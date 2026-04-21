@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>Format Backends</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Format Backends</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>vectra reads and writes five formats: its native <code>.vtr</code>,
+CSV, SQLite, Excel, and GeoTIFF. Each reader returns the same
+<code>vectra_node</code> object. Once a node exists, the engine treats
+it identically regardless of where the data came from. A filter on a CSV
+scan produces the same plan tree as a filter on a <code>.vtr</code>
+scan. The same verbs work, the same expressions evaluate, and
+<code>collect()</code> materializes an R data.frame either way.</p>
+<p>This matters because format choice becomes a deployment decision, not
+a code decision. We can prototype a pipeline against a CSV export,
+convert the data to <code>.vtr</code> for production, and the pipeline
+code stays the same apart from the opening <code>tbl_*()</code>
+call.</p>
+<p>Writers mirror the readers. <code>write_vtr()</code>,
+<code>write_csv()</code>, <code>write_sqlite()</code>, and
+<code>write_tiff()</code> are all S3 generics dispatching on both
+<code>vectra_node</code> and <code>data.frame</code>. When the input is
+a node, writes stream batch-by-batch through the plan tree. The full
+dataset never needs to fit in memory. This is the core of vectra’s
+format conversion story: pipe a reader into a writer, and data flows
+from source format to target format in bounded memory.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co">#&gt; Attaching package: &#39;vectra&#39;</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="co">#&gt; The following object is masked from &#39;package:stats&#39;:</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="co">#&gt;     filter</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="co"># Write mtcars to .vtr, then read it back lazily</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f)</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>node <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>node</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co">#&gt; vectra query node</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt; Columns (11):</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt;   disp &lt;double&gt;</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt;   drat &lt;double&gt;</span></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a><span class="co">#&gt;   wt &lt;double&gt;</span></span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a><span class="co">#&gt;   qsec &lt;double&gt;</span></span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a><span class="co">#&gt;   vs &lt;double&gt;</span></span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a><span class="co">#&gt;   am &lt;double&gt;</span></span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a><span class="co">#&gt;   gear &lt;double&gt;</span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a><span class="co">#&gt;   carb &lt;double&gt;</span></span></code></pre></div>
+<p>The node prints its schema but holds no data. Columns, types, and row
+count are in the file header; the actual values stay on disk until
+<code>collect()</code>.</p>
+</div>
+<div id="the-.vtr-format" class="section level2">
+<h2>The .vtr format</h2>
+<p><code>.vtr</code> is vectra’s native binary columnar format. It
+stores data in row groups, where each row group contains all columns for
+a slice of rows. The current version (v4) applies a two-stage encoding
+stack per column per row group: first a logical encoding (dictionary for
+low-cardinality strings, delta for monotonic integers, or plain
+pass-through), then byte-level compression via Zstandard when it
+actually shrinks the data.</p>
+<p>This layout gives the scan node several optimization paths that other
+formats cannot support. Zone-map statistics (min/max per column per row
+group) let the engine skip entire row groups that cannot match a filter
+predicate. Column pruning avoids reading columns that the query never
+references. And hash indexes (<code>.vtri</code> sidecar files) enable
+O(1) row group lookup on equality predicates.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="co">#&gt; 3 21.4   6 110</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="co">#&gt; 4 18.1   6 105</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co">#&gt; 5 19.2   6 123</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co">#&gt; 6 17.8   6 123</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co">#&gt; 7 19.7   6 175</span></span></code></pre></div>
+<p>When we call <code>write_vtr()</code> with a <code>vectra_node</code>
+input, the writer streams batches from the upstream plan and writes each
+batch as one row group. The full result never materializes in memory.
+For <code>data.frame</code> inputs, the data is written directly from
+R’s memory in a single row group.</p>
+<p>The <code>batch_size</code> parameter on <code>write_vtr()</code>
+controls how many rows accumulate before flushing a row group. Smaller
+row groups mean more granular zone-map statistics and finer predicate
+pruning. Larger row groups reduce per-group overhead and compress
+better.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="co"># Convert CSV to .vtr with 10-row row groups</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(f, <span class="at">batch_size =</span> <span class="dv">10</span>)</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co"># The file now has multiple row groups</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt; [1] 32</span></span></code></pre></div>
+<p><code>append_vtr()</code> adds new row groups to an existing file
+without rewriting it. This is useful for incremental data ingestion
+where new batches arrive over time.</p>
+</div>
+<div id="csv" class="section level2">
+<h2>CSV</h2>
+<p><code>tbl_csv()</code> opens a CSV file for streaming reads. Column
+types are inferred from the first 1000 rows: numeric-looking columns
+become doubles, integer- looking columns become integers, and everything
+else is a string. Gzip- compressed files (<code>.csv.gz</code>) are
+detected and decompressed transparently.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="fu">filter</span>(hp <span class="sc">&gt;</span> <span class="dv">200</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="fu">select</span>(mpg, hp, wt) <span class="sc">|&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt;    mpg  hp    wt</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 1 14.3 245 3.570</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 2 10.4 205 5.250</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; 3 10.4 215 5.424</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; 4 14.7 230 5.345</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; 5 13.3 245 3.840</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; 6 15.8 264 3.170</span></span>
+<span id="cb4-15"><a href="#cb4-15" tabindex="-1"></a><span class="co">#&gt; 7 15.0 335 3.570</span></span></code></pre></div>
+<p>The <code>batch_size</code> parameter controls how many rows the CSV
+scanner reads per internal batch. The default (65536) works well for
+most files. Smaller values reduce peak memory at the cost of more read
+calls.</p>
+<p><code>write_csv()</code> streams from any node. It writes a standard
+comma-separated file with a header row. There is no gzip output option;
+if we need compressed output, we convert to <code>.vtr</code> instead,
+which applies Zstandard automatically.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>out_csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">4</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="fu">write_csv</span>(out_csv)</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co"># Verify the output</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="fu">read.csv</span>(out_csv) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  disp hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt; 1 22.8   4 108.0 93 3.85 2.320 18.61  1  1    4    1</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt; 2 24.4   4 146.7 62 3.69 3.190 20.00  1  0    4    2</span></span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4 140.8 95 3.92 3.150 22.90  1  0    4    2</span></span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a><span class="co">#&gt; 4 32.4   4  78.7 66 4.08 2.200 19.47  1  1    4    1</span></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="co">#&gt; 5 30.4   4  75.7 52 4.93 1.615 18.52  1  1    4    2</span></span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a><span class="co">#&gt; 6 33.9   4  71.1 65 4.22 1.835 19.90  1  1    4    1</span></span></code></pre></div>
+<p>CSV has no predicate pushdown or column pruning. Every row and every
+column is read and parsed, then the engine’s filter and project nodes
+discard what the query does not need. For one-off analyses this is fine.
+For repeated queries on the same data, converting to <code>.vtr</code>
+once and querying many times is faster.</p>
+</div>
+<div id="sqlite" class="section level2">
+<h2>SQLite</h2>
+<p><code>tbl_sqlite()</code> connects to a SQLite database and streams a
+table through vectra’s engine. Column types are inferred from the
+declared types in the <code>CREATE TABLE</code> statement. All
+filtering, grouping, and aggregation happen in vectra’s C engine, not
+via SQL queries. The SQLite library is used only as a row source.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>db <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="fu">write_sqlite</span>(mtcars, db, <span class="st">&quot;cars&quot;</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="fu">tbl_sqlite</span>(db, <span class="st">&quot;cars&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="fu">filter</span>(mpg <span class="sc">&gt;</span> <span class="dv">25</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, wt) <span class="sc">|&gt;</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt;    mpg cyl    wt</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; 1 32.4   4 2.200</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; 2 30.4   4 1.615</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; 3 33.9   4 1.835</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; 4 27.3   4 1.935</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; 5 26.0   4 2.140</span></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="co">#&gt; 6 30.4   4 1.513</span></span></code></pre></div>
+<p>The <code>table</code> argument names which table to scan. A database
+can hold many tables; each <code>tbl_sqlite()</code> call opens one.</p>
+<p>SQLite is a natural choice when data already lives in a database, or
+when other tools (Python, command-line utilities, web applications) need
+to read the same file. The format is self-contained, widely supported,
+and handles concurrent reads well.</p>
+<p><code>write_sqlite()</code> streams from any node into a SQLite
+table. If the table already exists, rows are appended. This makes it
+straightforward to export vectra query results for consumption by non-R
+tools.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f)</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>db <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">8</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>  <span class="fu">write_sqlite</span>(db, <span class="st">&quot;v8_cars&quot;</span>)</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co"># Read it back through vectra</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="fu">tbl_sqlite</span>(db, <span class="st">&quot;v8_cars&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt;     mpg cyl  disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="co">#&gt; 1  18.7   8 360.0 175 3.15 3.440 17.02  0  0    3    2</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co">#&gt; 2  14.3   8 360.0 245 3.21 3.570 15.84  0  0    3    4</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt; 3  16.4   8 275.8 180 3.07 4.070 17.40  0  0    3    3</span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; 4  17.3   8 275.8 180 3.07 3.730 17.60  0  0    3    3</span></span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt; 5  15.2   8 275.8 180 3.07 3.780 18.00  0  0    3    3</span></span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt; 6  10.4   8 472.0 205 2.93 5.250 17.98  0  0    3    4</span></span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 7  10.4   8 460.0 215 3.00 5.424 17.82  0  0    3    4</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 8  14.7   8 440.0 230 3.23 5.345 17.42  0  0    3    4</span></span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a><span class="co">#&gt; 9  15.5   8 318.0 150 2.76 3.520 16.87  0  0    3    2</span></span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a><span class="co">#&gt; 10 15.2   8 304.0 150 3.15 3.435 17.30  0  0    3    2</span></span>
+<span id="cb7-22"><a href="#cb7-22" tabindex="-1"></a><span class="co">#&gt; 11 13.3   8 350.0 245 3.73 3.840 15.41  0  0    3    4</span></span>
+<span id="cb7-23"><a href="#cb7-23" tabindex="-1"></a><span class="co">#&gt; 12 19.2   8 400.0 175 3.08 3.845 17.05  0  0    3    2</span></span>
+<span id="cb7-24"><a href="#cb7-24" tabindex="-1"></a><span class="co">#&gt; 13 15.8   8 351.0 264 4.22 3.170 14.50  0  1    5    4</span></span>
+<span id="cb7-25"><a href="#cb7-25" tabindex="-1"></a><span class="co">#&gt; 14 15.0   8 301.0 335 3.54 3.570 14.60  0  1    5    8</span></span></code></pre></div>
+</div>
+<div id="excel" class="section level2">
+<h2>Excel</h2>
+<p><code>tbl_xlsx()</code> reads a sheet from an Excel workbook. It
+requires the <code>openxlsx2</code> package, which is listed in
+Suggests. The sheet is specified by name or by 1-based index (default:
+first sheet).</p>
+<p>Unlike the other backends, Excel support is read-only. There is no
+<code>write_xlsx()</code> function. Excel’s format is complex and
+writing it adds little value when CSV or SQLite serve the same
+interoperability purpose with less overhead.</p>
+<p>Under the hood, <code>tbl_xlsx()</code> reads the sheet into a
+data.frame via <code>openxlsx2</code> and then converts it to a vectra
+node. This means the sheet does load into memory during the initial
+read, but all subsequent operations (filter, mutate, join) are lazy and
+stream through the C engine.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="co"># Not run (requires openxlsx2)</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>node <span class="ot">&lt;-</span> <span class="fu">tbl_xlsx</span>(<span class="st">&quot;survey_results.xlsx&quot;</span>, <span class="at">sheet =</span> <span class="st">&quot;Q1_2025&quot;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>node <span class="sc">|&gt;</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="fu">filter</span>(score <span class="sc">&gt;=</span> <span class="dv">80</span>) <span class="sc">|&gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="fu">select</span>(respondent, score, region) <span class="sc">|&gt;</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
+<p>For large Excel files that do not fit in memory, export to CSV first
+and use <code>tbl_csv()</code>.</p>
+</div>
+<div id="geotiff" class="section level2">
+<h2>GeoTIFF</h2>
+<p><code>tbl_tiff()</code> reads raster data. Each pixel becomes a row
+with <code>x</code> and <code>y</code> columns (pixel center coordinates
+derived from the geotransform) and one column per band
+(<code>band1</code>, <code>band2</code>, etc.). NoData values become
+<code>NA</code>. This tabular representation lets us apply the full verb
+set to raster data: filter by spatial extent, threshold band values,
+compute derived indices, join with point observations.</p>
+<p>The default <code>batch_size</code> is 256 raster rows, much smaller
+than the CSV/SQLite default. Raster data is dense. A 10,000 x 10,000
+single-band TIFF has 100 million pixels, so each raster row of 10,000
+pixels already constitutes a meaningful batch.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Not run (requires a GeoTIFF file)</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a><span class="fu">tbl_tiff</span>(<span class="st">&quot;temperature.tif&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">filter</span>(band1 <span class="sc">&gt;</span> <span class="dv">25</span>, x <span class="sc">&gt;=</span> <span class="dv">10</span>, x <span class="sc">&lt;=</span> <span class="dv">20</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span></code></pre></div>
+<p><code>write_tiff()</code> writes query results back to a GeoTIFF. The
+data must contain <code>x</code> and <code>y</code> columns and one or
+more numeric band columns. Grid dimensions and the geotransform are
+inferred from the coordinate arrays. The <code>compress</code> parameter
+enables DEFLATE compression.</p>
+<div id="integer-pixel-types" class="section level3">
+<h3>Integer pixel types</h3>
+<p>By default, <code>write_tiff()</code> writes 64-bit float pixels. The
+<code>pixel_type</code> parameter selects a smaller representation:
+<code>&quot;int16&quot;</code>, <code>&quot;int32&quot;</code>, <code>&quot;uint8&quot;</code>,
+<code>&quot;uint16&quot;</code>, or <code>&quot;float32&quot;</code>. Smaller types compress
+better and produce much smaller files — a global climate raster stored
+as <code>int16</code> + DEFLATE can be 5-10x smaller than the equivalent
+<code>float64</code>.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="co"># Scale temperature to integer: value * 100, stored as int16</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>df <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">band1 =</span> <span class="fu">round</span>(band1 <span class="sc">*</span> <span class="dv">100</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="fu">write_tiff</span>(<span class="st">&quot;temperature_int16.tif&quot;</span>, <span class="at">compress =</span> <span class="cn">TRUE</span>, <span class="at">pixel_type =</span> <span class="st">&quot;int16&quot;</span>)</span></code></pre></div>
+<p><code>NA</code> values in the input are automatically mapped to the
+integer nodata value (-32768 for <code>int16</code>, 65535 for
+<code>uint16</code>, etc.) and tagged in the GDAL_NODATA header. The
+reader converts them back to <code>NA</code> on read.</p>
+</div>
+<div id="embedded-metadata" class="section level3">
+<h3>Embedded metadata</h3>
+<p>The <code>metadata</code> parameter writes a GDAL_METADATA XML string
+into TIFF tag 42112. This is useful for recording scale factors,
+offsets, variable names, or provenance without a sidecar file.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>xml <span class="ot">&lt;-</span> <span class="st">&#39;&lt;GDALMetadata&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="st">  &lt;Item name=&quot;scale&quot;&gt;0.01&lt;/Item&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="st">  &lt;Item name=&quot;offset&quot;&gt;0&lt;/Item&gt;</span></span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="st">  &lt;Item name=&quot;variable&quot;&gt;bio1&lt;/Item&gt;</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="st">&lt;/GDALMetadata&gt;&#39;</span></span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="fu">write_tiff</span>(df, <span class="st">&quot;bio1.tif&quot;</span>, <span class="at">pixel_type =</span> <span class="st">&quot;int16&quot;</span>, <span class="at">metadata =</span> xml)</span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a><span class="co"># Read the metadata back</span></span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="fu">tiff_metadata</span>(<span class="st">&quot;bio1.tif&quot;</span>)</span></code></pre></div>
+<p><code>tiff_metadata()</code> returns the XML string, or
+<code>NA</code> if the tag is absent.</p>
+</div>
+<div id="point-extraction" class="section level3">
+<h3>Point extraction</h3>
+<p><code>tiff_extract_points()</code> samples band values at specific
+<code>(x, y)</code> coordinates directly from the TIFF file. Only the
+strips containing query points are read, making it efficient for sparse
+lookups on large rasters. No spatial package is needed at runtime.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>pts <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">x =</span> <span class="fu">c</span>(<span class="fl">10.5</span>, <span class="fl">11.2</span>), <span class="at">y =</span> <span class="fu">c</span>(<span class="fl">47.1</span>, <span class="fl">47.3</span>))</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="fu">tiff_extract_points</span>(<span class="st">&quot;temperature.tif&quot;</span>, pts)</span></code></pre></div>
+<p>This round-trip capability makes vectra useful for raster ETL: read a
+TIFF, filter or transform it with standard verbs, write a new TIFF. No
+dependency on spatial packages is needed for the read-process-write loop
+itself, though <code>terra::rast(df, type = &quot;xyz&quot;)</code> can convert
+results to <code>SpatRaster</code> objects when spatial operations are
+needed.</p>
+</div>
+</div>
+<div id="streaming-conversion-pipelines" class="section level2">
+<h2>Streaming conversion pipelines</h2>
+<p>The practical payoff of uniform node types is format conversion with
+zero full-dataset materialization. We pipe a reader into a writer, and
+data flows from source to target one batch at a time. Memory use stays
+proportional to one batch, not the full dataset.</p>
+<p>The simplest case: convert CSV to <code>.vtr</code>.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>vtr <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(vtr)</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="fu">tbl</span>(vtr) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt;    mpg cyl disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6  160 110 3.90 2.620 16.46  0  1    4    4</span></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6  160 110 3.90 2.875 17.02  0  1    4    4</span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  108  93 3.85 2.320 18.61  1  1    4    1</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6  258 110 3.08 3.215 19.44  1  0    3    1</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8  360 175 3.15 3.440 17.02  0  0    3    2</span></span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6  225 105 2.76 3.460 20.22  1  0    3    1</span></span></code></pre></div>
+<p>We can filter during conversion. Only rows passing the predicate are
+written.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>vtr <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span></span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>  <span class="fu">filter</span>(mpg <span class="sc">&gt;</span> <span class="dv">20</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">kpl =</span> mpg <span class="sc">*</span> <span class="fl">0.425144</span>) <span class="sc">|&gt;</span></span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>  <span class="fu">write_vtr</span>(vtr)</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="fu">tbl</span>(vtr) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a><span class="co">#&gt;     mpg cyl  disp  hp drat    wt  qsec vs am gear carb       kpl</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a><span class="co">#&gt; 1  21.0   6 160.0 110 3.90 2.620 16.46  0  1    4    4  8.928024</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="co">#&gt; 2  21.0   6 160.0 110 3.90 2.875 17.02  0  1    4    4  8.928024</span></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="co">#&gt; 3  22.8   4 108.0  93 3.85 2.320 18.61  1  1    4    1  9.693283</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="co">#&gt; 4  21.4   6 258.0 110 3.08 3.215 19.44  1  0    3    1  9.098082</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; 5  24.4   4 146.7  62 3.69 3.190 20.00  1  0    4    2 10.373514</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="co">#&gt; 6  22.8   4 140.8  95 3.92 3.150 22.90  1  0    4    2  9.693283</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a><span class="co">#&gt; 7  32.4   4  78.7  66 4.08 2.200 19.47  1  1    4    1 13.774666</span></span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a><span class="co">#&gt; 8  30.4   4  75.7  52 4.93 1.615 18.52  1  1    4    2 12.924378</span></span>
+<span id="cb14-20"><a href="#cb14-20" tabindex="-1"></a><span class="co">#&gt; 9  33.9   4  71.1  65 4.22 1.835 19.90  1  1    4    1 14.412382</span></span>
+<span id="cb14-21"><a href="#cb14-21" tabindex="-1"></a><span class="co">#&gt; 10 21.5   4 120.1  97 3.70 2.465 20.01  1  0    3    1  9.140596</span></span>
+<span id="cb14-22"><a href="#cb14-22" tabindex="-1"></a><span class="co">#&gt; 11 27.3   4  79.0  66 4.08 1.935 18.90  1  1    4    1 11.606431</span></span>
+<span id="cb14-23"><a href="#cb14-23" tabindex="-1"></a><span class="co">#&gt; 12 26.0   4 120.3  91 4.43 2.140 16.70  0  1    5    2 11.053744</span></span>
+<span id="cb14-24"><a href="#cb14-24" tabindex="-1"></a><span class="co">#&gt; 13 30.4   4  95.1 113 3.77 1.513 16.90  1  1    5    2 12.924378</span></span>
+<span id="cb14-25"><a href="#cb14-25" tabindex="-1"></a><span class="co">#&gt; 14 21.4   4 121.0 109 4.11 2.780 18.60  1  1    4    2  9.098082</span></span></code></pre></div>
+<p>Multi-step ETL works the same way. Read from one format, transform,
+write to another.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="co"># CSV -&gt; filter + transform -&gt; SQLite</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>db <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">&gt;=</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp, wt) <span class="sc">|&gt;</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">power_weight =</span> hp <span class="sc">/</span> wt) <span class="sc">|&gt;</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  <span class="fu">write_sqlite</span>(db, <span class="st">&quot;powerful_cars&quot;</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co"># SQLite -&gt; VTR</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a>vtr <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="fu">tbl_sqlite</span>(db, <span class="st">&quot;powerful_cars&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(vtr)</span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a></span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a><span class="fu">tbl</span>(vtr) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a><span class="co">#&gt;     mpg cyl  hp    wt power_weight</span></span>
+<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a><span class="co">#&gt; 1  21.0   6 110 2.620     41.98473</span></span>
+<span id="cb15-19"><a href="#cb15-19" tabindex="-1"></a><span class="co">#&gt; 2  21.0   6 110 2.875     38.26087</span></span>
+<span id="cb15-20"><a href="#cb15-20" tabindex="-1"></a><span class="co">#&gt; 3  21.4   6 110 3.215     34.21462</span></span>
+<span id="cb15-21"><a href="#cb15-21" tabindex="-1"></a><span class="co">#&gt; 4  18.7   8 175 3.440     50.87209</span></span>
+<span id="cb15-22"><a href="#cb15-22" tabindex="-1"></a><span class="co">#&gt; 5  18.1   6 105 3.460     30.34682</span></span>
+<span id="cb15-23"><a href="#cb15-23" tabindex="-1"></a><span class="co">#&gt; 6  14.3   8 245 3.570     68.62745</span></span>
+<span id="cb15-24"><a href="#cb15-24" tabindex="-1"></a><span class="co">#&gt; 7  19.2   6 123 3.440     35.75581</span></span>
+<span id="cb15-25"><a href="#cb15-25" tabindex="-1"></a><span class="co">#&gt; 8  17.8   6 123 3.440     35.75581</span></span>
+<span id="cb15-26"><a href="#cb15-26" tabindex="-1"></a><span class="co">#&gt; 9  16.4   8 180 4.070     44.22604</span></span>
+<span id="cb15-27"><a href="#cb15-27" tabindex="-1"></a><span class="co">#&gt; 10 17.3   8 180 3.730     48.25737</span></span>
+<span id="cb15-28"><a href="#cb15-28" tabindex="-1"></a><span class="co">#&gt; 11 15.2   8 180 3.780     47.61905</span></span>
+<span id="cb15-29"><a href="#cb15-29" tabindex="-1"></a><span class="co">#&gt; 12 10.4   8 205 5.250     39.04762</span></span>
+<span id="cb15-30"><a href="#cb15-30" tabindex="-1"></a><span class="co">#&gt; 13 10.4   8 215 5.424     39.63864</span></span>
+<span id="cb15-31"><a href="#cb15-31" tabindex="-1"></a><span class="co">#&gt; 14 14.7   8 230 5.345     43.03087</span></span>
+<span id="cb15-32"><a href="#cb15-32" tabindex="-1"></a><span class="co">#&gt; 15 15.5   8 150 3.520     42.61364</span></span>
+<span id="cb15-33"><a href="#cb15-33" tabindex="-1"></a><span class="co">#&gt; 16 15.2   8 150 3.435     43.66812</span></span>
+<span id="cb15-34"><a href="#cb15-34" tabindex="-1"></a><span class="co">#&gt; 17 13.3   8 245 3.840     63.80208</span></span>
+<span id="cb15-35"><a href="#cb15-35" tabindex="-1"></a><span class="co">#&gt; 18 19.2   8 175 3.845     45.51365</span></span>
+<span id="cb15-36"><a href="#cb15-36" tabindex="-1"></a><span class="co">#&gt; 19 15.8   8 264 3.170     83.28076</span></span>
+<span id="cb15-37"><a href="#cb15-37" tabindex="-1"></a><span class="co">#&gt; 20 19.7   6 175 2.770     63.17690</span></span>
+<span id="cb15-38"><a href="#cb15-38" tabindex="-1"></a><span class="co">#&gt; 21 15.0   8 335 3.570     93.83754</span></span></code></pre></div>
+<p>Each arrow in the pipeline is a streaming connection. The CSV scanner
+reads a batch, the filter discards rows, the project computes new
+columns, and the SQLite writer inserts the result. Then the next batch
+flows through. At no point does the full dataset exist in memory. For
+datasets that dwarf available RAM, this is the only way these
+conversions can work.</p>
+<p>Conversion pipelines also compose with joins. We can read two sources
+in different formats and join them.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>f1 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>f2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>cars_main <span class="ot">&lt;-</span> mtcars[, <span class="fu">c</span>(<span class="st">&quot;mpg&quot;</span>, <span class="st">&quot;cyl&quot;</span>, <span class="st">&quot;hp&quot;</span>)]</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>cars_extra <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">cyl =</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">6</span>, <span class="dv">8</span>), <span class="at">label =</span> <span class="fu">c</span>(<span class="st">&quot;small&quot;</span>, <span class="st">&quot;mid&quot;</span>, <span class="st">&quot;big&quot;</span>))</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="fu">write_vtr</span>(cars_main, f1)</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="fu">write.csv</span>(cars_extra, f2, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="fu">tbl</span>(f1) <span class="sc">|&gt;</span></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">tbl_csv</span>(f2), <span class="at">by =</span> <span class="st">&quot;cyl&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp label</span></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110   mid</span></span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110   mid</span></span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  93 small</span></span>
+<span id="cb16-18"><a href="#cb16-18" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6 110   mid</span></span>
+<span id="cb16-19"><a href="#cb16-19" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8 175   big</span></span>
+<span id="cb16-20"><a href="#cb16-20" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6 105   mid</span></span></code></pre></div>
+</div>
+<div id="batch-size" class="section level2">
+<h2>Batch size</h2>
+<p>The <code>batch_size</code> parameter appears on readers and on
+<code>write_vtr()</code>. It controls different things depending on
+context.</p>
+<p>On <strong>readers</strong> (<code>tbl_csv</code>,
+<code>tbl_sqlite</code>), batch size sets how many rows the scanner
+reads per pull from the source. The default 65536 balances memory use
+against per-call overhead. Larger values read more rows per call, which
+can be faster for simple scan-heavy queries. Smaller values keep peak
+memory lower, which matters when individual rows are wide (many columns
+or long strings).</p>
+<p>On <strong><code>write_vtr()</code></strong>, batch size controls how
+many rows accumulate before flushing a row group to disk. This directly
+affects the structure of the output file. Each row group carries its own
+zone-map statistics (min and max per column), so more row groups mean
+finer-grained predicate pushdown. Fewer row groups mean less metadata
+overhead and better compression ratios, because the compressor sees more
+data per block.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>big <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">seq_len</span>(<span class="dv">1000</span>),</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">rnorm</span>(<span class="dv">1000</span>)</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>)</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a><span class="fu">write.csv</span>(big, csv, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a></span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a><span class="co"># Small row groups: more granular zone maps</span></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a>f_small <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(f_small, <span class="at">batch_size =</span> <span class="dv">100</span>)</span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a><span class="co"># Default: single row group for 1000 rows</span></span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a>f_default <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(f_default)</span>
+<span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a></span>
+<span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Small batches:&quot;</span>, <span class="fu">file.size</span>(f_small), <span class="st">&quot;bytes</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a><span class="co">#&gt; Small batches: 8241 bytes</span></span>
+<span id="cb17-18"><a href="#cb17-18" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Default:      &quot;</span>, <span class="fu">file.size</span>(f_default), <span class="st">&quot;bytes</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
+<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a><span class="co">#&gt; Default:       8241 bytes</span></span></code></pre></div>
+<p>For <code>tbl_tiff</code>, the default batch size is 256 raster rows,
+reflecting the high per-row density of raster data. Increasing it speeds
+up reads on files with few bands. Decreasing it helps when many bands
+produce very wide rows.</p>
+<p>There is no batch size parameter on <code>tbl()</code> (the
+<code>.vtr</code> reader). Row groups are defined by the file; the
+scanner reads one row group per <code>next_batch()</code> call,
+respecting whatever batch size was chosen at write time.</p>
+</div>
+<div id="format-comparison" class="section level2">
+<h2>Format comparison</h2>
+<p>The table below summarizes what each format supports. The right
+format depends on the workload: <code>.vtr</code> for repeated
+analytical queries, CSV for interchange, SQLite for multi-tool access,
+Excel for one-off imports, GeoTIFF for raster data.</p>
+<table>
+<colgroup>
+<col width="20%" />
+<col width="13%" />
+<col width="11%" />
+<col width="18%" />
+<col width="15%" />
+<col width="20%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Feature</th>
+<th align="left">.vtr</th>
+<th align="left">CSV</th>
+<th align="left">SQLite</th>
+<th align="left">Excel</th>
+<th align="left">GeoTIFF</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Streaming read</td>
+<td align="left">yes</td>
+<td align="left">yes</td>
+<td align="left">yes</td>
+<td align="left">no</td>
+<td align="left">yes</td>
+</tr>
+<tr class="even">
+<td align="left">Streaming write</td>
+<td align="left">yes</td>
+<td align="left">yes</td>
+<td align="left">yes</td>
+<td align="left">–</td>
+<td align="left">yes</td>
+</tr>
+<tr class="odd">
+<td align="left">Predicate pushdown</td>
+<td align="left">yes</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+</tr>
+<tr class="even">
+<td align="left">Column pruning</td>
+<td align="left">yes</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+</tr>
+<tr class="odd">
+<td align="left">Zone-map skip</td>
+<td align="left">yes</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+</tr>
+<tr class="even">
+<td align="left">Hash index support</td>
+<td align="left">yes</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+<td align="left">no</td>
+</tr>
+<tr class="odd">
+<td align="left">Compression</td>
+<td align="left">zstd</td>
+<td align="left">gzip (read)</td>
+<td align="left">–</td>
+<td align="left">–</td>
+<td align="left">deflate</td>
+</tr>
+<tr class="even">
+<td align="left">Size on disk</td>
+<td align="left">small</td>
+<td align="left">large</td>
+<td align="left">medium</td>
+<td align="left">medium</td>
+<td align="left">variable</td>
+</tr>
+<tr class="odd">
+<td align="left">Random access</td>
+<td align="left">by row group</td>
+<td align="left">no</td>
+<td align="left">by rowid</td>
+<td align="left">no</td>
+<td align="left">by raster row</td>
+</tr>
+<tr class="even">
+<td align="left">External tool support</td>
+<td align="left">vectra only</td>
+<td align="left">universal</td>
+<td align="left">wide</td>
+<td align="left">wide</td>
+<td align="left">GIS tools</td>
+</tr>
+</tbody>
+</table>
+<p><code>.vtr</code> wins on query performance because it is the only
+format where the scanner can skip data before reading it. Zone maps,
+column pruning, and hash indexes all reduce I/O. For a dataset queried
+repeatedly, converting to <code>.vtr</code> once pays for itself
+quickly.</p>
+<p>CSV and SQLite have broad tool support. If the data needs to flow to
+Python, a dashboard, or a command-line tool, these formats avoid
+lock-in. SQLite adds transactional writes and concurrent read access
+that flat files lack.</p>
+<p>GeoTIFF is specialized. It carries spatial metadata (coordinate
+reference system, geotransform) that the other formats do not. When the
+output is a raster, GeoTIFF is the right choice; when the output is a
+table derived from raster data, <code>.vtr</code> or CSV may be more
+practical.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>vectra Engine Reference</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">vectra Engine Reference</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<p>This document defines vectra’s public contract: which operations are
+supported, how types and coercion work, what streams and what
+materializes, and where guarantees stop. It is the reference for what
+vectra promises.</p>
+<p>See <code>?tbl</code>, <code>?filter</code>, <code>?left_join</code>,
+and <code>?explain</code> for function-level documentation.</p>
+<div id="what-vectra-is" class="section level2">
+<h2>What vectra is</h2>
+<p>vectra is an R-native columnar query engine for datasets that don’t
+fit in memory. It provides dplyr-style verbs backed by a pure C11
+pull-based execution engine and a custom on-disk format
+(<code>.vtr</code>). All operations are lazy until
+<code>collect()</code> materializes results as an R data.frame.</p>
+<p>vectra is not a dplyr backend plugin. It defines its own S3 generics.
+The verbs share names and semantics with dplyr, but do not depend on
+it.</p>
+</div>
+<div id="execution-model" class="section level2">
+<h2>Execution model</h2>
+<div id="pull-based-pipeline" class="section level3">
+<h3>Pull-based pipeline</h3>
+<p>Every verb (<code>filter</code>, <code>select</code>,
+<code>mutate</code>, …) builds a plan node. Nodes form a tree. No data
+moves until <code>collect()</code> calls the root node’s
+<code>next_batch()</code> function, which pulls data through the tree
+one <strong>row group</strong> at a time.</p>
+<p>A row group (internally: <code>VecBatch</code>) is a set of columnar
+arrays, typically thousands to millions of rows. Each column is a typed
+array with a validity bitmap for NA support.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Nothing executes here --- just builds a plan tree</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>plan <span class="ot">&lt;-</span> <span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  <span class="fu">filter</span>(x <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  <span class="fu">select</span>(id, x, y) <span class="sc">|&gt;</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">z =</span> x <span class="sc">+</span> y)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a><span class="co"># Data flows when you call collect()</span></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>result <span class="ot">&lt;-</span> <span class="fu">collect</span>(plan)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="co"># Or inspect the plan without executing it</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="fu">explain</span>(plan)</span></code></pre></div>
+</div>
+<div id="selection-vectors-zero-copy-filtering" class="section level3">
+<h3>Selection vectors (zero-copy filtering)</h3>
+<p><code>filter()</code> does not copy rows. It attaches a
+<strong>selection vector</strong> to the batch: an integer array
+indexing which physical rows pass the predicate. Downstream nodes read
+only the selected rows. This avoids memory allocation and copying for
+selective filters.</p>
+</div>
+<div id="columnar-storage" class="section level3">
+<h3>Columnar storage</h3>
+<p>Data is stored and processed column-by-column, not row-by-row. This
+means operations that touch few columns (e.g. <code>select(id, x)</code>
+on a 100-column table) only read the columns they need from disk.</p>
+</div>
+</div>
+<div id="data-sources" class="section level2">
+<h2>Data sources</h2>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Function</th>
+<th align="left">Format</th>
+<th align="left">Streaming</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>tbl(path)</code></td>
+<td align="left"><code>.vtr</code> (vectra native)</td>
+<td align="left">yes, row-group-at-a-time</td>
+</tr>
+<tr class="even">
+<td align="left"><code>tbl_csv(path)</code></td>
+<td align="left">CSV</td>
+<td align="left">yes, batch-at-a-time</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>tbl_sqlite(path, table)</code></td>
+<td align="left">SQLite</td>
+<td align="left">yes, batch-at-a-time</td>
+</tr>
+<tr class="even">
+<td align="left"><code>tbl_tiff(path)</code></td>
+<td align="left">GeoTIFF</td>
+<td align="left">yes, row-strip-at-a-time</td>
+</tr>
+</tbody>
+</table>
+<p>All sources produce the same <code>vectra_node</code> object. The
+query engine does not know or care which source is upstream.</p>
+<div id="output-sinks" class="section level3">
+<h3>Output sinks</h3>
+<table>
+<colgroup>
+<col width="34%" />
+<col width="27%" />
+<col width="37%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Function</th>
+<th align="left">Format</th>
+<th align="left">Streaming</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>collect()</code></td>
+<td align="left">R data.frame</td>
+<td align="left">materializes full result in R memory</td>
+</tr>
+<tr class="even">
+<td align="left"><code>write_vtr(df, path)</code></td>
+<td align="left"><code>.vtr</code></td>
+<td align="left">writes from data.frame</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>write_csv(x, path)</code></td>
+<td align="left">CSV</td>
+<td align="left">streams batch-by-batch</td>
+</tr>
+<tr class="even">
+<td align="left"><code>write_sqlite(x, path, table)</code></td>
+<td align="left">SQLite</td>
+<td align="left">streams batch-by-batch</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>write_tiff(x, path, pixel_type)</code></td>
+<td align="left">GeoTIFF</td>
+<td align="left">streams batch-by-batch; <code>pixel_type</code>:
+float64/float32/int16/int32/uint8/uint16</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="supported-verbs" class="section level2">
+<h2>Supported verbs</h2>
+<div id="transformation-verbs" class="section level3">
+<h3>Transformation verbs</h3>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="40%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Verb</th>
+<th align="left">Streams</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>filter(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Zero-copy via selection vector</td>
+</tr>
+<tr class="even">
+<td align="left"><code>select(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Full tidyselect: <code>starts_with()</code>,
+<code>where()</code>, <code>-col</code>, etc.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>mutate(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Arithmetic, comparison, boolean, <code>is.na()</code>,
+<code>nchar()</code>, <code>substr()</code>, <code>grepl()</code>, math
+(<code>abs</code>, <code>sqrt</code>, <code>log</code>,
+<code>exp</code>, <code>floor</code>, <code>ceiling</code>,
+<code>round</code>, <code>log2</code>, <code>log10</code>,
+<code>sign</code>, <code>trunc</code>), <code>if_else()</code>,
+<code>between()</code>, <code>%in%</code>, type casting
+(<code>as.numeric</code>), <code>tolower()</code>,
+<code>toupper()</code>, <code>trimws()</code>, <code>paste0()</code>,
+<code>gsub()</code>, <code>sub()</code>, <code>startsWith()</code>,
+<code>endsWith()</code>, <code>pmin()</code>, <code>pmax()</code>,
+<code>year()</code>, <code>month()</code>, <code>day()</code>,
+<code>hour()</code>, <code>minute()</code>, <code>second()</code>,
+<code>as.Date()</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>transmute(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Like <code>mutate()</code> but drops unmentioned
+columns</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>rename(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Full tidyselect rename support</td>
+</tr>
+<tr class="even">
+<td align="left"><code>relocate(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Reorder columns with <code>.before</code> /
+<code>.after</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="aggregation-verbs" class="section level3">
+<h3>Aggregation verbs</h3>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="40%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Verb</th>
+<th align="left">Streams</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>group_by(...)</code></td>
+<td align="left">metadata only</td>
+<td align="left">Attaches grouping info; no data moves</td>
+</tr>
+<tr class="even">
+<td align="left"><code>summarise(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Hash-based or sort-based aggregation</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>ungroup()</code></td>
+<td align="left">metadata only</td>
+<td align="left">Removes grouping</td>
+</tr>
+<tr class="even">
+<td align="left"><code>count(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Sugar for
+<code>group_by() |&gt; summarise(n = n())</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>tally(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Like <code>count()</code> on existing groups</td>
+</tr>
+</tbody>
+</table>
+<p>Supported aggregation functions: <code>n()</code>,
+<code>sum()</code>, <code>mean()</code>, <code>min()</code>,
+<code>max()</code>, <code>sd()</code>, <code>var()</code>,
+<code>first()</code>, <code>last()</code>, <code>any()</code>,
+<code>all()</code>, <code>median()</code>, <code>n_distinct()</code>.
+All accept <code>na.rm = TRUE</code>.</p>
+</div>
+<div id="ordering-verbs" class="section level3">
+<h3>Ordering verbs</h3>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="40%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Verb</th>
+<th align="left">Streams</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>arrange(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">External merge sort with 1 GB spill budget</td>
+</tr>
+<tr class="even">
+<td align="left"><code>slice_head(n)</code></td>
+<td align="left">yes</td>
+<td align="left">Limit node, stops after n rows</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>slice_tail(n)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Must see all rows to take last n</td>
+</tr>
+<tr class="even">
+<td align="left"><code>slice_min(order_by, n)</code></td>
+<td align="left">partial</td>
+<td align="left">Heap-based top-N; <code>with_ties = TRUE</code>
+(default) includes ties</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>slice_max(order_by, n)</code></td>
+<td align="left">partial</td>
+<td align="left">Heap-based top-N; <code>with_ties = TRUE</code>
+(default) includes ties</td>
+</tr>
+<tr class="even">
+<td align="left"><code>head(n)</code></td>
+<td align="left">yes</td>
+<td align="left">Alias for
+<code>slice_head() |&gt; collect()</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>slice(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Select or exclude rows by position (positive or
+negative indices)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>distinct(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Uses hash-based grouping</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="join-verbs" class="section level3">
+<h3>Join verbs</h3>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="40%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Verb</th>
+<th align="left">Streams</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>inner_join(x, y)</code></td>
+<td align="left"><strong>build materializes right</strong></td>
+<td align="left">Hash join; left streams</td>
+</tr>
+<tr class="even">
+<td align="left"><code>left_join(x, y)</code></td>
+<td align="left"><strong>build materializes right</strong></td>
+<td align="left">Hash join; left streams</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>right_join(x, y)</code></td>
+<td align="left"><strong>build materializes left</strong></td>
+<td align="left">Implemented as swapped left join</td>
+</tr>
+<tr class="even">
+<td align="left"><code>full_join(x, y)</code></td>
+<td align="left"><strong>build materializes right</strong></td>
+<td align="left">Hash join + finalize pass</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>semi_join(x, y)</code></td>
+<td align="left"><strong>build materializes right</strong></td>
+<td align="left">Hash join; returns left rows only</td>
+</tr>
+<tr class="even">
+<td align="left"><code>anti_join(x, y)</code></td>
+<td align="left"><strong>build materializes right</strong></td>
+<td align="left">Hash join; returns non-matching left rows</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>cross_join(x, y)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Cartesian product; no key columns required</td>
+</tr>
+</tbody>
+</table>
+<p>All joins support: <code>by = &quot;col&quot;</code>,
+<code>by = c(&quot;a&quot; = &quot;b&quot;)</code>, <code>by = NULL</code> (natural join),
+and <code>suffix = c(&quot;.x&quot;, &quot;.y&quot;)</code>.</p>
+</div>
+<div id="window-functions" class="section level3">
+<h3>Window functions</h3>
+<p>Available inside <code>mutate()</code>:</p>
+<table>
+<colgroup>
+<col width="43%" />
+<col width="56%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Function</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>row_number()</code></td>
+<td align="left">Sequential row number (respects groups)</td>
+</tr>
+<tr class="even">
+<td align="left"><code>rank(col)</code></td>
+<td align="left">Min rank with gaps for ties (like
+<code>dplyr::min_rank()</code>)</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>dense_rank(col)</code></td>
+<td align="left">Consecutive rank without gaps</td>
+</tr>
+<tr class="even">
+<td align="left"><code>lag(col, n, default)</code></td>
+<td align="left">Previous value</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>lead(col, n, default)</code></td>
+<td align="left">Next value</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cumsum(col)</code></td>
+<td align="left">Cumulative sum</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>cummean(col)</code></td>
+<td align="left">Cumulative mean</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cummin(col)</code></td>
+<td align="left">Cumulative minimum</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>cummax(col)</code></td>
+<td align="left">Cumulative maximum</td>
+</tr>
+<tr class="even">
+<td align="left"><code>ntile(n)</code></td>
+<td align="left">Divide rows into n roughly equal buckets</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>percent_rank(col)</code></td>
+<td align="left">Relative rank scaled to [0, 1]</td>
+</tr>
+<tr class="even">
+<td align="left"><code>cume_dist(col)</code></td>
+<td align="left">Cumulative distribution (proportion of values &lt;=
+current)</td>
+</tr>
+</tbody>
+</table>
+<p>Window functions respect <code>group_by()</code> partitions. They
+<strong>materialize</strong> all data within each partition.</p>
+</div>
+<div id="other-verbs" class="section level3">
+<h3>Other verbs</h3>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="40%" />
+<col width="31%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Verb</th>
+<th align="left">Streams</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>pull(var)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Collects one column as a vector</td>
+</tr>
+<tr class="even">
+<td align="left"><code>bind_rows(...)</code></td>
+<td align="left">yes</td>
+<td align="left">Streaming concat if schemas are compatible</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>bind_cols(...)</code></td>
+<td align="left"><strong>materializes</strong></td>
+<td align="left">Collects all inputs, then <code>cbind()</code></td>
+</tr>
+<tr class="even">
+<td align="left"><code>across(...)</code></td>
+<td align="left">n/a</td>
+<td align="left">Column expansion helper for
+<code>mutate()</code>/<code>summarise()</code></td>
+</tr>
+<tr class="odd">
+<td align="left"><code>explain()</code></td>
+<td align="left">n/a</td>
+<td align="left">Prints the plan tree</td>
+</tr>
+<tr class="even">
+<td align="left"><code>glimpse()</code></td>
+<td align="left"><strong>materializes</strong> (preview only)</td>
+<td align="left">Shows column types and first few values</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="tidyselect-support" class="section level3">
+<h3>tidyselect support</h3>
+<p><code>select()</code>, <code>rename()</code>,
+<code>relocate()</code>, <code>distinct()</code>, and
+<code>across(.cols)</code> support the full tidyselect vocabulary:</p>
+<ul>
+<li><p><code>starts_with()</code>, <code>ends_with()</code>,
+<code>contains()</code>, <code>matches()</code></p></li>
+<li><p><code>everything()</code>, <code>last_col()</code></p></li>
+<li><p><code>all_of()</code>, <code>any_of()</code></p></li>
+<li><p><code>where()</code> predicates
+(e.g. <code>where(is.numeric)</code>)</p></li>
+<li><p><code>-column</code> negation</p></li>
+</ul>
+<p><code>where()</code> works because vectra builds a 0-row typed proxy
+data.frame from the schema, giving tidyselect enough type information to
+evaluate predicates.</p>
+</div>
+</div>
+<div id="supported-types" class="section level2">
+<h2>Supported types</h2>
+<div id="base-types" class="section level3">
+<h3>Base types</h3>
+<table>
+<thead>
+<tr class="header">
+<th align="left">C type</th>
+<th align="left">R input</th>
+<th align="left">R output (default)</th>
+<th align="left">R output (bit64 mode)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>int64</code></td>
+<td align="left">integer</td>
+<td align="left">double</td>
+<td align="left">integer64</td>
+</tr>
+<tr class="even">
+<td align="left"><code>double</code></td>
+<td align="left">double</td>
+<td align="left">double</td>
+<td align="left">double</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>bool</code></td>
+<td align="left">logical</td>
+<td align="left">logical</td>
+<td align="left">logical</td>
+</tr>
+<tr class="even">
+<td align="left"><code>string</code></td>
+<td align="left">character</td>
+<td align="left">character</td>
+<td align="left">character</td>
+</tr>
+</tbody>
+</table>
+<p>R’s 32-bit <code>integer</code> is widened to 64-bit
+<code>int64</code> on write. On read, <code>int64</code> is returned as
+<code>double</code> by default (R has no native 64-bit integer). Set
+<code>options(vectra.int64 = &quot;bit64&quot;)</code> to get
+<code>bit64::integer64</code> output instead.</p>
+</div>
+<div id="annotated-types" class="section level3">
+<h3>Annotated types</h3>
+<p>The <code>.vtr</code> format version 2 stores per-column annotations
+that preserve R type metadata through the write/read cycle:</p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="29%" />
+<col width="21%" />
+<col width="26%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">R class</th>
+<th align="left">Annotation</th>
+<th align="left">Storage</th>
+<th align="left">Roundtrip</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Date</td>
+<td align="left"><code>&quot;Date&quot;</code></td>
+<td align="left">double (days since epoch)</td>
+<td align="left">exact</td>
+</tr>
+<tr class="even">
+<td align="left">POSIXct</td>
+<td align="left"><code>&quot;POSIXct\|tz&quot;</code></td>
+<td align="left">double (seconds since epoch)</td>
+<td align="left">exact (tz preserved)</td>
+</tr>
+<tr class="odd">
+<td align="left">factor</td>
+<td align="left"><code>&quot;factor\|lev1\|lev2\|...&quot;</code></td>
+<td align="left">string</td>
+<td align="left">exact (levels + order preserved)</td>
+</tr>
+</tbody>
+</table>
+<p>Annotations are metadata. The underlying C engine operates on the
+base types only. Type restoration happens at <code>collect()</code>
+time.</p>
+<p>Date and POSIXct columns support component extraction via
+<code>year()</code>, <code>month()</code>, <code>day()</code>,
+<code>hour()</code>, <code>minute()</code>, <code>second()</code> in
+<code>mutate()</code> and <code>filter()</code> expressions. Use
+<code>as.Date(&quot;2020-01-01&quot;)</code> as a literal in filter comparisons.
+Date arithmetic (adding/subtracting days) works via standard
+<code>+</code> and <code>-</code>.</p>
+</div>
+</div>
+<div id="coercion-rules" class="section level2">
+<h2>Coercion rules</h2>
+<div id="arithmetic-and-comparison-expressions" class="section level3">
+<h3>Arithmetic and comparison expressions</h3>
+<p>The coercion hierarchy for numeric operations is:</p>
+<pre><code>bool &lt; int64 &lt; double</code></pre>
+<p>When an expression combines two different numeric types, the narrower
+type is promoted to the wider type before evaluation. String columns
+cannot participate in arithmetic or comparison with numeric columns;
+this is an error.</p>
+</div>
+<div id="join-key-coercion" class="section level3">
+<h3>Join key coercion</h3>
+<p>Join keys follow the same hierarchy. If the left key is
+<code>int64</code> and the right key is <code>double</code>, the
+<code>int64</code> side is coerced to <code>double</code> for hashing
+and comparison. The coercion happens internally; the output column
+retains the original left-side type.</p>
+<p>Joining a <code>string</code> key against a numeric key is an
+error.</p>
+</div>
+<div id="bind_rows-coercion" class="section level3">
+<h3>bind_rows coercion</h3>
+<p>When <code>bind_rows()</code> combines tables with different column
+types, it computes the common type using the same
+<code>bool &lt; int64 &lt; double</code> hierarchy. Per-batch coercion
+happens at the C level during streaming — no R fallback needed.</p>
+<p>If column names differ across inputs, the R fallback path is used:
+all inputs are collected, aligned by column name, and combined with
+<code>rbind()</code>.</p>
+</div>
+</div>
+<div id="na-semantics" class="section level2">
+<h2>NA semantics</h2>
+<div id="storage" class="section level3">
+<h3>Storage</h3>
+<p>NAs are tracked by a per-column validity bitmap. Every column of
+every type supports NA values. The bitmap is bit-packed (1 bit per row,
+1 = valid).</p>
+</div>
+<div id="propagation" class="section level3">
+<h3>Propagation</h3>
+<ul>
+<li><p><strong>Arithmetic</strong>: <code>NA + x = NA</code>,
+<code>NA * x = NA</code></p></li>
+<li><p><strong>Comparison</strong>: <code>NA &gt; x = NA</code>,
+<code>x == NA = NA</code></p></li>
+<li><p><strong>Boolean</strong>: <code>NA &amp; FALSE = FALSE</code>,
+<code>NA &amp; TRUE = NA</code>, <code>NA | TRUE = TRUE</code>,
+<code>NA | FALSE = NA</code></p></li>
+<li><p><strong>Aggregation</strong>: NAs are included by default; use
+<code>na.rm = TRUE</code> to exclude</p></li>
+<li><p><strong>Joins</strong>: NA keys never match (same as SQL NULL
+semantics)</p></li>
+<li><p><strong>Window functions</strong>: <code>cumsum()</code> and
+friends propagate NA forward</p></li>
+</ul>
+</div>
+<div id="is.na" class="section level3">
+<h3>is.na()</h3>
+<p><code>is.na(col)</code> is supported in <code>filter()</code> and
+<code>mutate()</code> expressions. It returns a boolean column based on
+the validity bitmap.</p>
+</div>
+</div>
+<div id="ordering-guarantees" class="section level2">
+<h2>Ordering guarantees</h2>
+<ul>
+<li><p><code>filter()</code>, <code>select()</code>,
+<code>mutate()</code>, <code>rename()</code>, <code>relocate()</code>:
+preserve input order</p></li>
+<li><p><code>arrange()</code>: produces a total order (stable
+sort)</p></li>
+<li><p><code>group_by() |&gt; summarise()</code>: output order is
+<strong>not guaranteed</strong> (hash-based path) or sorted by key
+(sort-based path); do not depend on either</p></li>
+<li><p><code>distinct()</code>: output order is not guaranteed</p></li>
+<li><p>Joins: probe-side order is preserved within each batch;
+build-side order is not guaranteed</p></li>
+<li><p><code>bind_rows()</code>: child order is preserved (first child’s
+rows, then second’s, etc.)</p></li>
+</ul>
+</div>
+<div id="streaming-vs-materializing" class="section level2">
+<h2>Streaming vs materializing</h2>
+<div id="streaming-nodes-constant-memory-per-batch" class="section level3">
+<h3>Streaming nodes (constant memory per batch)</h3>
+<ul>
+<li><p>Scan (<code>.vtr</code>, CSV, SQLite, TIFF)</p></li>
+<li><p>Filter</p></li>
+<li><p>Project (select / mutate / rename / relocate /
+transmute)</p></li>
+<li><p>Limit (slice_head, head)</p></li>
+<li><p>Concat (bind_rows)</p></li>
+</ul>
+</div>
+<div id="materializing-nodes" class="section level3">
+<h3>Materializing nodes</h3>
+<p>These nodes buffer data in memory:</p>
+<table>
+<colgroup>
+<col width="17%" />
+<col width="48%" />
+<col width="34%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Node</th>
+<th align="left">What it buffers</th>
+<th align="left">Bounded by</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Sort (arrange)</td>
+<td align="left">All input rows</td>
+<td align="left">1 GB memory budget, then spills to disk</td>
+</tr>
+<tr class="even">
+<td align="left">GroupAgg (summarise)</td>
+<td align="left">Hash table of groups + accumulators</td>
+<td align="left">Number of distinct groups</td>
+</tr>
+<tr class="odd">
+<td align="left">TopN (slice_min/max)</td>
+<td align="left">Heap of n rows</td>
+<td align="left">Requested n</td>
+</tr>
+<tr class="even">
+<td align="left">Window</td>
+<td align="left">All rows per partition</td>
+<td align="left">Partition size</td>
+</tr>
+<tr class="odd">
+<td align="left">Join (build phase)</td>
+<td align="left">Right-side table in hash table</td>
+<td align="left">Right-side row count</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="external-sort-spill-to-disk" class="section level3">
+<h3>External sort (spill-to-disk)</h3>
+<p><code>arrange()</code> accumulates incoming batches into column
+builders in memory. After each batch, the sort node estimates total
+memory usage across all builders. When the estimate exceeds the memory
+budget (default 1 GB, defined as <code>DEFAULT_MEM_BUDGET</code>), the
+node flushes the accumulated data as a sorted run:</p>
+<ol style="list-style-type: decimal">
+<li><p>The builders are finished into arrays.</p></li>
+<li><p>The arrays are sorted in-place using a parallel merge sort
+(OpenMP task spawning above 32,768 rows, sequential below).</p></li>
+<li><p>The sorted data is written to a temporary <code>.vtr</code> file
+in the system temp directory, split into row groups of 65,536 rows
+each.</p></li>
+<li><p>The builders are reset and accumulation continues.</p></li>
+</ol>
+<p>This spill cycle repeats as many times as needed. A 10 GB dataset
+with a 1 GB budget produces approximately 10 spill files.</p>
+<p>Once all input is consumed, the sort node enters the merge phase. It
+opens all spill files as <code>Vtr1File</code> readers and runs a k-way
+merge using a min-heap. Each heap entry holds a reference to one merge
+run (one spill file) and tracks the current row group and cursor
+position within that run. The merge emits batches of up to 65,536 rows,
+reading row groups from spill files on demand. Peak memory during the
+merge phase is proportional to k (number of runs) times the row group
+size, not the total dataset size.</p>
+<p>If all data fits within the 1 GB budget, no spill occurs. The node
+sorts in memory and emits the result directly. This is the common case
+for datasets under ~100 million rows (depending on column count and
+types).</p>
+<p>The sort-based <code>group_by() |&gt; summarise()</code> path (used
+internally when the engine detects it is advantageous) also benefits
+from this spill mechanism. Temporary spill files are deleted when the
+sort node is freed.</p>
+</div>
+<div id="join-memory-model" class="section level3">
+<h3>Join memory model</h3>
+<p>Joins use a <strong>build-right, probe-left</strong> hash join:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Build phase</strong>: The entire right-side table is
+materialized into a hash table in memory. Key columns are hashed using
+FNV-1a. For single-key joins, the hash is computed directly on the key
+bytes. For multi-key joins, per-key hashes are combined via XOR and FNV
+prime multiplication. The hash table uses open addressing. Key hashing
+is OpenMP-parallelized for batches above 32,768 rows.</li>
+<li><strong>Probe phase</strong>: Left-side batches stream through one
+at a time, probing the hash table. For each left row, the engine
+computes the key hash, looks up the hash table, and verifies key
+equality (hash collisions are resolved by comparison). Probe-side
+hashing is also parallelized.</li>
+<li><strong>Finalize phase</strong> (full_join only): Unmatched
+right-side rows are emitted in chunks of 65,536 rows. A matched-flag
+array tracks which right-side rows participated in the join.</li>
+</ol>
+<p>The memory cost of a join is proportional to the right-side table
+size (data arrays plus hash table overhead). The left side streams and
+does not accumulate. For this reason, place the smaller table on the
+right side of the join. The <code>right_join</code> verb handles this
+automatically by swapping sides internally and remapping columns in the
+output.</p>
+</div>
+</div>
+<div id="the-.vtr-file-format" class="section level2">
+<h2>The .vtr file format</h2>
+<p>The <code>.vtr</code> format is vectra’s native binary columnar
+format. It is designed for fast sequential reads with row-group-level
+granularity.</p>
+<div id="layout" class="section level3">
+<h3>Layout</h3>
+<pre><code>Header:
+  magic bytes (&quot;VTR1&quot;)
+  version (uint16: 1–4)
+  n_cols, n_rowgroups
+  per-column: name + type byte [+ annotation string in v2+]
+  row group index (byte offsets)
+
+Row groups (repeated):
+  per-column:
+    validity bitmap (bit-packed)
+    [v4] encoding tag (1 byte) + compression tag (1 byte)
+    [v4] uncompressed_size (uint32)
+    typed data array (int64/double/bool/string)
+  [v3+] per-column statistics (min/max)</code></pre>
+</div>
+<div id="version-history" class="section level3">
+<h3>Version history</h3>
+<ul>
+<li><p><strong>Version 1</strong>: Base format with typed columns and
+validity bitmaps.</p></li>
+<li><p><strong>Version 2</strong>: Adds per-column annotation strings
+for Date, POSIXct, and factor roundtripping.</p></li>
+<li><p><strong>Version 3</strong>: Adds per-column per-rowgroup
+statistics (min/max) enabling zone-map predicate pushdown.</p></li>
+<li><p><strong>Version 4</strong> (current): Adds a two-layer encoding
+and compression stack. Writing always produces v4. All versions (v1–v4)
+are readable.</p></li>
+</ul>
+</div>
+<div id="encoding-and-compression-v4" class="section level3">
+<h3>Encoding and compression (v4)</h3>
+<p>v4 applies two transformations to each column chunk (one column in
+one row group), in order: an <strong>encoding</strong> step and a
+<strong>compression</strong> step.</p>
+<p>Encoding transforms data logically to expose redundancy. The encoder
+picks the best encoding per column per row group automatically:</p>
+<table>
+<colgroup>
+<col width="22%" />
+<col width="27%" />
+<col width="25%" />
+<col width="25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Encoding</th>
+<th align="left">Applies to</th>
+<th align="left">Condition</th>
+<th align="left">Mechanism</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">PLAIN</td>
+<td align="left">all types</td>
+<td align="left">default</td>
+<td align="left">Raw bytes, no transformation</td>
+</tr>
+<tr class="even">
+<td align="left">DICTIONARY</td>
+<td align="left">string</td>
+<td align="left">unique ratio &lt; 50%</td>
+<td align="left">Builds a string dictionary; stores indices as RLE
+(run-length encoded)</td>
+</tr>
+<tr class="odd">
+<td align="left">DELTA</td>
+<td align="left">int64</td>
+<td align="left">monotonically increasing</td>
+<td align="left">Stores first value + deltas (all &gt;= 0)</td>
+</tr>
+</tbody>
+</table>
+<p>DICTIONARY encoding is the most impactful for typical categorical
+string columns. The encoder counts distinct values in a single pass
+using an open-addressing hash table (70% load factor, dynamic resizing).
+If fewer than half the values are unique, it emits a dictionary (offset
+array + packed strings) followed by RLE-encoded indices. The RLE step
+collapses runs of repeated indices into (value, count) pairs, which is
+effective when rows with the same category are clustered (e.g. after a
+sort). If more than half the values are unique, the encoder aborts
+dictionary encoding and falls back to PLAIN with zero overhead.</p>
+<p>DELTA encoding stores an initial value followed by the difference
+between consecutive values. It targets auto-increment IDs, timestamps,
+and other monotonic integer sequences where the deltas are small and
+compress well.</p>
+<p>Compression squeezes bytes physically after encoding. vectra uses a
+built-in LZ77 compressor (LZ-VTR), approximately 120 lines of C with no
+external dependencies. The compressor uses a 3-byte minimum match,
+256-byte maximum offset, and a hash table for match finding. It skips
+column chunks smaller than 64 bytes (not worth the overhead). If
+compression does not reduce size, the chunk is stored uncompressed.
+There is no configuration knob; the format always attempts compression
+on eligible chunks.</p>
+<p>The two-layer design is intentional. Encoding and compression solve
+different problems. DICTIONARY and DELTA reduce the entropy of the data
+(fewer distinct byte patterns, smaller integer ranges). LZ-VTR then
+exploits the reduced entropy at the byte level. Applying both layers
+yields better ratios than either layer alone, particularly for
+RLE-encoded dictionary indices where long runs of identical small
+integers compress to near zero.</p>
+</div>
+</div>
+<div id="query-optimizer" class="section level2">
+<h2>Query optimizer</h2>
+<p><code>explain()</code> runs the optimizer before printing so you see
+the actual execution plan. Two optimization passes run
+automatically:</p>
+<div id="predicate-pushdown" class="section level3">
+<h3>Predicate pushdown</h3>
+<p>When a <code>FilterNode</code> sits above a <code>ScanNode</code>
+reading a <code>.vtr</code> file (v3+), the filter predicate is attached
+to the scan. The scan then applies up to three pruning strategies on its
+first <code>next_batch()</code> call, in priority order:</p>
+<ol style="list-style-type: decimal">
+<li><p><strong>Hash index pushdown</strong> (highest priority). If a
+<code>.vtri</code> sidecar index exists for the predicate column(s), the
+scan probes the index to build a row-group bitmap. Row groups not in the
+bitmap are skipped entirely. This handles <code>==</code> and
+<code>%in%</code> predicates. For composite indexes, AND-combined
+equality predicates on the indexed columns are matched and probed as a
+single composite key. See the Hash indexes section below for
+details.</p></li>
+<li><p><strong>Binary search on sorted columns</strong>. If the
+<code>.vtr</code> file records that a column is sorted and the predicate
+is a simple comparison (<code>==</code>, <code>&lt;</code>,
+<code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>) against a
+literal, the scan binary-searches the row group stats to find the first
+and last row groups that could contain matching rows. The scan range is
+narrowed to <code>[first_rg, last_rg)</code>. For AND-combined
+predicates on the same sorted column
+(e.g. <code>x &gt;= 10 &amp; x &lt; 100</code>), both bounds are
+applied. For OR-combined predicates, the union of both ranges is
+used.</p></li>
+<li><p><strong>Zone-map pruning</strong> (applied per row group during
+iteration). Each row group in a v3+ file stores per-column min/max
+statistics. Before reading a row group’s data from disk, the scan
+evaluates the pushed-down predicate against the row group’s stats. If
+the predicate is provably false for the entire row group
+(e.g. <code>filter(x &gt; 100)</code> on a row group where max(x) = 50),
+that row group is skipped entirely without touching the underlying
+bytes. Zone-map pruning handles comparison operators on numeric and
+string columns, AND/OR combinations, and <code>%in%</code> predicates
+(checking whether any set value falls within the row group’s min/max
+range). String zone maps use a packed 8-byte prefix representation for
+efficient comparison.</p></li>
+</ol>
+<p>These three strategies compose. The scan first applies hash index and
+binary search to narrow the set of candidate row groups, then checks
+zone-map stats on each candidate before reading data. In
+<code>explain()</code> output, predicate pushdown appears as
+<code>predicate pushdown</code> and <code>v3 stats</code> annotations on
+the ScanNode.</p>
+</div>
+<div id="column-pruning" class="section level3">
+<h3>Column pruning</h3>
+<p>The optimizer walks the plan tree top-down and determines which
+columns each node actually needs from its child. The required column set
+at each node is the union of: columns referenced in the node’s own
+expressions (filter predicates, mutate expressions, aggregation
+functions), columns passed through to the parent, and join key columns.
+At scan nodes, unneeded columns are excluded from disk reads by setting
+a column mask. For a 100-column <code>.vtr</code> file where only 3
+columns are needed, this means 97 columns are never deserialized, never
+decompressed, and never decoded. This is visible in
+<code>explain()</code> as <code>3/100 cols (pruned)</code>. Column
+pruning applies to all <code>.vtr</code> scans regardless of format
+version.</p>
+</div>
+<div id="hidden-mutate-insertion" class="section level3">
+<h3>Hidden mutate insertion</h3>
+<p>When <code>summarise()</code> contains nested expressions like
+<code>mean(x + y)</code>, the optimizer auto-inserts a
+<code>ProjectNode</code> (visible as <code>hidden mutate</code> in
+<code>explain()</code>) to compute the intermediate expression
+<code>x + y</code> before aggregation. This is necessary because the
+C-level aggregation nodes (GroupAgg) operate on single columns, not on
+expression trees. The hidden mutate computes the intermediate column and
+gives it a generated name, which the aggregation node then references.
+The same mechanism applies to <code>sum(log(x))</code>,
+<code>n_distinct(a + b)</code>, and similar patterns. The inserted node
+is visible in <code>explain()</code> output but invisible to the user’s
+pipeline.</p>
+</div>
+</div>
+<div id="explain-contract" class="section level2">
+<h2>explain() contract</h2>
+<p><code>explain()</code> prints the optimized plan tree without
+executing it. The output shows:</p>
+<ul>
+<li><p>Node types in execution order (leaf to root)</p></li>
+<li><p>Per-node annotations: streaming/materializing, column pruning,
+predicate pushdown, v3 stats, hidden mutate</p></li>
+<li><p>Grouping columns if present</p></li>
+<li><p>Output schema (column names and types)</p></li>
+</ul>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">filter</span>(x <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="fu">select</span>(id, x) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; ProjectNode [streaming]</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt;   FilterNode [streaming]</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;     ScanNode [streaming, 2/5 cols (pruned), predicate pushdown, v3 stats]</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt;</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; Output columns (2):</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt;   id &lt;int64&gt;</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt;   x &lt;double&gt;</span></span></code></pre></div>
+<p>The plan tree is a description of what will happen, not a guarantee
+of how it will happen internally. Node ordering and naming may change
+between versions.</p>
+</div>
+<div id="hash-indexes-.vtri" class="section level2">
+<h2>Hash indexes (.vtri)</h2>
+<p>vectra supports persistent on-disk hash indexes stored as
+<code>.vtri</code> sidecar files alongside <code>.vtr</code> data files.
+These indexes enable O(1) row group pruning for equality predicates,
+turning full-table scans into targeted reads.</p>
+<div id="creating-indexes" class="section level3">
+<h3>Creating indexes</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Single-column index</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Case-insensitive index</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>, <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co"># Composite (multi-column) index</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="fu">c</span>(<span class="st">&quot;country&quot;</span>, <span class="st">&quot;year&quot;</span>))</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co"># Check if an index exists</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="fu">has_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>)</span></code></pre></div>
+<p><code>create_index()</code> reads the <code>.vtr</code> file, hashes
+every value in the indexed column(s) per row group, and writes a
+<code>.vtri</code> file. The file name encodes the indexed columns:
+<code>data.species.vtri</code> for a single-column index,
+<code>data.country_year.vtri</code> for a composite.</p>
+</div>
+<div id="index-format" class="section level3">
+<h3>Index format</h3>
+<p>The <code>.vtri</code> format is a chained hash table mapping key
+hashes to row group indices:</p>
+<ul>
+<li><strong>v1</strong> (single-column): stores one column index, a
+case-insensitive flag, hash entries, row group entries, a slot heads
+array, and a next-pointer chain. Hashing uses FNV-1a on the raw column
+bytes. For case-insensitive indexes, the hash folds ASCII uppercase to
+lowercase before hashing.</li>
+<li><strong>v2</strong> (composite): stores multiple column indices. The
+composite hash combines per-column FNV-1a hashes via XOR and
+multiplication with the FNV prime, producing a single 64-bit hash per
+row group entry.</li>
+</ul>
+</div>
+<div id="how-the-scan-uses-indexes" class="section level3">
+<h3>How the scan uses indexes</h3>
+<p>When a <code>ScanNode</code> opens a <code>.vtr</code> file, it
+checks for <code>.vtri</code> sidecar files matching the columns
+referenced in the pushed-down predicate. For single-column indexes, it
+matches <code>==</code> predicates and <code>%in%</code> predicates. For
+composite indexes, it matches AND-combined equality predicates where
+every indexed column has an <code>== literal</code> clause.</p>
+<p>On match, the scan probes the index to produce a row-group bitmap.
+For <code>%in%</code> predicates, the scan probes once per set element
+and ORs the bitmaps together. Row groups with a 0 bit in the bitmap are
+never read from disk. This is the first pruning step, applied before
+binary search and zone-map checks.</p>
+</div>
+<div id="performance-characteristics" class="section level3">
+<h3>Performance characteristics</h3>
+<p>Index probing is O(k) where k is the number of query keys (1 for
+<code>==</code>, n for <code>%in%</code>). Each probe is a hash
+computation plus a chain walk in the slot array. The index file is
+memory-mapped at open time, so repeated probes pay no I/O cost. For
+tables with many row groups and selective equality predicates, index
+pushdown can reduce I/O by orders of magnitude compared to zone-map
+pruning alone.</p>
+</div>
+</div>
+<div id="materialized-blocks" class="section level2">
+<h2>Materialized blocks</h2>
+<p><code>materialize()</code> consumes a vectra node and stores the
+result as a persistent in-memory columnar block. Unlike nodes, which are
+consumed on <code>collect()</code> and cannot be reused, blocks persist
+and support repeated lookups.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>blk <span class="ot">&lt;-</span> <span class="fu">tbl</span>(<span class="st">&quot;backbone.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">select</span>(taxonID, canonicalName, genus) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">materialize</span>()</span></code></pre></div>
+<div id="exact-lookups" class="section level3">
+<h3>Exact lookups</h3>
+<p><code>block_lookup()</code> performs hash-based lookups on a string
+column. Hash indices are built lazily on first use and cached for
+subsequent calls. The return value is a data.frame with a
+<code>query_idx</code> column (1-based position in the input keys
+vector) plus all columns from the block.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>))</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Case-insensitive</span></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;quercus robur&quot;</span>), <span class="at">ci =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+</div>
+<div id="fuzzy-lookups" class="section level3">
+<h3>Fuzzy lookups</h3>
+<p><code>block_fuzzy_lookup()</code> computes string distances between
+query keys and a block column. Three distance methods are available:
+Damerau-Levenshtein (<code>&quot;dl&quot;</code>, default), Levenshtein
+(<code>&quot;levenshtein&quot;</code>), and Jaro-Winkler (<code>&quot;jw&quot;</code>).
+Results are filtered by a maximum normalized distance threshold (default
+0.2).</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>, <span class="st">&quot;Pinus silvestris&quot;</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>                            <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>, <span class="at">max_dist =</span> <span class="fl">0.2</span>)</span></code></pre></div>
+<p>An optional blocking column reduces the search space by requiring
+exact matches on a second column before computing distances. This is
+useful for taxonomic lookups where genus is known:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>),</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>                            <span class="at">block_col =</span> <span class="st">&quot;genus&quot;</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>                            <span class="at">block_keys =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>),</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>                            <span class="at">n_threads =</span> <span class="dv">4</span><span class="dt">L</span>)</span></code></pre></div>
+<p>Fuzzy lookups are OpenMP-parallelized. The <code>n_threads</code>
+parameter controls the thread count (default 4).</p>
+</div>
+<div id="use-case" class="section level3">
+<h3>Use case</h3>
+<p>Materialized blocks are designed for repeated lookups against a
+reference table. The typical pattern is: load a backbone or codelist
+once with <code>materialize()</code>, then probe it many times with
+different query vectors. The block stays in memory across calls, and its
+internal hash index (for exact lookups) is built once and reused.</p>
+</div>
+</div>
+<div id="openmp-parallelization" class="section level2">
+<h2>OpenMP parallelization</h2>
+<p>The C engine uses OpenMP for CPU-bound operations where the
+per-element cost is high enough to justify thread management overhead.
+Parallelism is conditional: operations fall back to single-threaded
+execution when the batch size is below a threshold or when the platform
+does not support OpenMP.</p>
+<div id="which-operations-parallelize" class="section level3">
+<h3>Which operations parallelize</h3>
+<table>
+<colgroup>
+<col width="28%" />
+<col width="28%" />
+<col width="25%" />
+<col width="17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Operation</th>
+<th align="left">Threshold</th>
+<th align="left">Schedule</th>
+<th align="left">Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left"><code>filter()</code> (selection vector build)</td>
+<td align="left">32,768 rows</td>
+<td align="left">parallel prefix sum</td>
+<td align="left">Two-phase: count matches per thread, then write at
+offsets</td>
+</tr>
+<tr class="even">
+<td align="left"><code>grepl()</code> with regex</td>
+<td align="left">1,000 rows</td>
+<td align="left"><code>dynamic, 64</code></td>
+<td align="left">Per-thread regex compilation for thread safety</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>levenshtein()</code>, <code>dl_dist()</code>,
+<code>jaro_winkler()</code></td>
+<td align="left">1,000 rows</td>
+<td align="left"><code>dynamic, 64</code></td>
+<td align="left">Fuzzy string distance in mutate expressions</td>
+</tr>
+<tr class="even">
+<td align="left">Sort (merge sort)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>task</code></td>
+<td align="left">Recursive task spawning for parallel merge sort</td>
+</tr>
+<tr class="odd">
+<td align="left">Sort (key extraction)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel extraction of sort keys into index arrays</td>
+</tr>
+<tr class="even">
+<td align="left">Join (build-side hashing)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel hash computation for build-side keys</td>
+</tr>
+<tr class="odd">
+<td align="left">Join (probe-side hashing)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel hash computation for probe-side keys</td>
+</tr>
+<tr class="even">
+<td align="left">Window (data copy)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel copy of partition data</td>
+</tr>
+<tr class="odd">
+<td align="left">Window (group dispatch)</td>
+<td align="left">64 groups</td>
+<td align="left"><code>dynamic</code></td>
+<td align="left">Parallel window computation across groups</td>
+</tr>
+<tr class="even">
+<td align="left">Collect (column append)</td>
+<td align="left">8 columns</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel column-by-column append to R vectors</td>
+</tr>
+<tr class="odd">
+<td align="left">Zone-map stat computation</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code> with <code>reduction</code></td>
+<td align="left">Parallel min/max scan during write</td>
+</tr>
+<tr class="even">
+<td align="left">Block fuzzy lookup</td>
+<td align="left">always (if &gt; 0 keys)</td>
+<td align="left"><code>dynamic, 1</code> per key /
+<code>dynamic, 16</code> per row</td>
+<td align="left">Parallelized by query key and by block row</td>
+</tr>
+<tr class="odd">
+<td align="left">Literal fill (broadcast)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Parallel fill for constant columns</td>
+</tr>
+</tbody>
+</table>
+<p>The general-purpose threshold is 32,768 rows
+(<code>VEC_OMP_THRESHOLD</code>). String operations use a lower
+threshold of 1,000 rows because their per-element cost (regex
+compilation, edit distance matrices) is much higher than arithmetic.</p>
+</div>
+<div id="thread-safety" class="section level3">
+<h3>Thread safety</h3>
+<p>Regex operations (<code>grepl</code> with regex patterns) compile the
+POSIX regex once per thread. Each thread owns its own
+<code>regex_t</code> instance, allocated in thread-local scope inside
+the <code>#pragma omp parallel</code> block. This avoids both contention
+and the overhead of recompiling the regex per row.</p>
+<p>The filter node uses a parallel prefix sum to build the selection
+vector without locking. Each thread counts matches in its chunk, a
+sequential scan computes prefix offsets, then each thread writes
+selected indices at its computed offset.</p>
+</div>
+</div>
+<div id="current-limitations" class="section level2">
+<h2>Current limitations</h2>
+<ul>
+<li><p><strong>slice_tail materializes</strong>: There is no
+reverse-scan optimization.</p></li>
+<li><p><strong>distinct with .keep_all</strong>: Falls back to R when
+<code>.keep_all = TRUE</code> with a column subset.</p></li>
+<li><p><strong>Predicate pushdown is .vtr only</strong>: CSV, SQLite,
+and TIFF scans do not benefit from predicate pushdown, column pruning,
+or hash index acceleration.</p></li>
+<li><p><strong>No SIMD</strong>: Arithmetic and comparison operations
+use scalar loops. The compiler may auto-vectorize some patterns, but
+there are no explicit SIMD intrinsics.</p></li>
+<li><p><strong>OpenMP availability varies</strong>: On macOS, R ships
+without OpenMP by default. Users must install <code>libomp</code>
+(e.g. via Homebrew) and configure the compiler flags. On Windows
+(rtools) and Linux, OpenMP is typically available out of the box. When
+OpenMP is not available, all operations run single-threaded with no
+functional difference.</p></li>
+</ul>
+</div>
+<div id="fallback-behavior" class="section level2">
+<h2>Fallback behavior</h2>
+<p>vectra has these fallback paths to base R:</p>
+<ol style="list-style-type: decimal">
+<li><p><strong>bind_rows with mismatched column names</strong>: If
+column names differ across inputs, all tables are collected and combined
+via <code>rbind()</code> in R.</p></li>
+<li><p><strong>distinct with .keep_all and column subset</strong>: Falls
+back to <code>duplicated()</code> in R (emits a message).</p></li>
+<li><p><strong>slice_tail</strong>: Must see all rows to take the last
+n; returns a data.frame.</p></li>
+<li><p><strong>slice_min/slice_max with
+<code>with_ties = TRUE</code></strong> (the default): Collects all data
+to identify ties at the boundary; returns a data.frame.</p></li>
+<li><p><strong>reframe</strong>: Always collects and evaluates in R;
+returns a data.frame.</p></li>
+</ol>
+<p>All other operations execute entirely in C. There is no silent
+fallback to dplyr or any other package.</p>
+</div>
+<div id="grouping-preservation" class="section level2">
+<h2>Grouping preservation</h2>
+<p>All verbs preserve <code>group_by()</code> metadata:
+<code>filter()</code>, <code>select()</code>, <code>mutate()</code>,
+<code>rename()</code>, <code>relocate()</code>, <code>arrange()</code>,
+and <code>transmute()</code> pass grouping through.
+<code>rename()</code> additionally updates group column names to match
+the rename. <code>summarise()</code> drops grouping according to its
+<code>.groups</code> argument.</p>
+</div>
+<div id="package-conflicts" class="section level2">
+<h2>Package conflicts</h2>
+<p>vectra defines its own S3 generics for dplyr-like verbs
+(<code>filter</code>, <code>select</code>, <code>mutate</code>, etc.)
+and utility functions (<code>glimpse</code>, <code>collect</code>). If
+dplyr is also loaded, whichever package was attached last will mask the
+other’s generics. vectra’s methods will still dispatch correctly on
+<code>vectra_node</code> objects regardless of masking order.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

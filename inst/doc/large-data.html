@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>Working with Large Data</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Working with Large Data</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>R holds data.frames entirely in memory. A 10 GB CSV loaded with
+<code>read.csv()</code> becomes a 10 GB R object, sometimes larger: R’s
+internal representation of character vectors, factor levels, and ALTREP
+metadata can inflate the footprint to 2 to 3x the raw data size. On a
+machine with 16 GB of RAM, that 10 GB file will either fail to load or
+push the system into swap, grinding everything to a halt.
+“Larger-than-RAM” is not a theoretical concern. It is the normal state
+of affairs for anyone working with multi-year survey data, remote
+sensing extracts, or event logs from sensor networks.</p>
+<p>vectra sidesteps this by never loading the full dataset. When we call
+<code>tbl()</code> on a <code>.vtr</code> file or <code>tbl_csv()</code>
+on a CSV, nothing is read yet. The call to <code>collect()</code>,
+<code>write_vtr()</code>, or any other terminal verb pulls data through
+the plan tree one row group at a time. Each row group is a
+self-contained slice of the dataset: a few thousand to a few hundred
+thousand rows with all their columns. The engine reads one group,
+applies every operation in the pipeline, emits the result, then discards
+the group and moves to the next. The key distinction from R’s default
+approach: data moves through the pipeline in fixed-size pieces, and each
+piece is freed before the next one arrives.</p>
+<p>This batch-at-a-time design means that most vectra operations use
+constant memory per batch, regardless of how many total rows exist. A
+<code>filter</code> node reads a batch, applies a predicate, passes
+matching rows downstream, and forgets about them. A <code>mutate</code>
+node reads a batch, computes new columns, passes the result on. A
+<code>select</code> node simply drops columns from each batch. None of
+these ever accumulate the full dataset in memory.</p>
+<p>A few operations do need to see all the data before they can produce
+output. Sorting requires a global ordering. Hash-based grouping needs to
+track every distinct group key. Joins need a hash table of the build
+side. These “materializing” operations have bounded memory budgets or
+known scaling behaviour that we will discuss in detail.</p>
+<p>The central implication is this: if we can express our workload as a
+chain of streaming operations terminated by a streaming sink, the full
+dataset never needs to fit in RAM. A 200 GB CSV can flow through
+<code>tbl_csv() |&gt; filter() |&gt; mutate() |&gt; write_vtr()</code>
+on a laptop with 8 GB of memory. The pipeline processes each batch in
+isolation and writes the result directly to disk.</p>
+<p><code>collect()</code> is the one terminal verb that materializes
+everything into an R data.frame. It breaks the streaming model: the
+entire result set crosses from C into R and lives in R’s heap until we
+remove it. For large data, we avoid it for the final result and instead
+use <code>write_vtr()</code>, <code>write_csv()</code>, or
+<code>write_sqlite()</code> as our streaming sinks. These functions pull
+batches through the pipeline and write each one directly to disk, so the
+C engine’s memory is recycled on every iteration. The R process never
+holds more than one batch. We still use <code>collect()</code> freely
+for small intermediate checks, filtered subsets, and aggregation results
+that we know will fit in memory. The question to ask before calling
+<code>collect()</code> is always: how many rows will this return? If the
+answer is “roughly the same as the input,” we want a streaming sink
+instead.</p>
+<p>This vignette walks through the patterns and tools vectra provides
+for working with datasets that exceed available RAM. We will build our
+examples around a synthetic multi-year ecological survey dataset:
+species observations recorded across monitoring sites over several
+years.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">42</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="dv">50000</span></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>species_pool <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  <span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="st">&quot;Betula pendula&quot;</span>, <span class="st">&quot;Acer pseudoplatanus&quot;</span>, <span class="st">&quot;Fraxinus excelsior&quot;</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="st">&quot;Picea abies&quot;</span>, <span class="st">&quot;Tilia cordata&quot;</span>, <span class="st">&quot;Carpinus betulus&quot;</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  <span class="st">&quot;Alnus glutinosa&quot;</span>, <span class="st">&quot;Sorbus aucuparia&quot;</span>, <span class="st">&quot;Ulmus glabra&quot;</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>sites <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;SITE_&quot;</span>, <span class="fu">sprintf</span>(<span class="st">&quot;%03d&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">50</span>))</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>years <span class="ot">&lt;-</span> <span class="dv">2015</span><span class="sc">:</span><span class="dv">2024</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>obs <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>  <span class="at">obs_id    =</span> <span class="fu">seq_len</span>(n),</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>  <span class="at">site      =</span> <span class="fu">sample</span>(sites, n, <span class="at">replace =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>  <span class="at">species   =</span> <span class="fu">sample</span>(species_pool, n, <span class="at">replace =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a>  <span class="at">year      =</span> <span class="fu">sample</span>(years, n, <span class="at">replace =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>  <span class="at">abundance =</span> <span class="fu">rpois</span>(n, <span class="at">lambda =</span> <span class="dv">15</span>),</span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  <span class="at">cover_pct =</span> <span class="fu">round</span>(<span class="fu">runif</span>(n, <span class="fl">0.1</span>, <span class="fl">95.0</span>), <span class="dv">1</span>),</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>  <span class="at">quality   =</span> <span class="fu">sample</span>(<span class="fu">c</span>(<span class="st">&quot;good&quot;</span>, <span class="st">&quot;moderate&quot;</span>, <span class="st">&quot;poor&quot;</span>), n,</span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a>                     <span class="at">replace =</span> <span class="cn">TRUE</span>, <span class="at">prob =</span> <span class="fu">c</span>(<span class="fl">0.6</span>, <span class="fl">0.3</span>, <span class="fl">0.1</span>)),</span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a>)</span></code></pre></div>
+<p>We will write this as both CSV and <code>.vtr</code> to demonstrate
+different starting points. In a real workflow the CSV might be a raw
+export from a database or field data logger.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>csv_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">write.csv</span>(obs, csv_path, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>vtr_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="fu">write_vtr</span>(obs, vtr_path)</span></code></pre></div>
+</div>
+<div id="streaming-pipelines" class="section level2">
+<h2>Streaming pipelines</h2>
+<p>The core larger-than-RAM pattern in vectra is source, verbs, sink. We
+open a lazy reference to the data, chain operations, and terminate with
+a write function. No intermediate data.frame is ever created.</p>
+<p>Suppose we want to extract only high-quality observations, compute a
+derived column, and store the result as a new <code>.vtr</code> file.
+The entire pipeline streams:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>clean_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_path) <span class="sc">|&gt;</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="fu">filter</span>(quality <span class="sc">==</span> <span class="st">&quot;good&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">log_abundance =</span> <span class="fu">log</span>(abundance <span class="sc">+</span> <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="fu">write_vtr</span>(clean_path)</span></code></pre></div>
+<p>At no point did R hold 50,000 rows (or 50 million, if this were a
+larger dataset) in memory. <code>tbl_csv()</code> created a lazy scan
+node. <code>filter()</code> and <code>mutate()</code> each wrapped it in
+another lazy node. <code>write_vtr()</code> triggered execution: the CSV
+scanner read a batch of rows, the filter discarded non-matching rows,
+the mutate computed the log column, and the writer serialized the result
+to disk. Then the next batch.</p>
+<p>At the C level, each node in the pipeline exposes a
+<code>next_batch()</code> function. The terminal node (the writer) calls
+<code>next_batch()</code> on its upstream node, which in turn calls
+<code>next_batch()</code> on its own upstream, and so on down to the
+scan node that actually reads from disk. Each <code>VecBatch</code>
+struct flows upward through the chain, gets transformed at each stage,
+and arrives at the writer ready to be serialized. Once the writer
+finishes with a batch, the memory is freed. The pipeline then pulls the
+next batch. This pull-based design means memory consumption stays flat
+regardless of how many millions of rows pass through. A pipeline that
+processes 200 GB of CSV data uses the same peak memory as one that
+processes 200 KB.</p>
+<p>We can verify the result by reading back a small slice:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(clean_path) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">select</span>(obs_id, site, species, abundance, log_abundance) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt;   obs_id     site            species abundance log_abundance</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 1      3 SITE_001    Alnus glutinosa        12      2.564949</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; 2      7 SITE_018 Fraxinus excelsior        17      2.890372</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; 3      8 SITE_049     Betula pendula        17      2.890372</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 4      9 SITE_047 Fraxinus excelsior        16      2.833213</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 5     11 SITE_007        Picea abies        14      2.708050</span></span></code></pre></div>
+<p>The same pattern works for any source-sink combination. CSV to
+SQLite:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>db_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_path) <span class="sc">|&gt;</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&gt;=</span> <span class="dv">2020</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="fu">write_sqlite</span>(db_path, <span class="st">&quot;recent_obs&quot;</span>)</span></code></pre></div>
+<p>Or <code>.vtr</code> to CSV, useful for handing data to colleagues
+who expect plain text:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>export_csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="fu">filter</span>(species <span class="sc">==</span> <span class="st">&quot;Fagus sylvatica&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="fu">select</span>(obs_id, site, year, abundance) <span class="sc">|&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="fu">write_csv</span>(export_csv)</span></code></pre></div>
+<p>Each pipeline reads only what it needs and writes directly to the
+target format. The intermediate verbs never buffer more than one batch.
+This is what makes vectra practical for datasets larger than RAM: the
+memory footprint of a streaming pipeline is determined by the batch
+size, not the dataset size.</p>
+<p>When the result of a pipeline <em>is</em> small enough for R
+(aggregation results, filtered subsets, summary statistics),
+<code>collect()</code> is still the right choice. Aggregations in
+particular tend to produce far fewer rows than the input:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="fu">group_by</span>(species, year) <span class="sc">|&gt;</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>    <span class="at">n_obs     =</span> <span class="fu">n</span>(),</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>    <span class="at">mean_abun =</span> <span class="fu">mean</span>(abundance),</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>    <span class="at">mean_cov  =</span> <span class="fu">mean</span>(cover_pct)</span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  <span class="fu">arrange</span>(species, year) <span class="sc">|&gt;</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt;                species year n_obs mean_abun mean_cov</span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="co">#&gt; 1  Acer pseudoplatanus 2015   407  14.70516 49.73317</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co">#&gt; 2  Acer pseudoplatanus 2016   412  15.16019 47.83883</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt; 3  Acer pseudoplatanus 2017   394  15.06345 49.33426</span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; 4  Acer pseudoplatanus 2018   431  15.32483 49.17193</span></span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt; 5  Acer pseudoplatanus 2019   426  15.15023 46.93474</span></span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt; 6  Acer pseudoplatanus 2020   415  15.02892 46.37253</span></span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 7  Acer pseudoplatanus 2021   416  15.18750 44.88101</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 8  Acer pseudoplatanus 2022   415  15.31325 48.43277</span></span>
+<span id="cb7-20"><a href="#cb7-20" tabindex="-1"></a><span class="co">#&gt; 9  Acer pseudoplatanus 2023   433  14.80831 48.84665</span></span>
+<span id="cb7-21"><a href="#cb7-21" tabindex="-1"></a><span class="co">#&gt; 10 Acer pseudoplatanus 2024   375  14.77600 47.40613</span></span></code></pre></div>
+<p>The rule of thumb: if the output might be large, write to disk. If it
+fits in a data.frame, collect.</p>
+</div>
+<div id="batch-sizing" class="section level2">
+<h2>Batch sizing</h2>
+<p>A <code>.vtr</code> file is organised into row groups. Each row group
+is a self-contained unit: it has its own column data, validity bitmaps,
+dictionary tables, and zone-map min/max statistics. When vectra scans a
+file, it reads one row group at a time. The number of rows per group is
+the batch size.</p>
+<p>Batch size affects two things: memory per batch and zone-map pruning
+granularity. Larger batches mean fewer row groups and less per-group
+overhead, but each batch consumes more memory during processing. Smaller
+batches mean the zone-map statistics cover a narrower range of values,
+so filter predicates can skip more groups entirely.</p>
+<p>The default batch size is 65,536 rows. This is a reasonable middle
+ground for most workloads: large enough that per-batch overhead (reading
+the row group header, allocating column arrays, setting up validity
+bitmaps) is amortized across many rows, but small enough that each batch
+stays in the low megabytes for typical column counts. When choosing a
+different batch size, the decision depends on the query pattern.
+Analytical workloads that scan most of the file (aggregations,
+full-table joins) benefit from large batches because they reduce the
+number of <code>next_batch()</code> calls and the associated per-group
+bookkeeping. Point queries that target a few matching rows benefit from
+small batches, especially when combined with indexes or sorted columns,
+because the engine can skip entire row groups whose zone-map ranges do
+not overlap the predicate.</p>
+<p>For analytical workloads with selective filters, smaller row groups
+often pay off. If each row group spans a narrow range of
+<code>year</code> values, a filter like <code>year == 2023</code> can
+skip most groups without reading them. With one giant row group, the
+filter must scan every row.</p>
+<p>We control batch size when writing:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>small_groups <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>large_groups <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>  <span class="fu">arrange</span>(year) <span class="sc">|&gt;</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>  <span class="fu">write_vtr</span>(small_groups, <span class="at">batch_size =</span> <span class="dv">5000</span>)</span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a>  <span class="fu">arrange</span>(year) <span class="sc">|&gt;</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a>  <span class="fu">write_vtr</span>(large_groups, <span class="at">batch_size =</span> <span class="dv">50000</span>)</span></code></pre></div>
+<p>We sorted by <code>year</code> before writing so that row groups have
+tight year ranges. The small-batch file has about 10 row groups; the
+large-batch file has one. When we filter on <code>year</code>, the
+small-batch file can prune most groups using zone maps:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">tbl</span>(small_groups) <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">==</span> <span class="dv">2023</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt; FilterNode [streaming] </span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt;   ScanNode [streaming, 7 cols, predicate pushdown, tdc stats] </span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; Output columns (7):</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt;   obs_id &lt;int64&gt;</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt;   site &lt;string&gt;</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;   species &lt;string&gt;</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;   year &lt;int64&gt;</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   abundance &lt;int64&gt;</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt;   cover_pct &lt;double&gt;</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt;   quality &lt;string&gt;</span></span></code></pre></div>
+<p>CSV and SQLite sources also have a <code>batch_size</code> parameter,
+but it controls how many rows the scanner reads per pull rather than how
+the file is structured on disk. The default of 65,536 works well for
+most cases. Reducing it lowers peak memory; increasing it reduces
+per-batch overhead for simple pass-through pipelines.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_path, <span class="at">batch_size =</span> <span class="dv">10000</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">filter</span>(quality <span class="sc">==</span> <span class="st">&quot;good&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#&gt;   obs_id     site            species year abundance cover_pct quality</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt; 1      3 SITE_001    Alnus glutinosa 2015        12      75.9    good</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; 2      7 SITE_018 Fraxinus excelsior 2016        17      13.6    good</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; 3      8 SITE_049     Betula pendula 2020        17      29.3    good</span></span></code></pre></div>
+<p>As a starting point: 50,000 to 100,000 rows per group works well for
+datasets with a few dozen columns. If the data is sorted on a
+frequently-filtered column, lean towards smaller groups (10,000 to
+50,000) for better pruning. If the workload is dominated by full scans
+or aggregations, larger groups (100,000+) reduce overhead.</p>
+</div>
+<div id="append-workflows" class="section level2">
+<h2>Append workflows</h2>
+<p>Real datasets rarely arrive all at once. Monitoring data comes in
+daily, monthly, or seasonally. <code>append_vtr()</code> adds new rows
+to an existing <code>.vtr</code> file as a new row group, without
+touching existing data. The file header is updated to reflect the
+additional group.</p>
+<p>Here is a typical pattern: we start with one year of data and append
+subsequent years as they arrive.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>archive <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>first_year <span class="ot">&lt;-</span> obs[obs<span class="sc">$</span>year <span class="sc">==</span> <span class="dv">2015</span>, ]</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a><span class="fu">write_vtr</span>(first_year, archive)</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="co">#&gt; [1] 5012</span></span></code></pre></div>
+<p>Now we simulate receiving 2016 data:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>year_2016 <span class="ot">&lt;-</span> obs[obs<span class="sc">$</span>year <span class="sc">==</span> <span class="dv">2016</span>, ]</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a><span class="fu">append_vtr</span>(year_2016, archive)</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; [1] 10025</span></span></code></pre></div>
+<p><code>append_vtr()</code> also accepts a <code>vectra_node</code>, so
+we can stream data directly from a CSV into an existing archive without
+loading it into R:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>csv_2017 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a><span class="fu">write.csv</span>(obs[obs<span class="sc">$</span>year <span class="sc">==</span> <span class="dv">2017</span>, ], csv_2017, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_2017) <span class="sc">|&gt;</span> <span class="fu">append_vtr</span>(archive)</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; [1] 15023</span></span></code></pre></div>
+<p>Each call to <code>append_vtr()</code> creates one new row group.
+Over time, the file accumulates many groups of varying sizes. This is
+fine for append-heavy workloads. If the number of groups becomes
+unwieldy (hundreds of small appends, each adding a few rows), we can
+compact the file by rewriting it:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>compacted <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a><span class="fu">tbl</span>(archive) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(compacted, <span class="at">batch_size =</span> <span class="dv">50000</span>)</span></code></pre></div>
+<p>This reads every row group from the archive, streams through the
+writer with a fresh batch size, and produces a clean file. The old file
+can then be replaced.</p>
+<p>The schema of appended data must exactly match the target file: same
+column names, same types, same order. If the schema drifts over time (a
+new column added in 2018, say), we need to align it before appending.
+One approach is to add the missing column with a default value in a
+<code>mutate()</code> step:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>new_data_node <span class="ot">&lt;-</span> <span class="fu">tbl_csv</span>(csv_2017) <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">observer =</span> <span class="cn">NA_character_</span>)</span></code></pre></div>
+<p>This produces a node whose schema matches a hypothetical archive that
+includes an <code>observer</code> column. The key point: because
+<code>append_vtr()</code> accepts nodes, we can chain any transformation
+needed to match the target schema.</p>
+</div>
+<div id="delete-and-tombstones" class="section level2">
+<h2>Delete and tombstones</h2>
+<p>Sometimes we need to remove rows from an existing <code>.vtr</code>
+file. Perhaps a batch of observations was flagged as erroneous, or
+privacy regulations require deletion of certain records.
+<code>delete_vtr()</code> handles this without rewriting the file.</p>
+<p>Deletion works through a tombstone sidecar file. When we call
+<code>delete_vtr(path, row_ids)</code>, vectra writes the specified row
+indices to a <code>.del</code> file next to the <code>.vtr</code>. The
+original data file is never modified. On the next <code>tbl()</code>
+call, the scan node reads the tombstone file and skips those rows.</p>
+<p>Row IDs are 0-based physical positions across the entire file. The
+first row of the first row group is 0, the first row of the second group
+continues from where the first left off.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>del_demo <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a><span class="fu">write_vtr</span>(obs[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>, ], del_demo)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co"># Delete rows 0, 1, and 99 (first two and last)</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="fu">delete_vtr</span>(del_demo, <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">99</span>))</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="fu">tbl</span>(del_demo) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; [1] 97</span></span></code></pre></div>
+<p>Tombstone files are cumulative. Calling <code>delete_vtr()</code>
+again merges the new indices with existing ones:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">delete_vtr</span>(del_demo, <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">11</span>, <span class="dv">12</span>))</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a><span class="fu">tbl</span>(del_demo) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a><span class="co">#&gt; [1] 94</span></span></code></pre></div>
+<p>To undo all deletions, remove the <code>.del</code> file:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">unlink</span>(<span class="fu">paste0</span>(del_demo, <span class="st">&quot;.del&quot;</span>))</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a><span class="fu">tbl</span>(del_demo) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a><span class="co">#&gt; [1] 100</span></span></code></pre></div>
+<p>Tombstones are lightweight for sparse deletions. If we delete 1% of
+rows, the overhead is negligible. But if deletions accumulate to a
+substantial fraction of the file, scan performance degrades because the
+engine still reads and discards the tombstoned rows. At that point,
+compaction makes sense:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">delete_vtr</span>(del_demo, <span class="dv">0</span><span class="sc">:</span><span class="dv">49</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>compacted_del <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a><span class="fu">tbl</span>(del_demo) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(compacted_del)</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(compacted_del) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a><span class="co">#&gt; [1] 50</span></span></code></pre></div>
+<p>The compacted file contains only the surviving rows, with no
+tombstone file.</p>
+</div>
+<div id="diff-between-snapshots" class="section level2">
+<h2>Diff between snapshots</h2>
+<p>Data pipelines often work with periodic snapshots. We receive
+yesterday’s extract and today’s extract, and we need to know what
+changed. <code>diff_vtr()</code> computes a key-based logical diff
+between two <code>.vtr</code> files.</p>
+<p>The function takes the paths to the old and new files plus the name
+of a key column. It streams both files and returns a list with two
+elements: <code>$deleted</code> contains the key values that were
+present in the old file but absent in the new one. <code>$added</code>
+is a lazy <code>vectra_node</code> of rows present in the new file but
+not in the old.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a>snap_v1 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>snap_v2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="co"># Version 1: observations 1-100</span></span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a><span class="fu">write_vtr</span>(obs[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>, ], snap_v1)</span>
+<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a><span class="co"># Version 2: observations 51-150 (rows 1-50 removed, 101-150 added)</span></span>
+<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a><span class="fu">write_vtr</span>(obs[<span class="dv">51</span><span class="sc">:</span><span class="dv">150</span>, ], snap_v2)</span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a>changes <span class="ot">&lt;-</span> <span class="fu">diff_vtr</span>(snap_v1, snap_v2, <span class="st">&quot;obs_id&quot;</span>)</span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a><span class="co"># Keys that disappeared</span></span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a><span class="fu">head</span>(changes<span class="sc">$</span>deleted)</span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a><span class="co">#&gt; [1] 1 2 3 4 5 6</span></span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a><span class="fu">length</span>(changes<span class="sc">$</span>deleted)</span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a><span class="co">#&gt; [1] 50</span></span></code></pre></div>
+<p>The deleted keys are the <code>obs_id</code> values 1 through 50.
+Meanwhile, the <code>$added</code> element contains a lazy node pointing
+to observations with <code>obs_id</code> 101 through 150, which we can
+collect or pipe into further processing:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">collect</span>(changes<span class="sc">$</span>added) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a><span class="co">#&gt;   obs_id     site          species year abundance cover_pct  quality</span></span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a><span class="co">#&gt; 1    101 SITE_042      Picea abies 2022        18      81.7     good</span></span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a><span class="co">#&gt; 2    102 SITE_018    Quercus robur 2018        16      52.4     good</span></span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a><span class="co">#&gt; 3    103 SITE_027 Carpinus betulus 2019        13      15.5     poor</span></span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a><span class="co">#&gt; 4    104 SITE_013      Picea abies 2022        17      14.5     good</span></span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a><span class="co">#&gt; 5    105 SITE_019    Quercus robur 2019        11      16.8 moderate</span></span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="co">#&gt; 6    106 SITE_032    Tilia cordata 2018        20      80.1     good</span></span></code></pre></div>
+<p>Because <code>$added</code> is a lazy node, we can pipe it directly
+into further processing. For instance, we might want to append only the
+truly new rows to an archive:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>archive_diff <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a><span class="fu">write_vtr</span>(obs[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>, ], archive_diff)</span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a>changes<span class="sc">$</span>added <span class="sc">|&gt;</span> <span class="fu">append_vtr</span>(archive_diff)</span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive_diff) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="co">#&gt; [1] 100</span></span></code></pre></div>
+<p>This is a common incremental-load pattern: diff today’s snapshot
+against yesterday’s, then append only the additions. Combined with
+<code>delete_vtr()</code> for removals, we can maintain an up-to-date
+archive without full rewrites.</p>
+<p>Note that <code>diff_vtr()</code> performs a set-level diff on the
+key column. If a row exists in both snapshots with the same key but
+different values in other columns, it will not appear in either
+<code>$deleted</code> or <code>$added</code>. To detect modifications,
+we would need to compare the full row content after identifying shared
+keys.</p>
+</div>
+<div id="external-sort" class="section level2">
+<h2>External sort</h2>
+<p>Sorting a dataset that does not fit in memory requires an external
+merge sort. vectra’s <code>arrange()</code> handles this automatically.
+The engine maintains a 1 GB memory budget. As data flows through, it
+accumulates rows in memory. When the budget is reached, the accumulated
+rows are sorted and written to a temporary <code>.vtr</code> file on
+disk (a “sorted run”). After all input has been consumed, a k-way merge
+reads from all sorted runs simultaneously using a min-heap, producing
+the final sorted output one batch at a time.</p>
+<p>From the user’s perspective, none of this is visible. We just call
+<code>arrange()</code>:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>sorted_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>  <span class="fu">arrange</span>(species, <span class="fu">desc</span>(abundance)) <span class="sc">|&gt;</span></span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>  <span class="fu">write_vtr</span>(sorted_path)</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a></span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="fu">tbl</span>(sorted_path) <span class="sc">|&gt;</span></span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a>  <span class="fu">select</span>(species, abundance, site) <span class="sc">|&gt;</span></span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">8</span>) <span class="sc">|&gt;</span></span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="co">#&gt;               species abundance     site</span></span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt; 1 Acer pseudoplatanus        33 SITE_050</span></span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; 2 Acer pseudoplatanus        29 SITE_023</span></span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; 3 Acer pseudoplatanus        29 SITE_038</span></span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="co">#&gt; 4 Acer pseudoplatanus        28 SITE_040</span></span>
+<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a><span class="co">#&gt; 5 Acer pseudoplatanus        28 SITE_030</span></span>
+<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a><span class="co">#&gt; 6 Acer pseudoplatanus        28 SITE_006</span></span>
+<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a><span class="co">#&gt; 7 Acer pseudoplatanus        28 SITE_031</span></span>
+<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a><span class="co">#&gt; 8 Acer pseudoplatanus        28 SITE_010</span></span></code></pre></div>
+<p>The sorted output streams to disk. Peak memory stays bounded at the
+spill budget (1 GB) plus overhead for the merge heap, regardless of
+input size. For our 50,000-row example the data fits entirely in memory
+and no spill occurs. But the same code would work on a 500 million row
+file; the sort would produce multiple temporary runs and merge them
+transparently.</p>
+<p>The 1 GB budget governs how much unsorted data the engine accumulates
+before flushing to a temporary file. Each flush produces one sorted run.
+A 10 GB dataset with a 1 GB budget produces roughly 10 runs. The final
+merge opens all runs simultaneously and maintains a min-heap with one
+entry per run. At each step, the smallest element across all runs is
+popped from the heap and emitted as the next output row; the run that
+contributed it advances by one row and re-inserts into the heap. Because
+the heap has only as many entries as there are runs (not as many as
+there are rows), the merge phase uses very little memory.</p>
+<p>Data that is already partially sorted produces fewer runs. If the
+input is sorted on a prefix of the sort key, long stretches of rows will
+already be in order, so the engine can absorb more rows before hitting
+the budget and flushing. In the best case (fully sorted input), no spill
+occurs at all and the sort reduces to a streaming pass-through. There is
+nothing to tune here. The engine detects the budget internally and
+manages spill files in the system temp directory. They are cleaned up
+after the merge completes.</p>
+<p>Writing the sorted data to a new <code>.vtr</code> file also improves
+query performance. Once the file is sorted on <code>species</code>,
+zone-map statistics on that column become tight, and filters on species
+can skip most row groups. Sorting on a frequently-queried column is one
+of the most effective optimizations available.</p>
+</div>
+<div id="streaming-joins" class="section level2">
+<h2>Streaming joins</h2>
+<p>vectra’s join engine uses a build-right, probe-left strategy. The
+right-side table is fully materialized into a hash table in memory. Then
+the left-side table streams through, probing the hash table for matches
+one batch at a time. This means the left side can be arbitrarily large,
+because only the right side needs to fit in memory.</p>
+<p>The natural pattern for large-data joins is: huge fact table on the
+left, small dimension table on the right.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="co"># Small reference table: site metadata</span></span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a>site_meta <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a>  <span class="at">site      =</span> sites,</span>
+<span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a>  <span class="at">region    =</span> <span class="fu">sample</span>(<span class="fu">c</span>(<span class="st">&quot;North&quot;</span>, <span class="st">&quot;South&quot;</span>, <span class="st">&quot;East&quot;</span>, <span class="st">&quot;West&quot;</span>),</span>
+<span id="cb25-5"><a href="#cb25-5" tabindex="-1"></a>                     <span class="fu">length</span>(sites), <span class="at">replace =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb25-6"><a href="#cb25-6" tabindex="-1"></a>  <span class="at">elevation =</span> <span class="fu">round</span>(<span class="fu">runif</span>(<span class="fu">length</span>(sites), <span class="dv">100</span>, <span class="dv">2500</span>)),</span>
+<span id="cb25-7"><a href="#cb25-7" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb25-8"><a href="#cb25-8" tabindex="-1"></a>)</span>
+<span id="cb25-9"><a href="#cb25-9" tabindex="-1"></a>site_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb25-10"><a href="#cb25-10" tabindex="-1"></a><span class="fu">write_vtr</span>(site_meta, site_path)</span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>enriched <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">tbl</span>(site_path), <span class="at">by =</span> <span class="st">&quot;site&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a>  <span class="fu">write_vtr</span>(enriched)</span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="fu">tbl</span>(enriched) <span class="sc">|&gt;</span></span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a>  <span class="fu">select</span>(obs_id, site, region, elevation, species) <span class="sc">|&gt;</span></span>
+<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a><span class="co">#&gt;   obs_id     site region elevation            species</span></span>
+<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a><span class="co">#&gt; 1      1 SITE_049   East       998   Pinus sylvestris</span></span>
+<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a><span class="co">#&gt; 2      2 SITE_037   East      1914 Fraxinus excelsior</span></span>
+<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a><span class="co">#&gt; 3      3 SITE_001  South      2374    Alnus glutinosa</span></span>
+<span id="cb26-15"><a href="#cb26-15" tabindex="-1"></a><span class="co">#&gt; 4      4 SITE_025   West      1165   Pinus sylvestris</span></span>
+<span id="cb26-16"><a href="#cb26-16" tabindex="-1"></a><span class="co">#&gt; 5      5 SITE_010   East      1976   Carpinus betulus</span></span></code></pre></div>
+<p>The 50 site metadata rows become the hash table (right side). The
+observation table streams through on the left, each batch probing the
+hash table for its <code>site</code> key. Memory usage is proportional
+to the site metadata, not the observation count.</p>
+<p>What happens when both sides are large? The right side still must fit
+in memory, so we need to reduce it. The most direct approach is to
+filter the right side before the join:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a>joined_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&gt;=</span> <span class="dv">2022</span>) <span class="sc">|&gt;</span></span>
+<span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a>  <span class="fu">inner_join</span>(</span>
+<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>    <span class="fu">tbl</span>(site_path) <span class="sc">|&gt;</span> <span class="fu">filter</span>(region <span class="sc">==</span> <span class="st">&quot;North&quot;</span>),</span>
+<span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;site&quot;</span></span>
+<span id="cb27-8"><a href="#cb27-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb27-9"><a href="#cb27-9" tabindex="-1"></a>  <span class="fu">write_vtr</span>(joined_path)</span>
+<span id="cb27-10"><a href="#cb27-10" tabindex="-1"></a></span>
+<span id="cb27-11"><a href="#cb27-11" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(joined_path) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb27-12"><a href="#cb27-12" tabindex="-1"></a><span class="co">#&gt; [1] 2944</span></span></code></pre></div>
+<p>The filtered right side is much smaller, so the hash table stays
+small. The left-side filter also reduces the number of rows that flow
+through the probe, but that affects throughput rather than memory.</p>
+<p>For self-joins or joins between two truly large tables, the options
+are more constrained. The core problem is that one side must fit in
+memory as a hash table. When neither side is small, we need a strategy
+to make one of them small.</p>
+<p>The most general approach is split-apply-combine: partition the left
+side by a key (say, <code>year</code>), and for each partition, join
+against only the matching rows from the right side. If both tables span
+10 years, each partition pair is roughly 1/10th the size of the full
+join. We write each partial result to disk and consolidate with
+<code>bind_rows()</code> afterward. This trades a single large join for
+many small joins, each of which fits in memory.</p>
+<p>Pre-aggregation is another powerful option. If we only need summary
+statistics from the right table,
+<code>group_by() |&gt; summarise()</code> can reduce millions of rows to
+a handful of groups before the join. A right-side table with 50 million
+observations across 10,000 sites collapses to 10,000 rows after a
+site-level aggregation. That fits comfortably in a hash table.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="co"># Right side: per-site-year summary from a second dataset</span></span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>summary_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a>  <span class="fu">group_by</span>(site, year) <span class="sc">|&gt;</span></span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">site_year_avg =</span> <span class="fu">mean</span>(abundance)) <span class="sc">|&gt;</span></span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a>  <span class="fu">write_vtr</span>(summary_path)</span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a><span class="co"># Join the summary back to the detail table</span></span>
+<span id="cb28-10"><a href="#cb28-10" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb28-11"><a href="#cb28-11" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">tbl</span>(summary_path), <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;site&quot;</span>, <span class="st">&quot;year&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb28-12"><a href="#cb28-12" tabindex="-1"></a>  <span class="fu">select</span>(obs_id, site, year, abundance, site_year_avg) <span class="sc">|&gt;</span></span>
+<span id="cb28-13"><a href="#cb28-13" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb28-14"><a href="#cb28-14" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb28-15"><a href="#cb28-15" tabindex="-1"></a><span class="co">#&gt;   obs_id     site year abundance site_year_avg</span></span>
+<span id="cb28-16"><a href="#cb28-16" tabindex="-1"></a><span class="co">#&gt; 1      1 SITE_049 2023        13      15.86957</span></span>
+<span id="cb28-17"><a href="#cb28-17" tabindex="-1"></a><span class="co">#&gt; 2      2 SITE_037 2024        11      14.44330</span></span>
+<span id="cb28-18"><a href="#cb28-18" tabindex="-1"></a><span class="co">#&gt; 3      3 SITE_001 2015        12      14.48718</span></span>
+<span id="cb28-19"><a href="#cb28-19" tabindex="-1"></a><span class="co">#&gt; 4      4 SITE_025 2018        17      15.00000</span></span>
+<span id="cb28-20"><a href="#cb28-20" tabindex="-1"></a><span class="co">#&gt; 5      5 SITE_010 2023         9      14.81579</span></span></code></pre></div>
+</div>
+<div id="multi-file-workflows" class="section level2">
+<h2>Multi-file workflows</h2>
+<p>Partitioned data is common. Monthly exports, regional splits,
+sensor-specific files. The partitioning dimension matters for query
+performance. Partitioning by date works well when most queries filter on
+a time range, because we can skip entire files that fall outside the
+range. Partitioning by category (region, species, sensor type) works
+when queries target a specific category. The wrong partitioning
+dimension forces us to read every file for every query, negating the
+benefit.</p>
+<p><code>bind_rows()</code> combines multiple vectra nodes into a single
+streaming pipeline. When all inputs share the same schema (column names
+and types), vectra creates a C-level <code>ConcatNode</code> that reads
+from each child sequentially. No data is copied; each source’s batches
+flow through in order.</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a>monthly_paths <span class="ot">&lt;-</span> <span class="fu">character</span>(<span class="dv">6</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a><span class="cf">for</span> (m <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">6</span>) {</span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a>  monthly_paths[m] <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a>  idx <span class="ot">&lt;-</span> <span class="fu">which</span>(obs<span class="sc">$</span>year <span class="sc">==</span> <span class="dv">2024</span> <span class="sc">&amp;</span> ((obs<span class="sc">$</span>obs_id <span class="sc">%%</span> <span class="dv">6</span>) <span class="sc">+</span> <span class="dv">1</span>) <span class="sc">==</span> m)</span>
+<span id="cb29-5"><a href="#cb29-5" tabindex="-1"></a>  month_data <span class="ot">&lt;-</span> obs[idx[<span class="fu">seq_len</span>(<span class="fu">min</span>(<span class="dv">200</span>, <span class="fu">length</span>(idx)))], ]</span>
+<span id="cb29-6"><a href="#cb29-6" tabindex="-1"></a>  <span class="fu">write_vtr</span>(month_data, monthly_paths[m])</span>
+<span id="cb29-7"><a href="#cb29-7" tabindex="-1"></a>}</span></code></pre></div>
+<p>We can combine all monthly files and aggregate without loading them
+all:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a>nodes <span class="ot">&lt;-</span> <span class="fu">lapply</span>(monthly_paths, tbl)</span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>combined <span class="ot">&lt;-</span> <span class="fu">do.call</span>(bind_rows, nodes)</span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a></span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a>combined <span class="sc">|&gt;</span></span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>  <span class="fu">group_by</span>(species) <span class="sc">|&gt;</span></span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a>    <span class="at">total_obs  =</span> <span class="fu">n</span>(),</span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a>    <span class="at">mean_abun  =</span> <span class="fu">mean</span>(abundance)</span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb30-10"><a href="#cb30-10" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(total_obs)) <span class="sc">|&gt;</span></span>
+<span id="cb30-11"><a href="#cb30-11" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb30-12"><a href="#cb30-12" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb30-13"><a href="#cb30-13" tabindex="-1"></a><span class="co">#&gt;            species total_obs mean_abun</span></span>
+<span id="cb30-14"><a href="#cb30-14" tabindex="-1"></a><span class="co">#&gt; 1    Quercus robur       110  14.77273</span></span>
+<span id="cb30-15"><a href="#cb30-15" tabindex="-1"></a><span class="co">#&gt; 2     Ulmus glabra       110  15.44545</span></span>
+<span id="cb30-16"><a href="#cb30-16" tabindex="-1"></a><span class="co">#&gt; 3 Carpinus betulus       108  14.41667</span></span>
+<span id="cb30-17"><a href="#cb30-17" tabindex="-1"></a><span class="co">#&gt; 4    Tilia cordata       106  15.39623</span></span>
+<span id="cb30-18"><a href="#cb30-18" tabindex="-1"></a><span class="co">#&gt; 5  Fagus sylvatica       103  14.68932</span></span></code></pre></div>
+<p>The <code>bind_rows()</code> call does not read any data. It returns
+a new node that, when pulled, first exhausts all batches from the first
+child, then the second, and so on. Downstream operations (the grouping,
+aggregation, sort) see a single continuous stream.</p>
+<p>We can also consolidate the partitioned files into one:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>consolidated <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>nodes2 <span class="ot">&lt;-</span> <span class="fu">lapply</span>(monthly_paths, tbl)</span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a><span class="fu">do.call</span>(bind_rows, nodes2) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(consolidated)</span>
+<span id="cb31-4"><a href="#cb31-4" tabindex="-1"></a></span>
+<span id="cb31-5"><a href="#cb31-5" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(consolidated) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb31-6"><a href="#cb31-6" tabindex="-1"></a><span class="co">#&gt; [1] 1200</span></span></code></pre></div>
+<p>For partitioned files that arrive on a schedule, a common workflow
+combines <code>bind_rows()</code> with <code>append_vtr()</code>. We
+process the latest batch of files and append the result to a running
+archive:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>running_archive <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>initial_nodes <span class="ot">&lt;-</span> <span class="fu">lapply</span>(monthly_paths[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], tbl)</span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a><span class="fu">do.call</span>(bind_rows, initial_nodes) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(running_archive)</span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a></span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a><span class="co"># Next month&#39;s files arrive</span></span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a>new_nodes <span class="ot">&lt;-</span> <span class="fu">lapply</span>(monthly_paths[<span class="dv">4</span><span class="sc">:</span><span class="dv">6</span>], tbl)</span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a><span class="fu">do.call</span>(bind_rows, new_nodes) <span class="sc">|&gt;</span> <span class="fu">append_vtr</span>(running_archive)</span>
+<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a></span>
+<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(running_archive) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb32-10"><a href="#cb32-10" tabindex="-1"></a><span class="co">#&gt; [1] 1200</span></span></code></pre></div>
+<p>This gives us a single growing file that can be queried as a unit,
+while each monthly append is a lightweight operation.</p>
+<p>At some point we may want to consolidate partitioned files into a
+single sorted <code>.vtr</code> for better query performance.
+<code>bind_rows()</code> piped into <code>arrange()</code> and then
+<code>write_vtr()</code> does this in one streaming pass: the concat
+node reads from each partition, the sort accumulates and spills as
+needed, and the writer produces a single file with tight zone-map
+statistics. The original partitions can then be archived or deleted.</p>
+</div>
+<div id="format-conversion-etl" class="section level2">
+<h2>Format conversion ETL</h2>
+<p>A one-time conversion from CSV to <code>.vtr</code> pays off every
+time we query the data afterwards. The <code>.vtr</code> format supports
+dictionary encoding, delta encoding, zstd compression, and zone-map
+statistics. Repeated queries on a <code>.vtr</code> file are faster
+because the engine can skip row groups and decompress only the columns
+it needs. CSV requires a full parse every time.</p>
+<p>A minimal conversion:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a>vtr_archive <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_path) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(vtr_archive)</span></code></pre></div>
+<p>That single line streams the entire CSV through the vectra writer.
+The output file is typed, compressed, and has zone-map statistics. For
+repeated queries, the difference is substantial.</p>
+<p>In practice, we rarely want a raw copy. The ingest step is a natural
+place to clean, filter, and reshape:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>clean_archive <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_path) <span class="sc">|&gt;</span></span>
+<span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a>  <span class="fu">filter</span>(quality <span class="sc">!=</span> <span class="st">&quot;poor&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a>    <span class="at">abundance_log =</span> <span class="fu">log</span>(abundance <span class="sc">+</span> <span class="dv">1</span>),</span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a>    <span class="at">cover_frac    =</span> cover_pct <span class="sc">/</span> <span class="dv">100</span></span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb34-9"><a href="#cb34-9" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>quality) <span class="sc">|&gt;</span></span>
+<span id="cb34-10"><a href="#cb34-10" tabindex="-1"></a>  <span class="fu">arrange</span>(site, year) <span class="sc">|&gt;</span></span>
+<span id="cb34-11"><a href="#cb34-11" tabindex="-1"></a>  <span class="fu">write_vtr</span>(clean_archive, <span class="at">batch_size =</span> <span class="dv">10000</span>)</span></code></pre></div>
+<p>We filtered out poor-quality records, computed derived columns,
+dropped the raw quality flag, sorted by site and year for better
+zone-map pruning, and chose a 10,000-row batch size. The CSV was read
+once, streaming, and the clean result was written directly to disk.</p>
+<p>The inverse direction is also useful. We might need to export a
+subset to a colleague who uses SQLite:</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" tabindex="-1"></a>sqlite_export <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb35-2"><a href="#cb35-2" tabindex="-1"></a></span>
+<span id="cb35-3"><a href="#cb35-3" tabindex="-1"></a><span class="fu">tbl</span>(clean_archive) <span class="sc">|&gt;</span></span>
+<span id="cb35-4"><a href="#cb35-4" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&gt;=</span> <span class="dv">2020</span>) <span class="sc">|&gt;</span></span>
+<span id="cb35-5"><a href="#cb35-5" tabindex="-1"></a>  <span class="fu">write_sqlite</span>(sqlite_export, <span class="st">&quot;observations&quot;</span>)</span></code></pre></div>
+<p>Or produce a CSV of summary statistics for a report:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>summary_csv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a><span class="fu">tbl</span>(clean_archive) <span class="sc">|&gt;</span></span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a>  <span class="fu">group_by</span>(site, year) <span class="sc">|&gt;</span></span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb36-6"><a href="#cb36-6" tabindex="-1"></a>    <span class="at">n_species =</span> <span class="fu">n_distinct</span>(species),</span>
+<span id="cb36-7"><a href="#cb36-7" tabindex="-1"></a>    <span class="at">total_abundance =</span> <span class="fu">sum</span>(abundance)</span>
+<span id="cb36-8"><a href="#cb36-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb36-9"><a href="#cb36-9" tabindex="-1"></a>  <span class="fu">write_csv</span>(summary_csv)</span>
+<span id="cb36-10"><a href="#cb36-10" tabindex="-1"></a></span>
+<span id="cb36-11"><a href="#cb36-11" tabindex="-1"></a><span class="fu">read.csv</span>(summary_csv) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb36-12"><a href="#cb36-12" tabindex="-1"></a><span class="co">#&gt;       site year n_species total_abundance</span></span>
+<span id="cb36-13"><a href="#cb36-13" tabindex="-1"></a><span class="co">#&gt; 1 SITE_001 2015        12            1509</span></span>
+<span id="cb36-14"><a href="#cb36-14" tabindex="-1"></a><span class="co">#&gt; 2 SITE_001 2016        12            1509</span></span>
+<span id="cb36-15"><a href="#cb36-15" tabindex="-1"></a><span class="co">#&gt; 3 SITE_001 2017        12            1249</span></span>
+<span id="cb36-16"><a href="#cb36-16" tabindex="-1"></a><span class="co">#&gt; 4 SITE_001 2018        12            1311</span></span>
+<span id="cb36-17"><a href="#cb36-17" tabindex="-1"></a><span class="co">#&gt; 5 SITE_001 2019        12            1252</span></span>
+<span id="cb36-18"><a href="#cb36-18" tabindex="-1"></a><span class="co">#&gt; 6 SITE_001 2020        12            1266</span></span></code></pre></div>
+<p>Multi-source ETL pipelines combine several inputs. Suppose we have
+regional CSV files that we want to merge and convert:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" tabindex="-1"></a>csv_north <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb37-2"><a href="#cb37-2" tabindex="-1"></a>csv_south <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb37-3"><a href="#cb37-3" tabindex="-1"></a><span class="fu">write.csv</span>(obs[<span class="dv">1</span><span class="sc">:</span><span class="dv">25000</span>, ], csv_north, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb37-4"><a href="#cb37-4" tabindex="-1"></a><span class="fu">write.csv</span>(obs[<span class="dv">25001</span><span class="sc">:</span><span class="dv">50000</span>, ], csv_south, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb37-5"><a href="#cb37-5" tabindex="-1"></a></span>
+<span id="cb37-6"><a href="#cb37-6" tabindex="-1"></a>merged_vtr <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb37-7"><a href="#cb37-7" tabindex="-1"></a></span>
+<span id="cb37-8"><a href="#cb37-8" tabindex="-1"></a><span class="fu">bind_rows</span>(</span>
+<span id="cb37-9"><a href="#cb37-9" tabindex="-1"></a>  <span class="fu">tbl_csv</span>(csv_north),</span>
+<span id="cb37-10"><a href="#cb37-10" tabindex="-1"></a>  <span class="fu">tbl_csv</span>(csv_south)</span>
+<span id="cb37-11"><a href="#cb37-11" tabindex="-1"></a>) <span class="sc">|&gt;</span></span>
+<span id="cb37-12"><a href="#cb37-12" tabindex="-1"></a>  <span class="fu">filter</span>(abundance <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb37-13"><a href="#cb37-13" tabindex="-1"></a>  <span class="fu">write_vtr</span>(merged_vtr, <span class="at">batch_size =</span> <span class="dv">25000</span>)</span>
+<span id="cb37-14"><a href="#cb37-14" tabindex="-1"></a></span>
+<span id="cb37-15"><a href="#cb37-15" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(merged_vtr) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb37-16"><a href="#cb37-16" tabindex="-1"></a><span class="co">#&gt; [1] 50000</span></span></code></pre></div>
+<p>Both CSVs streamed through the concat node, the filter, and the
+writer. Neither was fully loaded into R at any point.</p>
+</div>
+<div id="memory-budget-planning" class="section level2">
+<h2>Memory budget planning</h2>
+<p>Knowing which operations consume memory and how much lets us design
+pipelines that stay within our system’s limits. The central principle is
+“stream early, materialize late.” Every row that we can filter out
+before it reaches a materializing operation (a sort, a join build, a
+grouping hash table) is a row that never occupies memory. Pushing
+filters upstream is not just a performance optimization; for
+larger-than-RAM data, it can be the difference between a pipeline that
+completes and one that exhausts memory.</p>
+<p>Here is a breakdown by operation type.</p>
+<p><strong>Constant-memory (streaming) operations.</strong>
+<code>filter</code>, <code>select</code>, <code>mutate</code>,
+<code>limit</code>, <code>slice_head</code>, and <code>concat</code>
+(bind_rows) all process one batch at a time. Their memory cost is
+proportional to the batch size and the number of columns, not the total
+row count. For a typical batch of 50,000 rows with 10 columns, each
+batch might occupy a few megabytes. These operations are safe for any
+dataset size.</p>
+<p><strong>External sort (arrange).</strong> vectra’s sort node
+accumulates data in memory up to a 1 GB budget. When the budget is
+exceeded, it flushes a sorted run to a temporary file and continues. The
+final merge reads from all runs simultaneously, using a heap that holds
+one row per run. Peak memory is bounded at 1 GB plus the merge overhead.
+For datasets smaller than 1 GB the sort completes entirely in
+memory.</p>
+<p><strong>Hash aggregation (group_by + summarise).</strong> The
+<code>group_agg</code> node maintains one accumulator per distinct group
+key, so memory scales with the number of distinct groups rather than the
+number of input rows. If we group by <code>species</code> (12 values),
+the hash table is tiny. If we group by <code>obs_id</code> (50,000
+distinct values), it is larger. Grouping by a high-cardinality column on
+a billion-row dataset could create millions of accumulators, so it is
+worth checking the expected group count.</p>
+<p><strong>Hash join (build side).</strong> The right-side table is
+fully materialized in a hash table. Memory cost equals the right-side
+data size. A 1 million row reference table with 5 columns might consume
+50 to 100 MB. A 100 million row table would require several gigabytes.
+The left side streams and adds no persistent memory. String columns on
+the build side cost more than numeric columns because each string value
+has variable length and requires its own allocation. A build side with 1
+million rows and a 200-character text column will consume substantially
+more memory than one with only integer and double columns.</p>
+<p><strong>Window functions.</strong> Window operations
+(<code>row_number</code>, <code>lag</code>, <code>lead</code>,
+<code>cumsum</code>, etc.) operate on the current batch. Memory scales
+with batch size. Partitioned windows (via <code>group_by</code>) hold
+data for the current partition. If partitions are balanced and
+moderately sized, memory stays bounded.</p>
+<p>To estimate memory for a pipeline, we identify the materializing
+operations and estimate their footprints:</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="co"># Example pipeline:</span></span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a><span class="co"># tbl(huge.vtr) |&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a><span class="co">#   filter(year == 2023) |&gt;        -&gt; streaming, ~5 MB per batch</span></span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a><span class="co">#   left_join(sites, by = &quot;site&quot;)  -&gt; build side = 50 sites, ~1 KB</span></span>
+<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a><span class="co">#   group_by(species) |&gt;           -&gt; 12 groups, ~1 KB</span></span>
+<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a><span class="co">#   summarise(total = sum(abun))   -&gt; 12 accumulators, ~1 KB</span></span>
+<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a><span class="co">#   arrange(desc(total))           -&gt; 12 rows, in-memory</span></span>
+<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb38-9"><a href="#cb38-9" tabindex="-1"></a><span class="co"># Total peak: ~5 MB (one batch) + negligible join/agg overhead</span></span>
+<span id="cb38-10"><a href="#cb38-10" tabindex="-1"></a></span>
+<span id="cb38-11"><a href="#cb38-11" tabindex="-1"></a><span class="co"># Compare to:</span></span>
+<span id="cb38-12"><a href="#cb38-12" tabindex="-1"></a><span class="co"># tbl(huge.vtr) |&gt;</span></span>
+<span id="cb38-13"><a href="#cb38-13" tabindex="-1"></a><span class="co">#   arrange(species)               -&gt; external sort, up to 1 GB</span></span>
+<span id="cb38-14"><a href="#cb38-14" tabindex="-1"></a><span class="co">#   left_join(big_ref, by = &quot;id&quot;)  -&gt; build side = big_ref size</span></span>
+<span id="cb38-15"><a href="#cb38-15" tabindex="-1"></a><span class="co">#</span></span>
+<span id="cb38-16"><a href="#cb38-16" tabindex="-1"></a><span class="co"># Total peak: 1 GB (sort) + big_ref size</span></span></code></pre></div>
+<p>The general strategy: stream everything we can, materialize only what
+we must. Push filters as early as possible to reduce the volume flowing
+through materializing operations. Put the smaller table on the right
+side of joins. Pre-aggregate before joining when we only need summaries
+from the right side.</p>
+<p>To profile actual memory use, <code>explain()</code> prints the query
+plan tree before execution. We can read the plan to count the
+materializing nodes and estimate their size. For the build side of a
+join, we can <code>collect()</code> the right-side node in isolation and
+check <code>object.size()</code> on the resulting data.frame. That gives
+us the R-level footprint, which is a reasonable upper bound on the
+C-level hash table size. For sort operations, the question is simpler:
+if the total input is under 1 GB, the sort completes in memory;
+otherwise, it spills.</p>
+<p>A practical example that puts these principles together:</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a>final_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb39-2"><a href="#cb39-2" tabindex="-1"></a></span>
+<span id="cb39-3"><a href="#cb39-3" tabindex="-1"></a><span class="fu">tbl</span>(vtr_path) <span class="sc">|&gt;</span></span>
+<span id="cb39-4"><a href="#cb39-4" tabindex="-1"></a>  <span class="fu">filter</span>(year <span class="sc">&gt;=</span> <span class="dv">2020</span>, quality <span class="sc">!=</span> <span class="st">&quot;poor&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb39-5"><a href="#cb39-5" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">tbl</span>(site_path), <span class="at">by =</span> <span class="st">&quot;site&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb39-6"><a href="#cb39-6" tabindex="-1"></a>  <span class="fu">group_by</span>(region, species) <span class="sc">|&gt;</span></span>
+<span id="cb39-7"><a href="#cb39-7" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb39-8"><a href="#cb39-8" tabindex="-1"></a>    <span class="at">n_obs     =</span> <span class="fu">n</span>(),</span>
+<span id="cb39-9"><a href="#cb39-9" tabindex="-1"></a>    <span class="at">mean_cov  =</span> <span class="fu">mean</span>(cover_pct)</span>
+<span id="cb39-10"><a href="#cb39-10" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb39-11"><a href="#cb39-11" tabindex="-1"></a>  <span class="fu">arrange</span>(region, <span class="fu">desc</span>(n_obs)) <span class="sc">|&gt;</span></span>
+<span id="cb39-12"><a href="#cb39-12" tabindex="-1"></a>  <span class="fu">write_vtr</span>(final_path)</span>
+<span id="cb39-13"><a href="#cb39-13" tabindex="-1"></a></span>
+<span id="cb39-14"><a href="#cb39-14" tabindex="-1"></a><span class="fu">tbl</span>(final_path) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">head</span>(<span class="dv">10</span>)</span>
+<span id="cb39-15"><a href="#cb39-15" tabindex="-1"></a><span class="co">#&gt;    region             species n_obs mean_cov</span></span>
+<span id="cb39-16"><a href="#cb39-16" tabindex="-1"></a><span class="co">#&gt; 1    East       Quercus robur   763 47.77667</span></span>
+<span id="cb39-17"><a href="#cb39-17" tabindex="-1"></a><span class="co">#&gt; 2    East      Betula pendula   762 47.67244</span></span>
+<span id="cb39-18"><a href="#cb39-18" tabindex="-1"></a><span class="co">#&gt; 3    East     Fagus sylvatica   747 47.37965</span></span>
+<span id="cb39-19"><a href="#cb39-19" tabindex="-1"></a><span class="co">#&gt; 4    East    Carpinus betulus   737 48.03609</span></span>
+<span id="cb39-20"><a href="#cb39-20" tabindex="-1"></a><span class="co">#&gt; 5    East    Sorbus aucuparia   731 48.28468</span></span>
+<span id="cb39-21"><a href="#cb39-21" tabindex="-1"></a><span class="co">#&gt; 6    East Acer pseudoplatanus   727 47.93122</span></span>
+<span id="cb39-22"><a href="#cb39-22" tabindex="-1"></a><span class="co">#&gt; 7    East    Pinus sylvestris   717 47.46304</span></span>
+<span id="cb39-23"><a href="#cb39-23" tabindex="-1"></a><span class="co">#&gt; 8    East        Ulmus glabra   715 48.95790</span></span>
+<span id="cb39-24"><a href="#cb39-24" tabindex="-1"></a><span class="co">#&gt; 9    East     Alnus glutinosa   712 45.88975</span></span>
+<span id="cb39-25"><a href="#cb39-25" tabindex="-1"></a><span class="co">#&gt; 10   East  Fraxinus excelsior   707 48.80877</span></span></code></pre></div>
+<p>The filter runs first, reducing the data volume before the join. The
+join’s build side is 50 rows of site metadata. The aggregation produces
+at most 4 regions times 12 species = 48 groups. The sort handles 48 rows
+in memory. Total peak memory: one batch from the scan plus a few
+kilobytes. This pipeline would work unchanged on a table with billions
+of rows.</p>
+</div>
+<div id="cleanup" class="section level2">
+<h2>Cleanup</h2>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>all_files <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a>  csv_path, vtr_path, clean_path, db_path, export_csv,</span>
+<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a>  del_demo, <span class="fu">paste0</span>(del_demo, <span class="st">&quot;.del&quot;</span>),</span>
+<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>  snap_v1, snap_v2,</span>
+<span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a>  sorted_path, site_path, enriched, joined_path,</span>
+<span id="cb40-6"><a href="#cb40-6" tabindex="-1"></a>  summary_path, monthly_paths, consolidated, running_archive,</span>
+<span id="cb40-7"><a href="#cb40-7" tabindex="-1"></a>  vtr_archive, clean_archive, sqlite_export, summary_csv,</span>
+<span id="cb40-8"><a href="#cb40-8" tabindex="-1"></a>  csv_north, csv_south, merged_vtr,</span>
+<span id="cb40-9"><a href="#cb40-9" tabindex="-1"></a>  small_groups, large_groups,</span>
+<span id="cb40-10"><a href="#cb40-10" tabindex="-1"></a>  archive, csv_2017, archive_diff, compacted, compacted_del,</span>
+<span id="cb40-11"><a href="#cb40-11" tabindex="-1"></a>  final_path</span>
+<span id="cb40-12"><a href="#cb40-12" tabindex="-1"></a>)</span>
+<span id="cb40-13"><a href="#cb40-13" tabindex="-1"></a><span class="fu">unlink</span>(all_files[<span class="fu">file.exists</span>(all_files)])</span></code></pre></div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

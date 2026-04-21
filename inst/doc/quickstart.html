@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>Getting Started with vectra</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Getting Started with vectra</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>vectra is a columnar query engine for R. It stores data in a custom
+binary format (<code>.vtr</code>), reads it lazily, and processes it
+batch-by-batch through a C11 execution engine. The user-facing API looks
+like dplyr: you chain <code>filter()</code>, <code>mutate()</code>,
+<code>group_by()</code>, <code>summarise()</code>, and the rest. But
+nothing actually runs until you call <code>collect()</code>. That call
+pulls row groups through a tree of plan nodes, each consuming and
+producing fixed-size batches. Memory use stays roughly constant
+regardless of how large the file is.</p>
+<p>The execution model is pull-based. When <code>collect()</code> fires,
+the root node calls <code>next_batch()</code> on its child, which calls
+its own child, and so on down to the scan node that reads from disk.
+Each node transforms one batch and passes it upstream. Filtering uses
+selection vectors rather than copying rows, so a filter over a
+billion-row file touches only the matching indices. Sorting spills to
+temporary files and merges via a k-way min-heap when data exceeds 1 GB.
+Aggregation uses hash tables that grow proportionally to the number of
+groups, not the number of input rows. The engine knows four column
+types: 64-bit integers, doubles, booleans, and variable-length strings,
+each with a separate validity bitmap for NA tracking.</p>
+<p>The question of when to reach for vectra over base R, dplyr,
+data.table, or arrow comes down to working set size and workflow. If
+your data fits comfortably in RAM and you prefer in-memory semantics,
+dplyr and data.table are mature, fast, and well-supported. Arrow’s
+<code>open_dataset()</code> handles partitioned Parquet and multi-file
+scans well and interoperates with the broader Arrow ecosystem (Spark,
+DuckDB, Flight). vectra fills a different niche: dplyr syntax on
+single-file storage with memory-bounded execution and no heavy compiled
+dependencies. The entire C codebase compiles from C11 source with no
+external library dependencies — compression and deflate support are
+vendored in the package itself. There is no C++ compiler requirement, no
+Boost, no protobuf. A 20 GB <code>.vtr</code> file processes on a laptop
+with 8 GB of RAM because the scan node reads one row group at a time and
+the downstream pipeline never holds more than two batches in memory
+simultaneously.</p>
+<p>The on-disk format uses dictionary encoding for low-cardinality
+string columns, delta encoding for monotonic integer sequences, and
+Zstandard compression at the byte level. File sizes are competitive with
+Parquet for typical tabular workloads. Zone-map statistics
+(per-row-group min/max) are stored in the header, enabling the scan node
+to skip irrelevant row groups before decompressing any column data.
+Optional hash indexes stored as <code>.vtri</code> sidecar files
+accelerate equality predicates to O(1) row group lookup.</p>
+<p>This vignette is a taste test. Each section introduces a feature area
+with runnable examples, then points to the relevant deep-dive vignette
+for full coverage. All code uses tempfiles and built-in datasets, so you
+can run every chunk on any machine with vectra installed.</p>
+</div>
+<div id="writing-and-reading-data" class="section level2">
+<h2>Writing and reading data</h2>
+<p>vectra uses a binary columnar format with the <code>.vtr</code>
+extension. A <code>.vtr</code> file contains a header (format version,
+column schema, and row group count), a row group index for fast seeking,
+and then the actual column data per row group. Each column within a row
+group is stored as a typed array with a validity bitmap for NA values.
+The current format version (v4) applies a two-stage encoding stack per
+column per row group. The first stage is a logical encoding: DICTIONARY
+for string columns where fewer than 50% of values are unique (the
+dictionary itself is stored once, and index runs are RLE-compressed),
+DELTA for int64 columns with monotonically increasing values (storing
+first value plus deltas), or PLAIN for everything else. The second stage
+is byte-level compression: Zstandard when the compressed output is
+smaller than the input and the raw data exceeds 64 bytes, or NONE
+otherwise. The file reader handles v1 through v4 transparently; the
+writer always produces v4.</p>
+<p>Write any data.frame to <code>.vtr</code> with
+<code>write_vtr()</code>. Open it lazily with <code>tbl()</code>, which
+returns a <code>vectra_node</code> object. No data is read at this
+point. The <code>tbl()</code> call reads only the file header to learn
+the schema and row group layout.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>node <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>node</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="co">#&gt; vectra query node</span></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co">#&gt; Columns (11):</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a><span class="co">#&gt;   disp &lt;double&gt;</span></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt;   drat &lt;double&gt;</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt;   wt &lt;double&gt;</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt;   qsec &lt;double&gt;</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt;   vs &lt;double&gt;</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt;   am &lt;double&gt;</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt;   gear &lt;double&gt;</span></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a><span class="co">#&gt;   carb &lt;double&gt;</span></span></code></pre></div>
+<p>The print method shows the schema and file path but does not scan any
+data. Call <code>collect()</code> to pull all batches through the plan
+and materialize the result as a data.frame.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="co">#&gt;    mpg cyl disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6  160 110 3.90 2.620 16.46  0  1    4    4</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6  160 110 3.90 2.875 17.02  0  1    4    4</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  108  93 3.85 2.320 18.61  1  1    4    1</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6  258 110 3.08 3.215 19.44  1  0    3    1</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8  360 175 3.15 3.440 17.02  0  0    3    2</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6  225 105 2.76 3.460 20.22  1  0    3    1</span></span></code></pre></div>
+<p>For large datasets, <code>write_vtr()</code> accepts a
+<code>batch_size</code> parameter that controls how many rows go into
+each row group. Smaller row groups give finer-grained zone-map pruning
+(the scan node skips row groups whose min/max statistics exclude your
+filter predicate) but add per-group overhead. The default, one row group
+per data.frame, works well for most in-memory writes. For streaming
+writes from a pipeline, the upstream batch size is preserved.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>f_batched <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f_batched, <span class="at">batch_size =</span> <span class="dv">10</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">tbl</span>(f_batched) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a><span class="co">#&gt; [1] 32</span></span></code></pre></div>
+<p>The row count is the same. The difference is internal layout: 4 row
+groups of approximately 10 rows each instead of 1 row group of 32 rows.
+With smaller row groups, zone-map pruning becomes more selective. If
+<code>mpg</code> ranges from 10.4 to 33.9 across the full dataset but
+only 10.4 to 15.2 within one particular row group, a
+<code>filter(mpg &gt; 20)</code> can skip that row group entirely
+without decompressing any column data. The tradeoff is overhead: each
+row group carries its own encoding metadata and compression frame, so
+very small row groups (under a few hundred rows) waste space on headers.
+For most analytical workloads, row groups between 10,000 and 100,000
+rows strike a good balance.</p>
+</div>
+<div id="filtering-and-selecting" class="section level2">
+<h2>Filtering and selecting</h2>
+<p><code>filter()</code> keeps rows matching one or more conditions.
+Comma-separated conditions inside a single <code>filter()</code> call
+are combined with AND. Use <code>|</code> for OR within a single
+expression. You can also chain multiple <code>filter()</code> calls,
+which stacks FilterNodes in the plan. The engine evaluates them
+sequentially, one batch at a time, so the second filter only sees rows
+that passed the first.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">6</span>, mpg <span class="sc">&gt;</span> <span class="dv">19</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp, wt) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp    wt</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110 2.620</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110 2.875</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; 3 21.4   6 110 3.215</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 4 19.2   6 123 3.440</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 5 19.7   6 175 2.770</span></span></code></pre></div>
+<p>The C engine evaluates the predicate batch-by-batch and sets a
+selection vector on each <code>VecBatch</code>. The selection vector is
+an integer array of indices that passed the predicate. Downstream nodes
+(project, sort, aggregation) read only those indices, so no column data
+is copied or compacted at the filter stage. This zero-copy approach
+means filtering a 50 GB file with a 1% hit rate allocates memory
+proportional to 1% of one batch, not 1% of the entire file.</p>
+<p>NA values in comparisons follow SQL semantics: <code>NA == 6</code>
+evaluates to NA, not FALSE. Rows where the predicate evaluates to NA are
+excluded from the selection vector, the same as rows that evaluate to
+FALSE. To explicitly test for NA, use <code>is.na()</code> in the
+predicate.</p>
+<p>OR conditions and parenthesized expressions work as expected.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">4</span> <span class="sc">|</span> cyl <span class="sc">==</span> <span class="dv">8</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt;    mpg cyl</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt; 1 22.8   4</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt; 2 18.7   8</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; 3 14.3   8</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt; 4 24.4   4</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; 5 22.8   4</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt; 6 16.4   8</span></span></code></pre></div>
+<p>For set membership, <code>%in%</code> is accelerated with a hash set
+when the right-hand side has more than a handful of values. On a column
+with 10 million rows and a set of 500 target values, the hash-based
+<code>%in%</code> is roughly 10x faster than repeated OR
+comparisons.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">%in%</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">6</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#&gt;    mpg cyl</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; 5 18.1   6</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; 6 24.4   4</span></span></code></pre></div>
+<p><code>select()</code> picks columns by name or by tidyselect helper.
+The full tidyselect vocabulary works: <code>starts_with()</code>,
+<code>ends_with()</code>, <code>contains()</code>,
+<code>matches()</code> (regex), <code>where()</code> (type predicate),
+<code>everything()</code>, <code>last_col()</code>, and negation via
+<code>-</code> or <code>!</code>. Column renaming inside
+<code>select()</code> also works (<code>select(miles = mpg)</code>
+renames on the fly). Under the hood, <code>select()</code> inserts a
+ProjectNode that prunes columns from the batch before they reach the
+next verb, so columns you drop are never decompressed from disk in
+subsequent row groups.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">starts_with</span>(<span class="st">&quot;d&quot;</span>), mpg) <span class="sc">|&gt;</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;   disp drat  mpg</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt; 1  160 3.90 21.0</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt; 2  160 3.90 21.0</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt; 3  108 3.85 22.8</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt; 4  258 3.08 21.4</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt; 5  360 3.15 18.7</span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt; 6  225 2.76 18.1</span></span></code></pre></div>
+<p>Negation drops columns.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>am, <span class="sc">-</span>vs, <span class="sc">-</span>gear, <span class="sc">-</span>carb) <span class="sc">|&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt;    mpg cyl disp  hp drat    wt  qsec</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6  160 110 3.90 2.620 16.46</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6  160 110 3.90 2.875 17.02</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  108  93 3.85 2.320 18.61</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6  258 110 3.08 3.215 19.44</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8  360 175 3.15 3.440 17.02</span></span>
+<span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6  225 105 2.76 3.460 20.22</span></span></code></pre></div>
+<p><code>explain()</code> prints the query plan tree. We can see how
+<code>filter()</code> and <code>select()</code> map to plan nodes, and
+where predicate pushdown applies.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">&gt;</span> <span class="dv">4</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; ProjectNode [streaming] </span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt;   FilterNode [streaming] </span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt;     ScanNode [streaming, 3/11 cols (pruned), predicate pushdown, tdc stats] </span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
+<p>The ProjectNode prunes columns before the data reaches R. The
+FilterNode sits below it, and the ScanNode reads from disk. When a hash
+index exists on the filter column, the scan node probes the
+<code>.vtri</code> sidecar index and builds a bitmap of row groups that
+could contain matching rows. Row groups not in the bitmap are skipped
+entirely. This composes with zone-map pruning: even without an explicit
+index, the scan node compares the filter predicate against per-row-group
+min/max statistics and skips row groups that cannot match. Between these
+two mechanisms, a point query on an indexed column over a 10 GB file
+with 1000 row groups might read only 1 row group.</p>
+</div>
+<div id="transforming-columns" class="section level2">
+<h2>Transforming columns</h2>
+<p><code>mutate()</code> adds or replaces columns. All expression
+evaluation happens in the C engine: the R layer captures the expression
+as an abstract syntax tree (via <code>substitute()</code>), serializes
+it into a nested list structure, and passes it across the
+<code>.Call()</code> bridge. The C side walks the expression tree and
+evaluates it element-wise over the batch. Supported operators include
+arithmetic (<code>+</code>, <code>-</code>, <code>*</code>,
+<code>/</code>, <code>%%</code>), comparison (<code>==</code>,
+<code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>,
+<code>&gt;</code>, <code>&gt;=</code>), boolean (<code>&amp;</code>,
+<code>|</code>, <code>!</code>), and unary negation. There is no R-level
+evaluation per row, which is why <code>mutate()</code> on 100 million
+rows runs at C speed regardless of expression complexity.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">kpl =</span> mpg <span class="sc">*</span> <span class="fl">0.425144</span>, <span class="at">hp_per_wt =</span> hp <span class="sc">/</span> wt) <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, kpl, hp, wt, hp_per_wt) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt;    mpg      kpl  hp    wt hp_per_wt</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; 1 21.0 8.928024 110 2.620  41.98473</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; 2 21.0 8.928024 110 2.875  38.26087</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; 3 22.8 9.693283  93 2.320  40.08621</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="co">#&gt; 4 21.4 9.098082 110 3.215  34.21462</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt; 5 18.7 7.950193 175 3.440  50.87209</span></span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt; 6 18.1 7.695106 105 3.460  30.34682</span></span></code></pre></div>
+<p>Math functions are evaluated natively in C: <code>abs()</code>,
+<code>sqrt()</code>, <code>log()</code>, <code>log2()</code>,
+<code>log10()</code>, <code>exp()</code>, <code>floor()</code>,
+<code>ceiling()</code>, <code>round()</code>, <code>sign()</code>,
+<code>trunc()</code>. For element-wise binary min/max,
+<code>pmin()</code> and <code>pmax()</code> take two arguments (columns
+or literals) and return the smaller or larger of each pair. These
+compose with arithmetic to build clamping expressions.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>    <span class="at">log_hp =</span> <span class="fu">log</span>(hp),</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>    <span class="at">hp_floor =</span> <span class="fu">floor</span>(hp <span class="sc">/</span> <span class="dv">10</span>) <span class="sc">*</span> <span class="dv">10</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>    <span class="at">bounded =</span> <span class="fu">pmin</span>(<span class="fu">pmax</span>(mpg, <span class="dv">15</span>), <span class="dv">25</span>)</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a>  <span class="fu">select</span>(hp, log_hp, hp_floor, mpg, bounded) <span class="sc">|&gt;</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co">#&gt;    hp   log_hp hp_floor  mpg bounded</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a><span class="co">#&gt; 1 110 4.700480      110 21.0    21.0</span></span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a><span class="co">#&gt; 2 110 4.700480      110 21.0    21.0</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a><span class="co">#&gt; 3  93 4.532599       90 22.8    22.8</span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co">#&gt; 4 110 4.700480      110 21.4    21.4</span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt; 5 175 5.164786      170 18.7    18.7</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co">#&gt; 6 105 4.653960      100 18.1    18.1</span></span></code></pre></div>
+<p><code>transmute()</code> works like <code>mutate()</code> but drops
+all columns except the new ones.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>    <span class="at">efficiency =</span> mpg <span class="sc">/</span> wt,</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>    <span class="at">power_ratio =</span> hp <span class="sc">/</span> disp</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="co">#&gt;   efficiency power_ratio</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a><span class="co">#&gt; 1   8.015267   0.6875000</span></span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a><span class="co">#&gt; 2   7.304348   0.6875000</span></span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="co">#&gt; 3   9.827586   0.8611111</span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="co">#&gt; 4   6.656299   0.4263566</span></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="co">#&gt; 5   5.436047   0.4861111</span></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="co">#&gt; 6   5.231214   0.4666667</span></span></code></pre></div>
+<p>Type casting converts between vectra’s four internal column types.
+<code>as.numeric()</code> and <code>as.double()</code> cast to double,
+<code>as.integer()</code> casts to int64, <code>as.character()</code>
+casts to string, and <code>as.logical()</code> casts to bool. Casting
+follows R semantics: <code>as.integer()</code> on a double truncates
+toward zero, <code>as.numeric()</code> on a string parses the number or
+returns NA, and <code>as.character()</code> on a numeric formats it as a
+decimal string. These casts happen per-element in C and respect the
+validity bitmap, so NA values stay NA after casting.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">cyl_str =</span> <span class="fu">as.character</span>(cyl)) <span class="sc">|&gt;</span></span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">select</span>(cyl, cyl_str) <span class="sc">|&gt;</span></span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">3</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt;   cyl cyl_str</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; 1   6       6</span></span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="co">#&gt; 2   6       6</span></span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a><span class="co">#&gt; 3   4       4</span></span></code></pre></div>
+<p><code>is.na()</code> tests for missing values by checking the
+validity bitmap directly, without touching the data buffer.
+<code>if_else()</code> and <code>case_when()</code> handle conditional
+logic. Unlike base R’s <code>ifelse()</code>, <code>if_else()</code> is
+type-strict: both branches must have the same type, and the result
+preserves NA from the condition (matching dplyr semantics).
+<code>case_when()</code> evaluates formulas top to bottom and assigns
+the value from the first matching condition. <code>coalesce()</code>
+returns the first non-NA value from an arbitrary number of columns or
+literals. <code>between()</code> is shorthand for
+<code>x &gt;= left &amp; x &lt;= right</code>, compiled to a single AND
+expression internally.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>    <span class="at">size =</span> <span class="fu">case_when</span>(</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>      cyl <span class="sc">==</span> <span class="dv">4</span> <span class="sc">~</span> <span class="st">&quot;small&quot;</span>,</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>      cyl <span class="sc">==</span> <span class="dv">6</span> <span class="sc">~</span> <span class="st">&quot;medium&quot;</span>,</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>      cyl <span class="sc">==</span> <span class="dv">8</span> <span class="sc">~</span> <span class="st">&quot;large&quot;</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>    ),</span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a>    <span class="at">mpg_class =</span> <span class="fu">if_else</span>(mpg <span class="sc">&gt;</span> <span class="dv">20</span>, <span class="st">&quot;high&quot;</span>, <span class="st">&quot;low&quot;</span>),</span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a>    <span class="at">in_range =</span> <span class="fu">between</span>(hp, <span class="dv">100</span>, <span class="dv">200</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>  <span class="fu">select</span>(cyl, size, mpg, mpg_class, hp, in_range) <span class="sc">|&gt;</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="co">#&gt;   cyl   size  mpg mpg_class  hp in_range</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="co">#&gt; 1   6 medium 21.0      high 110     TRUE</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; 2   6 medium 21.0      high 110     TRUE</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="co">#&gt; 3   4  small 22.8      high  93    FALSE</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a><span class="co">#&gt; 4   6 medium 21.4      high 110     TRUE</span></span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a><span class="co">#&gt; 5   8  large 18.7       low 175     TRUE</span></span>
+<span id="cb14-20"><a href="#cb14-20" tabindex="-1"></a><span class="co">#&gt; 6   6 medium 18.1       low 105     TRUE</span></span></code></pre></div>
+<p><code>case_when()</code> accepts a <code>.default</code> argument for
+the fallback value. Formulas are evaluated top to bottom; the first
+matching condition wins.</p>
+<p><code>coalesce()</code> takes any number of arguments and returns the
+first non-NA value for each row. It works with both column references
+and literal values.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>df_na <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="at">a =</span> <span class="fu">c</span>(<span class="cn">NA</span>, <span class="dv">2</span>, <span class="cn">NA</span>, <span class="dv">4</span>),</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>  <span class="at">b =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="cn">NA</span>, <span class="cn">NA</span>, <span class="dv">40</span>),</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>)</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>f_na <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="fu">write_vtr</span>(df_na, f_na)</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="fu">tbl</span>(f_na) <span class="sc">|&gt;</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">filled =</span> <span class="fu">coalesce</span>(a, b, <span class="dv">0</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co">#&gt;    a  b filled</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co">#&gt; 1 NA 10     10</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co">#&gt; 2  2 NA      2</span></span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a><span class="co">#&gt; 3 NA NA      0</span></span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a><span class="co">#&gt; 4  4 40      4</span></span></code></pre></div>
+</div>
+<div id="string-operations" class="section level2">
+<h2>String operations</h2>
+<p>vectra evaluates string functions in C using a two-pass strategy. The
+first pass walks the input strings and computes the total output byte
+count. The second pass allocates a single contiguous buffer of that size
+and fills it. This avoids per-row
+<code>malloc</code>/<code>realloc</code> overhead that would otherwise
+dominate runtime on columns with millions of short strings. For regex
+operations (<code>grepl</code> with <code>fixed = FALSE</code>,
+<code>gsub</code>, <code>sub</code>, <code>str_extract</code>), the
+engine uses POSIX regex compiled once per batch (or once per thread
+under OpenMP), supporting full backreference syntax (<code>\\1</code>,
+<code>\\2</code>, etc.) and capture groups.</p>
+<p>We will use a small dataset with character columns for the examples.
+The patterns here are representative of what you would do on larger
+string columns; the C engine processes them identically regardless of
+batch size.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>people <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;  Alice  &quot;</span>, <span class="st">&quot;Bob&quot;</span>, <span class="st">&quot;Charlie Brown&quot;</span>, <span class="st">&quot;Diana&quot;</span>),</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>  <span class="at">city =</span> <span class="fu">c</span>(<span class="st">&quot;Amsterdam&quot;</span>, <span class="st">&quot;Berlin&quot;</span>, <span class="st">&quot;Chicago&quot;</span>, <span class="st">&quot;Dublin&quot;</span>),</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">email =</span> <span class="fu">c</span>(<span class="st">&quot;alice@example.com&quot;</span>, <span class="st">&quot;bob@test.org&quot;</span>,</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>            <span class="st">&quot;charlie.b@work.net&quot;</span>, <span class="st">&quot;diana@example.com&quot;</span>),</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>)</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>fs <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="fu">write_vtr</span>(people, fs)</span></code></pre></div>
+<p><code>nchar()</code> returns the number of characters in each string
+(not bytes; the engine is UTF-8 aware for multi-byte characters).
+<code>substr()</code> extracts a substring by 1-indexed start and stop
+positions, matching base R semantics. <code>trimws()</code> strips
+leading and trailing whitespace (spaces, tabs, newlines).</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>    <span class="at">name_trimmed =</span> <span class="fu">trimws</span>(name),</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>    <span class="at">name_len =</span> <span class="fu">nchar</span>(<span class="fu">trimws</span>(name)),</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>    <span class="at">city_prefix =</span> <span class="fu">substr</span>(city, <span class="dv">1</span>, <span class="dv">3</span>)</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>  <span class="fu">select</span>(name_trimmed, name_len, city_prefix) <span class="sc">|&gt;</span></span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a><span class="co">#&gt;    name_trimmed name_len city_prefix</span></span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a><span class="co">#&gt; 1         Alice        5         Ams</span></span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a><span class="co">#&gt; 2           Bob        3         Ber</span></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a><span class="co">#&gt; 3 Charlie Brown       13         Chi</span></span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a><span class="co">#&gt; 4         Diana        5         Dub</span></span></code></pre></div>
+<p><code>toupper()</code> and <code>tolower()</code> convert case.
+<code>startsWith()</code> and <code>endsWith()</code> test prefixes and
+suffixes, returning a boolean column.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>    <span class="at">city_upper =</span> <span class="fu">toupper</span>(city),</span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>    <span class="at">is_example =</span> <span class="fu">endsWith</span>(email, <span class="st">&quot;example.com&quot;</span>),</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>    <span class="at">starts_a =</span> <span class="fu">startsWith</span>(city, <span class="st">&quot;A&quot;</span>)</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>  <span class="fu">select</span>(city_upper, email, is_example, starts_a) <span class="sc">|&gt;</span></span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a><span class="co">#&gt;   city_upper              email is_example starts_a</span></span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a><span class="co">#&gt; 1  AMSTERDAM  alice@example.com       TRUE     TRUE</span></span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a><span class="co">#&gt; 2     BERLIN       bob@test.org      FALSE    FALSE</span></span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a><span class="co">#&gt; 3    CHICAGO charlie.b@work.net      FALSE    FALSE</span></span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a><span class="co">#&gt; 4     DUBLIN  diana@example.com       TRUE    FALSE</span></span></code></pre></div>
+<p><code>grepl()</code> tests for pattern matches. The default is fixed
+matching (literal substring search), which is the fastest path and uses
+a simple <code>strstr()</code> internally. Pass
+<code>fixed = FALSE</code> for POSIX regex, which compiles the pattern
+once per batch and applies it element-wise. On columns with more than
+1000 rows, regex <code>grepl</code> is OpenMP-parallelized with
+per-thread regex compilation for thread safety.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">has_at =</span> <span class="fu">grepl</span>(<span class="st">&quot;@example&quot;</span>, email)) <span class="sc">|&gt;</span></span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>  <span class="fu">select</span>(email, has_at) <span class="sc">|&gt;</span></span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a><span class="co">#&gt;                email has_at</span></span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a><span class="co">#&gt; 1  alice@example.com   TRUE</span></span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a><span class="co">#&gt; 2       bob@test.org  FALSE</span></span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a><span class="co">#&gt; 3 charlie.b@work.net  FALSE</span></span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a><span class="co">#&gt; 4  diana@example.com   TRUE</span></span></code></pre></div>
+<p><code>gsub()</code> and <code>sub()</code> perform string
+replacement. <code>gsub()</code> replaces all occurrences of the
+pattern; <code>sub()</code> replaces only the first. Like
+<code>grepl()</code>, the default is fixed matching. Pass
+<code>fixed = FALSE</code> for regex with full backreference support. In
+regex mode, the replacement string can reference capture groups with
+<code>\\1</code>, <code>\\2</code>, and so on, following the POSIX
+extended regex specification.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">domain =</span> <span class="fu">gsub</span>(<span class="st">&quot;.*@&quot;</span>, <span class="st">&quot;&quot;</span>, email, <span class="at">fixed =</span> <span class="cn">FALSE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>  <span class="fu">select</span>(email, domain) <span class="sc">|&gt;</span></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a><span class="co">#&gt;                email      domain</span></span>
+<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a><span class="co">#&gt; 1  alice@example.com example.com</span></span>
+<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a><span class="co">#&gt; 2       bob@test.org    test.org</span></span>
+<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a><span class="co">#&gt; 3 charlie.b@work.net    work.net</span></span>
+<span id="cb20-9"><a href="#cb20-9" tabindex="-1"></a><span class="co">#&gt; 4  diana@example.com example.com</span></span></code></pre></div>
+<p><code>str_extract()</code> pulls out the first match of a regex
+pattern and returns it as a string. When there is no match, the result
+is NA. If the pattern contains a capture group (parentheses),
+<code>str_extract()</code> returns the captured portion rather than the
+full match, which makes it possible to extract structured substrings
+like domains from URLs or species epithets from binomial names.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">user =</span> <span class="fu">str_extract</span>(email, <span class="st">&quot;^[^@]+&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a>  <span class="fu">select</span>(email, user) <span class="sc">|&gt;</span></span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a><span class="co">#&gt;                email      user</span></span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a><span class="co">#&gt; 1  alice@example.com     alice</span></span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a><span class="co">#&gt; 2       bob@test.org       bob</span></span>
+<span id="cb21-8"><a href="#cb21-8" tabindex="-1"></a><span class="co">#&gt; 3 charlie.b@work.net charlie.b</span></span>
+<span id="cb21-9"><a href="#cb21-9" tabindex="-1"></a><span class="co">#&gt; 4  diana@example.com     diana</span></span></code></pre></div>
+<p><code>paste()</code> and <code>paste0()</code> concatenate columns
+and literals. Both are N-ary: they accept any number of arguments,
+mixing column references and string literals freely.
+<code>paste()</code> takes a <code>sep</code> argument (default
+<code>&quot; &quot;</code>) that is inserted between each pair of arguments;
+<code>paste0()</code> concatenates with no separator. Internally, these
+use the two-pass allocation strategy: the first pass sums up the output
+lengths across all arguments, allocates once, then the second pass
+writes the concatenated strings into the pre-sized buffer.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="fu">tbl</span>(fs) <span class="sc">|&gt;</span></span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>    <span class="at">greeting =</span> <span class="fu">paste0</span>(<span class="st">&quot;Hello, &quot;</span>, <span class="fu">trimws</span>(name), <span class="st">&quot;!&quot;</span>),</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>    <span class="at">label =</span> <span class="fu">paste</span>(<span class="fu">trimws</span>(name), city, <span class="at">sep =</span> <span class="st">&quot; - &quot;</span>)</span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a>  <span class="fu">select</span>(greeting, label) <span class="sc">|&gt;</span></span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="co">#&gt;                greeting                   label</span></span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a><span class="co">#&gt; 1         Hello, Alice!       Alice - Amsterdam</span></span>
+<span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a><span class="co">#&gt; 2           Hello, Bob!            Bob - Berlin</span></span>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a><span class="co">#&gt; 3 Hello, Charlie Brown! Charlie Brown - Chicago</span></span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a><span class="co">#&gt; 4         Hello, Diana!          Diana - Dublin</span></span></code></pre></div>
+<p>For a complete reference of string operations, regex patterns, and
+performance characteristics on large columns, see
+<code>vignette(&quot;string-ops&quot;)</code>.</p>
+</div>
+<div id="aggregation" class="section level2">
+<h2>Aggregation</h2>
+<p><code>group_by()</code> marks columns as grouping keys. It is
+metadata-only: no plan node is created, no data is scanned, and the
+grouping information simply attaches to the <code>vectra_node</code> as
+an R-level attribute. The C engine only learns about the groups when
+<code>summarise()</code> (or equivalently <code>summarize()</code>) is
+called, at which point a GroupAggNode is created in the plan. This node
+builds a hash table keyed on the group columns and accumulates
+aggregation results in a single pass through the input batches. Each
+batch’s rows are hashed, looked up in the hash table, and their values
+are folded into the running aggregation state. Once all batches are
+consumed, the hash table entries are flushed as the output.</p>
+<p>vectra supports 14 aggregation functions, all evaluated in C:
+<code>n()</code>, <code>sum()</code>, <code>mean()</code>,
+<code>min()</code>, <code>max()</code>, <code>sd()</code>,
+<code>var()</code>, <code>first()</code>, <code>last()</code>,
+<code>any()</code>, <code>all()</code>, <code>median()</code>,
+<code>n_distinct()</code>. All except <code>n()</code> take a column
+name as their first argument. All except <code>n()</code> and
+<code>n_distinct()</code> accept <code>na.rm = TRUE</code> to skip NA
+values. Without <code>na.rm</code>, any NA in a group poisons the
+result: <code>sum()</code> returns NA, <code>mean()</code> returns NA,
+and so on. This matches base R semantics. With
+<code>na.rm = TRUE</code>, the behavior also matches R:
+<code>sum()</code> on all-NA returns 0, <code>mean()</code> on all-NA
+returns NaN, and <code>min()</code>/<code>max()</code> on all-NA return
+Inf/-Inf with a warning.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a>    <span class="at">count =</span> <span class="fu">n</span>(),</span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a>    <span class="at">avg_mpg =</span> <span class="fu">mean</span>(mpg),</span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a>    <span class="at">total_hp =</span> <span class="fu">sum</span>(hp),</span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a>    <span class="at">best_mpg =</span> <span class="fu">max</span>(mpg)</span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="co">#&gt;   cyl count  avg_mpg total_hp best_mpg</span></span>
+<span id="cb23-11"><a href="#cb23-11" tabindex="-1"></a><span class="co">#&gt; 1   4    11 26.66364      909     33.9</span></span>
+<span id="cb23-12"><a href="#cb23-12" tabindex="-1"></a><span class="co">#&gt; 2   6     7 19.74286      856     21.4</span></span>
+<span id="cb23-13"><a href="#cb23-13" tabindex="-1"></a><span class="co">#&gt; 3   8    14 15.10000     2929     19.2</span></span></code></pre></div>
+<p>The result has one row per group. Groups are not guaranteed to be in
+any particular order unless you add an <code>arrange()</code>
+afterward.</p>
+<p><code>sd()</code> and <code>var()</code> compute sample standard
+deviation and variance using the Welford one-pass algorithm (denominator
+<code>n - 1</code>, matching R’s <code>sd()</code> and
+<code>var()</code>). <code>first()</code> and <code>last()</code> return
+the first and last non-NA values encountered in scan order within each
+group. <code>any()</code> and <code>all()</code> reduce boolean (or
+boolean-coercible) columns, returning TRUE/FALSE per group. These are
+useful for flagging groups that contain at least one positive
+observation or checking whether all rows in a group satisfy a
+condition.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>    <span class="at">mpg_sd =</span> <span class="fu">sd</span>(mpg),</span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>    <span class="at">mpg_var =</span> <span class="fu">var</span>(mpg),</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>    <span class="at">first_hp =</span> <span class="fu">first</span>(hp),</span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a>    <span class="at">last_hp =</span> <span class="fu">last</span>(hp)</span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a><span class="co">#&gt;   cyl   mpg_sd   mpg_var first_hp last_hp</span></span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="co">#&gt; 1   4 4.509828 20.338545       93     109</span></span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt; 2   6 1.453567  2.112857      110     175</span></span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; 3   8 2.560048  6.553846      175     335</span></span></code></pre></div>
+<p><code>median()</code> uses a per-group dynamic array and quicksort
+internally. <code>n_distinct()</code> uses a per-group open-addressing
+hash set with FNV-1a hashing at 70% load factor.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a>    <span class="at">med_mpg =</span> <span class="fu">median</span>(mpg),</span>
+<span id="cb25-5"><a href="#cb25-5" tabindex="-1"></a>    <span class="at">unique_gears =</span> <span class="fu">n_distinct</span>(gear)</span>
+<span id="cb25-6"><a href="#cb25-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb25-7"><a href="#cb25-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb25-8"><a href="#cb25-8" tabindex="-1"></a><span class="co">#&gt;   cyl med_mpg unique_gears</span></span>
+<span id="cb25-9"><a href="#cb25-9" tabindex="-1"></a><span class="co">#&gt; 1   4    26.0            3</span></span>
+<span id="cb25-10"><a href="#cb25-10" tabindex="-1"></a><span class="co">#&gt; 2   6    19.7            3</span></span>
+<span id="cb25-11"><a href="#cb25-11" tabindex="-1"></a><span class="co">#&gt; 3   8    15.2            2</span></span></code></pre></div>
+<p>For quick counts, <code>count()</code> and <code>tally()</code> are
+convenient shorthands. <code>count()</code> takes grouping columns
+inline; <code>tally()</code> uses existing groups.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>  <span class="fu">count</span>(cyl, <span class="at">sort =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a><span class="co">#&gt;   cyl  n</span></span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a><span class="co">#&gt; 1   8 14</span></span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="co">#&gt; 2   4 11</span></span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="co">#&gt; 3   6  7</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a>  <span class="fu">group_by</span>(gear) <span class="sc">|&gt;</span></span>
+<span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a>  <span class="fu">tally</span>() <span class="sc">|&gt;</span></span>
+<span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a><span class="co">#&gt;   gear  n</span></span>
+<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a><span class="co">#&gt; 1    3 15</span></span>
+<span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a><span class="co">#&gt; 2    4 12</span></span>
+<span id="cb27-8"><a href="#cb27-8" tabindex="-1"></a><span class="co">#&gt; 3    5  5</span></span></code></pre></div>
+<p><code>across()</code> applies the same function or set of functions
+to multiple columns at once. It works inside both
+<code>summarise()</code> and <code>mutate()</code>, accepting tidyselect
+column specifications (including helpers like
+<code>where(is.numeric)</code>, <code>starts_with()</code>, etc.) and
+functions as either a single function, a formula
+(<code>~ .x + 1</code>), or a named list of functions. The
+<code>.names</code> argument controls output column naming with
+<code>{.col}</code> and <code>{.fn}</code> glue-style placeholders, so
+you get predictable names like <code>mpg_avg</code>,
+<code>hp_total</code> without manual repetition. Under the hood,
+<code>across()</code> is expanded at the R level into individual
+aggregation expressions before the plan reaches C, so there is no
+runtime overhead compared to writing each expression by hand.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(<span class="fu">c</span>(mpg, hp, wt), mean)) <span class="sc">|&gt;</span></span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a><span class="co">#&gt;   cyl      mpg        hp       wt</span></span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a><span class="co">#&gt; 1   4 26.66364  82.63636 2.285727</span></span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a><span class="co">#&gt; 2   6 19.74286 122.28571 3.117143</span></span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a><span class="co">#&gt; 3   8 15.10000 209.21429 3.999214</span></span></code></pre></div>
+<p>With multiple functions and a naming pattern:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="fu">across</span>(</span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a>    <span class="fu">c</span>(mpg, hp),</span>
+<span id="cb29-5"><a href="#cb29-5" tabindex="-1"></a>    <span class="fu">list</span>(<span class="at">avg =</span> mean, <span class="at">total =</span> sum),</span>
+<span id="cb29-6"><a href="#cb29-6" tabindex="-1"></a>    <span class="at">.names =</span> <span class="st">&quot;{.col}_{.fn}&quot;</span></span>
+<span id="cb29-7"><a href="#cb29-7" tabindex="-1"></a>  )) <span class="sc">|&gt;</span></span>
+<span id="cb29-8"><a href="#cb29-8" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb29-9"><a href="#cb29-9" tabindex="-1"></a><span class="co">#&gt;   cyl  mpg_avg    hp_avg mpg_total hp_total</span></span>
+<span id="cb29-10"><a href="#cb29-10" tabindex="-1"></a><span class="co">#&gt; 1   4 26.66364  82.63636     293.3      909</span></span>
+<span id="cb29-11"><a href="#cb29-11" tabindex="-1"></a><span class="co">#&gt; 2   6 19.74286 122.28571     138.2      856</span></span>
+<span id="cb29-12"><a href="#cb29-12" tabindex="-1"></a><span class="co">#&gt; 3   8 15.10000 209.21429     211.4     2929</span></span></code></pre></div>
+<p><code>ungroup()</code> removes grouping metadata from a node. This is
+occasionally needed when you want to apply a second
+<code>summarise()</code> with different groups, or when you want window
+functions to operate on the full dataset rather than per-group.</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl, gear) <span class="sc">|&gt;</span></span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>(), <span class="at">.groups =</span> <span class="st">&quot;keep&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a>  <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(n)) <span class="sc">|&gt;</span></span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a><span class="co">#&gt;   cyl gear  n</span></span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a><span class="co">#&gt; 1   8    3 12</span></span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a><span class="co">#&gt; 2   4    4  8</span></span>
+<span id="cb30-10"><a href="#cb30-10" tabindex="-1"></a><span class="co">#&gt; 3   6    4  4</span></span>
+<span id="cb30-11"><a href="#cb30-11" tabindex="-1"></a><span class="co">#&gt; 4   4    5  2</span></span>
+<span id="cb30-12"><a href="#cb30-12" tabindex="-1"></a><span class="co">#&gt; 5   6    3  2</span></span>
+<span id="cb30-13"><a href="#cb30-13" tabindex="-1"></a><span class="co">#&gt; 6   8    5  2</span></span>
+<span id="cb30-14"><a href="#cb30-14" tabindex="-1"></a><span class="co">#&gt; 7   4    3  1</span></span>
+<span id="cb30-15"><a href="#cb30-15" tabindex="-1"></a><span class="co">#&gt; 8   6    5  1</span></span></code></pre></div>
+<p>The <code>.groups</code> argument to <code>summarise()</code>
+controls what happens to grouping after aggregation.
+<code>&quot;drop_last&quot;</code> (the default) peels off the last grouping
+column, <code>&quot;drop&quot;</code> removes all groups, and <code>&quot;keep&quot;</code>
+preserves them.</p>
+</div>
+<div id="sorting-and-slicing" class="section level2">
+<h2>Sorting and slicing</h2>
+<p><code>arrange()</code> sorts rows. Wrap column names in
+<code>desc()</code> for descending order. Sort is stable: rows with
+equal sort keys preserve their original order.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>  <span class="fu">arrange</span>(cyl, <span class="fu">desc</span>(mpg)) <span class="sc">|&gt;</span></span>
+<span id="cb31-4"><a href="#cb31-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb31-5"><a href="#cb31-5" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">8</span>)</span>
+<span id="cb31-6"><a href="#cb31-6" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp</span></span>
+<span id="cb31-7"><a href="#cb31-7" tabindex="-1"></a><span class="co">#&gt; 1 33.9   4  65</span></span>
+<span id="cb31-8"><a href="#cb31-8" tabindex="-1"></a><span class="co">#&gt; 2 32.4   4  66</span></span>
+<span id="cb31-9"><a href="#cb31-9" tabindex="-1"></a><span class="co">#&gt; 3 30.4   4  52</span></span>
+<span id="cb31-10"><a href="#cb31-10" tabindex="-1"></a><span class="co">#&gt; 4 30.4   4 113</span></span>
+<span id="cb31-11"><a href="#cb31-11" tabindex="-1"></a><span class="co">#&gt; 5 27.3   4  66</span></span>
+<span id="cb31-12"><a href="#cb31-12" tabindex="-1"></a><span class="co">#&gt; 6 26.0   4  91</span></span>
+<span id="cb31-13"><a href="#cb31-13" tabindex="-1"></a><span class="co">#&gt; 7 24.4   4  62</span></span>
+<span id="cb31-14"><a href="#cb31-14" tabindex="-1"></a><span class="co">#&gt; 8 22.8   4  93</span></span></code></pre></div>
+<p>Under the hood, <code>arrange()</code> uses an external merge sort
+with a 1 GB memory budget. When data exceeds that limit, sorted runs
+spill to temporary <code>.vtr</code> files and merge via a k-way
+min-heap. NAs sort last in ascending order and first in descending
+order.</p>
+<p><code>slice_head()</code> and <code>slice_tail()</code> return the
+first or last <code>n</code> rows. <code>slice_head()</code> is
+streaming (it creates a LimitNode that stops pulling after
+<code>n</code> rows). <code>slice_tail()</code> must materialize all
+rows to know the total count.</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a><span class="co">#&gt;    mpg cyl disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6  160 110 3.90 2.620 16.46  0  1    4    4</span></span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6  160 110 3.90 2.875 17.02  0  1    4    4</span></span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  108  93 3.85 2.320 18.61  1  1    4    1</span></span>
+<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6  258 110 3.08 3.215 19.44  1  0    3    1</span></span>
+<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8  360 175 3.15 3.440 17.02  0  0    3    2</span></span></code></pre></div>
+<p><code>slice_min()</code> and <code>slice_max()</code> use an
+optimized top-N algorithm (a bounded heap) that avoids a full sort. This
+matters when you want the 10 smallest values from a 100-million-row
+dataset: the heap holds at most 10 entries at any point.</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a>  <span class="fu">slice_min</span>(<span class="at">order_by =</span> mpg, <span class="at">n =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb33-4"><a href="#cb33-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb33-5"><a href="#cb33-5" tabindex="-1"></a><span class="co">#&gt;     mpg cyl  hp</span></span>
+<span id="cb33-6"><a href="#cb33-6" tabindex="-1"></a><span class="co">#&gt; 15 10.4   8 205</span></span>
+<span id="cb33-7"><a href="#cb33-7" tabindex="-1"></a><span class="co">#&gt; 16 10.4   8 215</span></span>
+<span id="cb33-8"><a href="#cb33-8" tabindex="-1"></a><span class="co">#&gt; 24 13.3   8 245</span></span></code></pre></div>
+<p>By default, <code>slice_min()</code> and <code>slice_max()</code>
+include ties. The result may contain more than <code>n</code> rows if
+multiple rows share the boundary value. Use
+<code>with_ties = FALSE</code> for exactly <code>n</code> rows.</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a>  <span class="fu">slice_min</span>(<span class="at">order_by =</span> cyl, <span class="at">n =</span> <span class="dv">3</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a><span class="co">#&gt;    mpg cyl</span></span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a><span class="co">#&gt; 1 22.8   4</span></span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a><span class="co">#&gt; 2 24.4   4</span></span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4</span></span></code></pre></div>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb35-2"><a href="#cb35-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb35-3"><a href="#cb35-3" tabindex="-1"></a>  <span class="fu">slice_max</span>(<span class="at">order_by =</span> hp, <span class="at">n =</span> <span class="dv">4</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb35-4"><a href="#cb35-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb35-5"><a href="#cb35-5" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp</span></span>
+<span id="cb35-6"><a href="#cb35-6" tabindex="-1"></a><span class="co">#&gt; 1 15.0   8 335</span></span>
+<span id="cb35-7"><a href="#cb35-7" tabindex="-1"></a><span class="co">#&gt; 2 15.8   8 264</span></span>
+<span id="cb35-8"><a href="#cb35-8" tabindex="-1"></a><span class="co">#&gt; 3 14.3   8 245</span></span>
+<span id="cb35-9"><a href="#cb35-9" tabindex="-1"></a><span class="co">#&gt; 4 13.3   8 245</span></span></code></pre></div>
+</div>
+<div id="joins" class="section level2">
+<h2>Joins</h2>
+<p>vectra implements hash joins using a build-right, probe-left
+strategy. The entire right-side table is consumed and stored in a hash
+table keyed on the join columns. Then left-side batches stream through
+one at a time, probing the hash table for matches. Memory cost is
+proportional to the number of rows in the right-side table, so the
+standard practice is to put the smaller table on the right. For a left
+table with 500 million rows and a right table with 50,000 rows, the hash
+table holds 50,000 entries and the left side streams through in constant
+memory.</p>
+<p>Seven join types are available. <code>left_join()</code> keeps all
+left rows and fills unmatched right columns with NA.
+<code>inner_join()</code> keeps only rows with matches on both sides.
+<code>right_join()</code> keeps all right rows. <code>full_join()</code>
+keeps everything from both sides, filling NA where there is no match.
+<code>semi_join()</code> keeps left rows that have at least one match on
+the right, without adding any right-side columns.
+<code>anti_join()</code> keeps left rows that have no match.
+<code>cross_join()</code> produces the Cartesian product (every left row
+paired with every right row). NA keys never match in any join type,
+following SQL NULL semantics.</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>cyl_info <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a>  <span class="at">cyl =</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">6</span>, <span class="dv">8</span>),</span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a>  <span class="at">engine_type =</span> <span class="fu">c</span>(<span class="st">&quot;inline&quot;</span>, <span class="st">&quot;v-type&quot;</span>, <span class="st">&quot;v-type&quot;</span>),</span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>)</span>
+<span id="cb36-6"><a href="#cb36-6" tabindex="-1"></a>f_cyl <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb36-7"><a href="#cb36-7" tabindex="-1"></a><span class="fu">write_vtr</span>(cyl_info, f_cyl)</span></code></pre></div>
+<p><code>left_join()</code> keeps all rows from the left table.
+Unmatched right-side columns are filled with NA.</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb37-2"><a href="#cb37-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb37-3"><a href="#cb37-3" tabindex="-1"></a>  <span class="fu">left_join</span>(<span class="fu">tbl</span>(f_cyl), <span class="at">by =</span> <span class="st">&quot;cyl&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb37-4"><a href="#cb37-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb37-5"><a href="#cb37-5" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb37-6"><a href="#cb37-6" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp engine_type</span></span>
+<span id="cb37-7"><a href="#cb37-7" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110      v-type</span></span>
+<span id="cb37-8"><a href="#cb37-8" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110      v-type</span></span>
+<span id="cb37-9"><a href="#cb37-9" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  93      inline</span></span>
+<span id="cb37-10"><a href="#cb37-10" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6 110      v-type</span></span>
+<span id="cb37-11"><a href="#cb37-11" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8 175      v-type</span></span>
+<span id="cb37-12"><a href="#cb37-12" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6 105      v-type</span></span></code></pre></div>
+<p><code>inner_join()</code> keeps only rows with matching keys on both
+sides. <code>semi_join()</code> keeps left-side rows that have a match
+on the right but does not add any right-side columns.
+<code>anti_join()</code> keeps left-side rows that have no match.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a>  <span class="fu">anti_join</span>(</span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a>    <span class="fu">tbl</span>(f_cyl) <span class="sc">|&gt;</span> <span class="fu">filter</span>(engine_type <span class="sc">==</span> <span class="st">&quot;v-type&quot;</span>),</span>
+<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a>    <span class="at">by =</span> <span class="st">&quot;cyl&quot;</span></span>
+<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb38-9"><a href="#cb38-9" tabindex="-1"></a><span class="co">#&gt;    mpg cyl</span></span>
+<span id="cb38-10"><a href="#cb38-10" tabindex="-1"></a><span class="co">#&gt; 1 22.8   4</span></span>
+<span id="cb38-11"><a href="#cb38-11" tabindex="-1"></a><span class="co">#&gt; 2 24.4   4</span></span>
+<span id="cb38-12"><a href="#cb38-12" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4</span></span>
+<span id="cb38-13"><a href="#cb38-13" tabindex="-1"></a><span class="co">#&gt; 4 32.4   4</span></span>
+<span id="cb38-14"><a href="#cb38-14" tabindex="-1"></a><span class="co">#&gt; 5 30.4   4</span></span>
+<span id="cb38-15"><a href="#cb38-15" tabindex="-1"></a><span class="co">#&gt; 6 33.9   4</span></span></code></pre></div>
+<p>That returns only the 4-cylinder cars, since both 6- and 8-cylinder
+entries are in the “v-type” subset.</p>
+<p>For joins on differently named columns, use a named vector in
+<code>by</code>. Multi-column keys work by passing multiple names.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a>ratings <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb39-2"><a href="#cb39-2" tabindex="-1"></a>  <span class="at">cylinders =</span> <span class="fu">c</span>(<span class="dv">4</span>, <span class="dv">6</span>, <span class="dv">8</span>),</span>
+<span id="cb39-3"><a href="#cb39-3" tabindex="-1"></a>  <span class="at">rating =</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>, <span class="st">&quot;C&quot;</span>),</span>
+<span id="cb39-4"><a href="#cb39-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb39-5"><a href="#cb39-5" tabindex="-1"></a>)</span>
+<span id="cb39-6"><a href="#cb39-6" tabindex="-1"></a>f_rat <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb39-7"><a href="#cb39-7" tabindex="-1"></a><span class="fu">write_vtr</span>(ratings, f_rat)</span>
+<span id="cb39-8"><a href="#cb39-8" tabindex="-1"></a></span>
+<span id="cb39-9"><a href="#cb39-9" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb39-10"><a href="#cb39-10" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb39-11"><a href="#cb39-11" tabindex="-1"></a>  <span class="fu">inner_join</span>(<span class="fu">tbl</span>(f_rat), <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;cyl&quot;</span> <span class="ot">=</span> <span class="st">&quot;cylinders&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb39-12"><a href="#cb39-12" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb39-13"><a href="#cb39-13" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb39-14"><a href="#cb39-14" tabindex="-1"></a><span class="co">#&gt;    mpg cyl rating</span></span>
+<span id="cb39-15"><a href="#cb39-15" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6      B</span></span>
+<span id="cb39-16"><a href="#cb39-16" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6      B</span></span>
+<span id="cb39-17"><a href="#cb39-17" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4      A</span></span>
+<span id="cb39-18"><a href="#cb39-18" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6      B</span></span>
+<span id="cb39-19"><a href="#cb39-19" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8      C</span></span>
+<span id="cb39-20"><a href="#cb39-20" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6      B</span></span></code></pre></div>
+<p>The <code>suffix</code> argument (default <code>c(&quot;.x&quot;, &quot;.y&quot;)</code>)
+controls how non-key columns with the same name on both sides are
+disambiguated. For example, if both tables have a column called
+<code>value</code>, the output will contain <code>value.x</code> from
+the left and <code>value.y</code> from the right. Multi-column keys work
+by passing a character vector to <code>by</code>, either unnamed (same
+column names on both sides) or named (mapping left names to right
+names).</p>
+<p>Key types are auto-coerced following the
+<code>bool &lt; int64 &lt; double</code> promotion hierarchy. If the
+left key is int64 and the right key is double, the int64 values are
+promoted to double before hashing. Joining a string column against a
+numeric column is an error and fails immediately with a descriptive
+message.</p>
+<p>vectra also supports <code>fuzzy_join()</code> for approximate string
+matching between tables. It computes string distances between key
+columns and keeps pairs within a normalized distance threshold.</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>ref_species <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a>  <span class="at">canonical =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Quercus petraea&quot;</span>,</span>
+<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a>                 <span class="st">&quot;Fagus sylvatica&quot;</span>),</span>
+<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>  <span class="at">code =</span> <span class="fu">c</span>(<span class="st">&quot;QR&quot;</span>, <span class="st">&quot;QP&quot;</span>, <span class="st">&quot;FS&quot;</span>),</span>
+<span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb40-6"><a href="#cb40-6" tabindex="-1"></a>)</span>
+<span id="cb40-7"><a href="#cb40-7" tabindex="-1"></a>query_species <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb40-8"><a href="#cb40-8" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Qurecus petraea&quot;</span>,</span>
+<span id="cb40-9"><a href="#cb40-9" tabindex="-1"></a>           <span class="st">&quot;Fagus sylvatca&quot;</span>),</span>
+<span id="cb40-10"><a href="#cb40-10" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb40-11"><a href="#cb40-11" tabindex="-1"></a>)</span>
+<span id="cb40-12"><a href="#cb40-12" tabindex="-1"></a>f_ref <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb40-13"><a href="#cb40-13" tabindex="-1"></a>f_query <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb40-14"><a href="#cb40-14" tabindex="-1"></a><span class="fu">write_vtr</span>(ref_species, f_ref)</span>
+<span id="cb40-15"><a href="#cb40-15" tabindex="-1"></a><span class="fu">write_vtr</span>(query_species, f_query)</span>
+<span id="cb40-16"><a href="#cb40-16" tabindex="-1"></a></span>
+<span id="cb40-17"><a href="#cb40-17" tabindex="-1"></a><span class="fu">tbl</span>(f_query) <span class="sc">|&gt;</span></span>
+<span id="cb40-18"><a href="#cb40-18" tabindex="-1"></a>  <span class="fu">fuzzy_join</span>(</span>
+<span id="cb40-19"><a href="#cb40-19" tabindex="-1"></a>    <span class="fu">tbl</span>(f_ref),</span>
+<span id="cb40-20"><a href="#cb40-20" tabindex="-1"></a>    <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;name&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>),</span>
+<span id="cb40-21"><a href="#cb40-21" tabindex="-1"></a>    <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb40-22"><a href="#cb40-22" tabindex="-1"></a>    <span class="at">max_dist =</span> <span class="fl">0.15</span></span>
+<span id="cb40-23"><a href="#cb40-23" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb40-24"><a href="#cb40-24" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb40-25"><a href="#cb40-25" tabindex="-1"></a><span class="co">#&gt;              name       canonical code fuzzy_dist</span></span>
+<span id="cb40-26"><a href="#cb40-26" tabindex="-1"></a><span class="co">#&gt; 1   Quercus robur   Quercus robur   QR 0.00000000</span></span>
+<span id="cb40-27"><a href="#cb40-27" tabindex="-1"></a><span class="co">#&gt; 2 Qurecus petraea Quercus petraea   QP 0.06666667</span></span>
+<span id="cb40-28"><a href="#cb40-28" tabindex="-1"></a><span class="co">#&gt; 3  Fagus sylvatca Fagus sylvatica   FS 0.06666667</span></span></code></pre></div>
+<p>The <code>method</code> argument accepts <code>&quot;dl&quot;</code>
+(Damerau-Levenshtein), <code>&quot;levenshtein&quot;</code>, or <code>&quot;jw&quot;</code>
+(Jaro-Winkler). The <code>block_by</code> parameter restricts
+comparisons to rows sharing an exact-match value on a second column,
+which can reduce runtime by orders of magnitude on large reference
+tables. For full documentation, see <code>vignette(&quot;joins&quot;)</code>.</p>
+</div>
+<div id="window-functions" class="section level2">
+<h2>Window functions</h2>
+<p>Window functions compute values row-by-row in the context of the full
+dataset or a per-group partition. Unlike aggregation, which collapses
+groups to single rows, window functions preserve the original row count.
+They are detected inside <code>mutate()</code> by function name and
+automatically routed to a dedicated WindowNode in the execution plan.
+The WindowNode is a materializing operation: it consumes all input rows
+(per partition) before producing output, because functions like
+<code>rank()</code> need to see all values before assigning ranks.</p>
+<p>vectra supports 12 window functions organized in three families.
+Ranking functions: <code>row_number()</code> (no argument, sequential
+1..n), <code>rank()</code> and <code>dense_rank()</code> (take a column
+argument, with <code>rank()</code> leaving gaps on ties and
+<code>dense_rank()</code> not), <code>ntile(n)</code> (divides rows into
+<code>n</code> roughly equal buckets), <code>percent_rank()</code> and
+<code>cume_dist()</code> (take a column argument, return normalized rank
+as a double between 0 and 1). Offset functions: <code>lag()</code> and
+<code>lead()</code>. Cumulative functions: <code>cumsum()</code>,
+<code>cummean()</code>, <code>cummin()</code>,
+<code>cummax()</code>.</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb41-2"><a href="#cb41-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb41-3"><a href="#cb41-3" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">8</span>) <span class="sc">|&gt;</span></span>
+<span id="cb41-4"><a href="#cb41-4" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb41-5"><a href="#cb41-5" tabindex="-1"></a>    <span class="at">rn =</span> <span class="fu">row_number</span>(),</span>
+<span id="cb41-6"><a href="#cb41-6" tabindex="-1"></a>    <span class="at">mpg_rank =</span> <span class="fu">rank</span>(mpg),</span>
+<span id="cb41-7"><a href="#cb41-7" tabindex="-1"></a>    <span class="at">mpg_dense =</span> <span class="fu">dense_rank</span>(mpg)</span>
+<span id="cb41-8"><a href="#cb41-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb41-9"><a href="#cb41-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb41-10"><a href="#cb41-10" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp rn mpg_rank mpg_dense</span></span>
+<span id="cb41-11"><a href="#cb41-11" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110  1        4         4</span></span>
+<span id="cb41-12"><a href="#cb41-12" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110  2        4         4</span></span>
+<span id="cb41-13"><a href="#cb41-13" tabindex="-1"></a><span class="co">#&gt; 3 22.8   4  93  3        7         6</span></span>
+<span id="cb41-14"><a href="#cb41-14" tabindex="-1"></a><span class="co">#&gt; 4 21.4   6 110  4        6         5</span></span>
+<span id="cb41-15"><a href="#cb41-15" tabindex="-1"></a><span class="co">#&gt; 5 18.7   8 175  5        3         3</span></span>
+<span id="cb41-16"><a href="#cb41-16" tabindex="-1"></a><span class="co">#&gt; 6 18.1   6 105  6        2         2</span></span>
+<span id="cb41-17"><a href="#cb41-17" tabindex="-1"></a><span class="co">#&gt; 7 14.3   8 245  7        1         1</span></span>
+<span id="cb41-18"><a href="#cb41-18" tabindex="-1"></a><span class="co">#&gt; 8 24.4   4  62  8        8         7</span></span></code></pre></div>
+<p><code>lag()</code> and <code>lead()</code> shift a column forward or
+backward by <code>n</code> positions (default 1). <code>lag(mpg)</code>
+gives each row the <code>mpg</code> value from the previous row;
+<code>lead(mpg)</code> gives the value from the next row. The
+<code>default</code> argument specifies the fill value when the offset
+falls outside the partition boundary (the first row for
+<code>lag</code>, the last row for <code>lead</code>). Without
+<code>default</code>, these positions are NA.</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb42-2"><a href="#cb42-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, hp) <span class="sc">|&gt;</span></span>
+<span id="cb42-3"><a href="#cb42-3" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb42-4"><a href="#cb42-4" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb42-5"><a href="#cb42-5" tabindex="-1"></a>    <span class="at">prev_mpg =</span> <span class="fu">lag</span>(mpg),</span>
+<span id="cb42-6"><a href="#cb42-6" tabindex="-1"></a>    <span class="at">next_mpg =</span> <span class="fu">lead</span>(mpg),</span>
+<span id="cb42-7"><a href="#cb42-7" tabindex="-1"></a>    <span class="at">prev2_hp =</span> <span class="fu">lag</span>(hp, <span class="at">n =</span> <span class="dv">2</span>, <span class="at">default =</span> <span class="dv">0</span>)</span>
+<span id="cb42-8"><a href="#cb42-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb42-9"><a href="#cb42-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb42-10"><a href="#cb42-10" tabindex="-1"></a><span class="co">#&gt;    mpg  hp prev_mpg next_mpg prev2_hp</span></span>
+<span id="cb42-11"><a href="#cb42-11" tabindex="-1"></a><span class="co">#&gt; 1 21.0 110       NA     21.0        0</span></span>
+<span id="cb42-12"><a href="#cb42-12" tabindex="-1"></a><span class="co">#&gt; 2 21.0 110     21.0     22.8        0</span></span>
+<span id="cb42-13"><a href="#cb42-13" tabindex="-1"></a><span class="co">#&gt; 3 22.8  93     21.0     21.4      110</span></span>
+<span id="cb42-14"><a href="#cb42-14" tabindex="-1"></a><span class="co">#&gt; 4 21.4 110     22.8     18.7      110</span></span>
+<span id="cb42-15"><a href="#cb42-15" tabindex="-1"></a><span class="co">#&gt; 5 18.7 175     21.4     18.1       93</span></span>
+<span id="cb42-16"><a href="#cb42-16" tabindex="-1"></a><span class="co">#&gt; 6 18.1 105     18.7       NA      110</span></span></code></pre></div>
+<p>Cumulative functions: <code>cumsum()</code>, <code>cummean()</code>,
+<code>cummin()</code>, <code>cummax()</code>.</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb43-2"><a href="#cb43-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, hp) <span class="sc">|&gt;</span></span>
+<span id="cb43-3"><a href="#cb43-3" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb43-4"><a href="#cb43-4" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb43-5"><a href="#cb43-5" tabindex="-1"></a>    <span class="at">running_hp =</span> <span class="fu">cumsum</span>(hp),</span>
+<span id="cb43-6"><a href="#cb43-6" tabindex="-1"></a>    <span class="at">running_avg =</span> <span class="fu">cummean</span>(mpg),</span>
+<span id="cb43-7"><a href="#cb43-7" tabindex="-1"></a>    <span class="at">running_min =</span> <span class="fu">cummin</span>(mpg)</span>
+<span id="cb43-8"><a href="#cb43-8" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb43-9"><a href="#cb43-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb43-10"><a href="#cb43-10" tabindex="-1"></a><span class="co">#&gt;    mpg  hp running_hp running_avg running_min</span></span>
+<span id="cb43-11"><a href="#cb43-11" tabindex="-1"></a><span class="co">#&gt; 1 21.0 110        110       21.00        21.0</span></span>
+<span id="cb43-12"><a href="#cb43-12" tabindex="-1"></a><span class="co">#&gt; 2 21.0 110        220       21.00        21.0</span></span>
+<span id="cb43-13"><a href="#cb43-13" tabindex="-1"></a><span class="co">#&gt; 3 22.8  93        313       21.60        21.0</span></span>
+<span id="cb43-14"><a href="#cb43-14" tabindex="-1"></a><span class="co">#&gt; 4 21.4 110        423       21.55        21.0</span></span>
+<span id="cb43-15"><a href="#cb43-15" tabindex="-1"></a><span class="co">#&gt; 5 18.7 175        598       20.98        18.7</span></span>
+<span id="cb43-16"><a href="#cb43-16" tabindex="-1"></a><span class="co">#&gt; 6 18.1 105        703       20.50        18.1</span></span></code></pre></div>
+<p>Window functions respect grouping. When a node is grouped, partitions
+are computed independently.</p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb44-2"><a href="#cb44-2" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl) <span class="sc">|&gt;</span></span>
+<span id="cb44-3"><a href="#cb44-3" tabindex="-1"></a>  <span class="fu">group_by</span>(cyl) <span class="sc">|&gt;</span></span>
+<span id="cb44-4"><a href="#cb44-4" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">rn =</span> <span class="fu">row_number</span>(), <span class="at">pct =</span> <span class="fu">percent_rank</span>(mpg)) <span class="sc">|&gt;</span></span>
+<span id="cb44-5"><a href="#cb44-5" tabindex="-1"></a>  <span class="fu">slice_head</span>(<span class="at">n =</span> <span class="dv">10</span>) <span class="sc">|&gt;</span></span>
+<span id="cb44-6"><a href="#cb44-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb44-7"><a href="#cb44-7" tabindex="-1"></a><span class="co">#&gt;     mpg cyl rn       pct</span></span>
+<span id="cb44-8"><a href="#cb44-8" tabindex="-1"></a><span class="co">#&gt; 1  21.0   6  1 0.6666667</span></span>
+<span id="cb44-9"><a href="#cb44-9" tabindex="-1"></a><span class="co">#&gt; 2  21.0   6  2 0.6666667</span></span>
+<span id="cb44-10"><a href="#cb44-10" tabindex="-1"></a><span class="co">#&gt; 3  22.8   4  1 0.2000000</span></span>
+<span id="cb44-11"><a href="#cb44-11" tabindex="-1"></a><span class="co">#&gt; 4  21.4   6  3 1.0000000</span></span>
+<span id="cb44-12"><a href="#cb44-12" tabindex="-1"></a><span class="co">#&gt; 5  18.7   8  1 0.9230769</span></span>
+<span id="cb44-13"><a href="#cb44-13" tabindex="-1"></a><span class="co">#&gt; 6  18.1   6  4 0.1666667</span></span>
+<span id="cb44-14"><a href="#cb44-14" tabindex="-1"></a><span class="co">#&gt; 7  14.3   8  2 0.2307692</span></span>
+<span id="cb44-15"><a href="#cb44-15" tabindex="-1"></a><span class="co">#&gt; 8  24.4   4  2 0.4000000</span></span>
+<span id="cb44-16"><a href="#cb44-16" tabindex="-1"></a><span class="co">#&gt; 9  22.8   4  3 0.2000000</span></span>
+<span id="cb44-17"><a href="#cb44-17" tabindex="-1"></a><span class="co">#&gt; 10 19.2   6  5 0.3333333</span></span></code></pre></div>
+<p>Each <code>cyl</code> group gets its own <code>row_number()</code>
+sequence starting from 1 and its own <code>percent_rank()</code>
+distribution. The grouped window node partitions the data by the group
+keys, materializes each partition independently, computes the window
+functions within the partition, and then concatenates the results. If a
+<code>mutate()</code> call mixes window functions with regular
+expressions (e.g.,
+<code>mutate(rn = row_number(), double_mpg = mpg * 2)</code>), the R
+layer splits them: window functions go to a WindowNode, regular
+expressions go to a ProjectNode stacked on top. The split is invisible
+to the caller.</p>
+</div>
+<div id="dates-and-times" class="section level2">
+<h2>Dates and times</h2>
+<p>Date and POSIXct columns roundtrip through vectra. Internally, dates
+are stored as doubles: days since the Unix epoch (1970-01-01) for Date
+objects, seconds since epoch for POSIXct. The R class attribute is
+preserved in the <code>.vtr</code> schema metadata, so when you
+<code>collect()</code>, the output columns have the correct R class
+restored. Component extraction functions work in <code>mutate()</code>
+and <code>filter()</code>: <code>year()</code>, <code>month()</code>,
+<code>day()</code> for date parts, and <code>hour()</code>,
+<code>minute()</code>, <code>second()</code> for time parts on POSIXct
+columns. These are evaluated in C by computing the Gregorian calendar
+decomposition from the epoch offset, so there is no R-level overhead per
+row.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" tabindex="-1"></a>events <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb45-2"><a href="#cb45-2" tabindex="-1"></a>  <span class="at">event_date =</span> <span class="fu">as.Date</span>(<span class="fu">c</span>(<span class="st">&quot;2020-03-15&quot;</span>, <span class="st">&quot;2020-07-01&quot;</span>,</span>
+<span id="cb45-3"><a href="#cb45-3" tabindex="-1"></a>                          <span class="st">&quot;2021-01-15&quot;</span>, <span class="st">&quot;2021-06-30&quot;</span>)),</span>
+<span id="cb45-4"><a href="#cb45-4" tabindex="-1"></a>  <span class="at">event_time =</span> <span class="fu">as.POSIXct</span>(<span class="fu">c</span>(<span class="st">&quot;2020-03-15 09:30:00&quot;</span>,</span>
+<span id="cb45-5"><a href="#cb45-5" tabindex="-1"></a>                             <span class="st">&quot;2020-07-01 14:00:00&quot;</span>,</span>
+<span id="cb45-6"><a href="#cb45-6" tabindex="-1"></a>                             <span class="st">&quot;2021-01-15 08:15:00&quot;</span>,</span>
+<span id="cb45-7"><a href="#cb45-7" tabindex="-1"></a>                             <span class="st">&quot;2021-06-30 17:45:00&quot;</span>),</span>
+<span id="cb45-8"><a href="#cb45-8" tabindex="-1"></a>                           <span class="at">tz =</span> <span class="st">&quot;UTC&quot;</span>),</span>
+<span id="cb45-9"><a href="#cb45-9" tabindex="-1"></a>  <span class="at">value =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>, <span class="dv">40</span>)</span>
+<span id="cb45-10"><a href="#cb45-10" tabindex="-1"></a>)</span>
+<span id="cb45-11"><a href="#cb45-11" tabindex="-1"></a>fd <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb45-12"><a href="#cb45-12" tabindex="-1"></a><span class="fu">write_vtr</span>(events, fd)</span></code></pre></div>
+<p>Extract date components and aggregate by year.</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" tabindex="-1"></a><span class="fu">tbl</span>(fd) <span class="sc">|&gt;</span></span>
+<span id="cb46-2"><a href="#cb46-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb46-3"><a href="#cb46-3" tabindex="-1"></a>    <span class="at">yr =</span> <span class="fu">year</span>(event_date),</span>
+<span id="cb46-4"><a href="#cb46-4" tabindex="-1"></a>    <span class="at">mo =</span> <span class="fu">month</span>(event_date),</span>
+<span id="cb46-5"><a href="#cb46-5" tabindex="-1"></a>    <span class="at">dy =</span> <span class="fu">day</span>(event_date)</span>
+<span id="cb46-6"><a href="#cb46-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb46-7"><a href="#cb46-7" tabindex="-1"></a>  <span class="fu">group_by</span>(yr) <span class="sc">|&gt;</span></span>
+<span id="cb46-8"><a href="#cb46-8" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">total =</span> <span class="fu">sum</span>(value)) <span class="sc">|&gt;</span></span>
+<span id="cb46-9"><a href="#cb46-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb46-10"><a href="#cb46-10" tabindex="-1"></a><span class="co">#&gt;     yr total</span></span>
+<span id="cb46-11"><a href="#cb46-11" tabindex="-1"></a><span class="co">#&gt; 1 2020    30</span></span>
+<span id="cb46-12"><a href="#cb46-12" tabindex="-1"></a><span class="co">#&gt; 2 2021    70</span></span></code></pre></div>
+<p>Extract time components from POSIXct.</p>
+<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" tabindex="-1"></a><span class="fu">tbl</span>(fd) <span class="sc">|&gt;</span></span>
+<span id="cb47-2"><a href="#cb47-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb47-3"><a href="#cb47-3" tabindex="-1"></a>    <span class="at">hr =</span> <span class="fu">hour</span>(event_time),</span>
+<span id="cb47-4"><a href="#cb47-4" tabindex="-1"></a>    <span class="at">mn =</span> <span class="fu">minute</span>(event_time)</span>
+<span id="cb47-5"><a href="#cb47-5" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb47-6"><a href="#cb47-6" tabindex="-1"></a>  <span class="fu">select</span>(event_time, hr, mn) <span class="sc">|&gt;</span></span>
+<span id="cb47-7"><a href="#cb47-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb47-8"><a href="#cb47-8" tabindex="-1"></a><span class="co">#&gt;   event_time hr mn</span></span>
+<span id="cb47-9"><a href="#cb47-9" tabindex="-1"></a><span class="co">#&gt; 1 1584264600  9 30</span></span>
+<span id="cb47-10"><a href="#cb47-10" tabindex="-1"></a><span class="co">#&gt; 2 1593612000 14  0</span></span>
+<span id="cb47-11"><a href="#cb47-11" tabindex="-1"></a><span class="co">#&gt; 3 1610698500  8 15</span></span>
+<span id="cb47-12"><a href="#cb47-12" tabindex="-1"></a><span class="co">#&gt; 4 1625075100 17 45</span></span></code></pre></div>
+<p>Filter by date using <code>as.Date()</code> to convert a string
+literal to a date value at parse time. The C engine receives the numeric
+date value and compares directly.</p>
+<div class="sourceCode" id="cb48"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" tabindex="-1"></a><span class="fu">tbl</span>(fd) <span class="sc">|&gt;</span></span>
+<span id="cb48-2"><a href="#cb48-2" tabindex="-1"></a>  <span class="fu">filter</span>(event_date <span class="sc">&gt;=</span> <span class="fu">as.Date</span>(<span class="st">&quot;2021-01-01&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb48-3"><a href="#cb48-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb48-4"><a href="#cb48-4" tabindex="-1"></a><span class="co">#&gt;   event_date          event_time value</span></span>
+<span id="cb48-5"><a href="#cb48-5" tabindex="-1"></a><span class="co">#&gt; 1 2021-01-15 2021-01-15 08:15:00    30</span></span>
+<span id="cb48-6"><a href="#cb48-6" tabindex="-1"></a><span class="co">#&gt; 2 2021-06-30 2021-06-30 17:45:00    40</span></span></code></pre></div>
+<p>Date arithmetic works through the numeric representation. Adding 30
+to a Date column advances it by 30 days. Subtracting two date columns
+gives a difference in days. You can combine date extraction with
+aggregation:
+<code>group_by(yr = year(event_date)) |&gt; summarise(total = sum(value))</code>
+works as expected because <code>mutate()</code> expressions are allowed
+inline inside <code>group_by()</code> through the standard dplyr
+convention of named expressions.</p>
+<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" tabindex="-1"></a><span class="fu">tbl</span>(fd) <span class="sc">|&gt;</span></span>
+<span id="cb49-2"><a href="#cb49-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">plus_30 =</span> event_date <span class="sc">+</span> <span class="dv">30</span>) <span class="sc">|&gt;</span></span>
+<span id="cb49-3"><a href="#cb49-3" tabindex="-1"></a>  <span class="fu">select</span>(event_date, plus_30) <span class="sc">|&gt;</span></span>
+<span id="cb49-4"><a href="#cb49-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb49-5"><a href="#cb49-5" tabindex="-1"></a><span class="co">#&gt;   event_date plus_30</span></span>
+<span id="cb49-6"><a href="#cb49-6" tabindex="-1"></a><span class="co">#&gt; 1      18336   18366</span></span>
+<span id="cb49-7"><a href="#cb49-7" tabindex="-1"></a><span class="co">#&gt; 2      18444   18474</span></span>
+<span id="cb49-8"><a href="#cb49-8" tabindex="-1"></a><span class="co">#&gt; 3      18642   18672</span></span>
+<span id="cb49-9"><a href="#cb49-9" tabindex="-1"></a><span class="co">#&gt; 4      18808   18838</span></span></code></pre></div>
+<p>The <code>plus_30</code> column is numeric (days since epoch). To
+interpret it as a Date in R after collecting, wrap it with
+<code>as.Date(x, origin = &quot;1970-01-01&quot;)</code>.</p>
+</div>
+<div id="string-similarity" class="section level2">
+<h2>String similarity</h2>
+<p>vectra computes edit distances directly in the C engine, with OpenMP
+parallelization for columns exceeding 1000 rows. Three distance
+algorithms are available.</p>
+<p><code>levenshtein()</code> counts insertions, deletions, and
+substitutions. <code>dl_dist()</code> (Damerau-Levenshtein) additionally
+counts transpositions of adjacent characters as a single edit, which
+better captures common typos like “hte” for “the”.
+<code>jaro_winkler()</code> returns a similarity score from 0 to 1,
+where 1 means identical. It weights early-character matches more
+heavily, making it well-suited for short strings like personal
+names.</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" tabindex="-1"></a>species <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb50-2"><a href="#cb50-2" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Quercus rubra&quot;</span>,</span>
+<span id="cb50-3"><a href="#cb50-3" tabindex="-1"></a>           <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Acer platanoides&quot;</span>,</span>
+<span id="cb50-4"><a href="#cb50-4" tabindex="-1"></a>           <span class="st">&quot;Quercus petraea&quot;</span>),</span>
+<span id="cb50-5"><a href="#cb50-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb50-6"><a href="#cb50-6" tabindex="-1"></a>)</span>
+<span id="cb50-7"><a href="#cb50-7" tabindex="-1"></a>fs2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb50-8"><a href="#cb50-8" tabindex="-1"></a><span class="fu">write_vtr</span>(species, fs2)</span></code></pre></div>
+<p>Compute all three metrics against a reference string and filter by
+edit distance.</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a><span class="fu">tbl</span>(fs2) <span class="sc">|&gt;</span></span>
+<span id="cb51-2"><a href="#cb51-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb51-3"><a href="#cb51-3" tabindex="-1"></a>    <span class="at">lev =</span> <span class="fu">levenshtein</span>(name, <span class="st">&quot;Quercus robur&quot;</span>),</span>
+<span id="cb51-4"><a href="#cb51-4" tabindex="-1"></a>    <span class="at">dl =</span> <span class="fu">dl_dist</span>(name, <span class="st">&quot;Quercus robur&quot;</span>),</span>
+<span id="cb51-5"><a href="#cb51-5" tabindex="-1"></a>    <span class="at">jw =</span> <span class="fu">jaro_winkler</span>(name, <span class="st">&quot;Quercus robur&quot;</span>)</span>
+<span id="cb51-6"><a href="#cb51-6" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb51-7"><a href="#cb51-7" tabindex="-1"></a>  <span class="fu">filter</span>(lev <span class="sc">&lt;=</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb51-8"><a href="#cb51-8" tabindex="-1"></a>  <span class="fu">arrange</span>(lev) <span class="sc">|&gt;</span></span>
+<span id="cb51-9"><a href="#cb51-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb51-10"><a href="#cb51-10" tabindex="-1"></a><span class="co">#&gt;            name lev dl        jw</span></span>
+<span id="cb51-11"><a href="#cb51-11" tabindex="-1"></a><span class="co">#&gt; 1 Quercus robur   0  0 1.0000000</span></span>
+<span id="cb51-12"><a href="#cb51-12" tabindex="-1"></a><span class="co">#&gt; 2 Quercus rubra   3  3 0.9525641</span></span></code></pre></div>
+<p>Normalized variants <code>levenshtein_norm()</code> and
+<code>dl_dist_norm()</code> divide the raw distance by the length of the
+longer string, returning a value between 0 and 1. This makes thresholds
+transferable across strings of different lengths.</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" tabindex="-1"></a><span class="fu">tbl</span>(fs2) <span class="sc">|&gt;</span></span>
+<span id="cb52-2"><a href="#cb52-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb52-3"><a href="#cb52-3" tabindex="-1"></a>    <span class="at">lev_norm =</span> <span class="fu">levenshtein_norm</span>(name, <span class="st">&quot;Quercus robur&quot;</span>),</span>
+<span id="cb52-4"><a href="#cb52-4" tabindex="-1"></a>    <span class="at">dl_norm =</span> <span class="fu">dl_dist_norm</span>(name, <span class="st">&quot;Quercus robur&quot;</span>)</span>
+<span id="cb52-5"><a href="#cb52-5" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb52-6"><a href="#cb52-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb52-7"><a href="#cb52-7" tabindex="-1"></a><span class="co">#&gt;               name  lev_norm   dl_norm</span></span>
+<span id="cb52-8"><a href="#cb52-8" tabindex="-1"></a><span class="co">#&gt; 1    Quercus robur 0.0000000 0.0000000</span></span>
+<span id="cb52-9"><a href="#cb52-9" tabindex="-1"></a><span class="co">#&gt; 2    Quercus rubra 0.2307692 0.2307692</span></span>
+<span id="cb52-10"><a href="#cb52-10" tabindex="-1"></a><span class="co">#&gt; 3  Fagus sylvatica 0.9333333 0.9333333</span></span>
+<span id="cb52-11"><a href="#cb52-11" tabindex="-1"></a><span class="co">#&gt; 4 Acer platanoides 0.8125000 0.8125000</span></span>
+<span id="cb52-12"><a href="#cb52-12" tabindex="-1"></a><span class="co">#&gt; 5  Quercus petraea 0.4666667 0.4666667</span></span></code></pre></div>
+<p>Damerau-Levenshtein catches transposition errors that pure
+Levenshtein scores as two edits.</p>
+<div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" tabindex="-1"></a><span class="fu">tbl</span>(fs2) <span class="sc">|&gt;</span></span>
+<span id="cb53-2"><a href="#cb53-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb53-3"><a href="#cb53-3" tabindex="-1"></a>    <span class="at">lev =</span> <span class="fu">levenshtein</span>(name, <span class="st">&quot;Qurecus robur&quot;</span>),</span>
+<span id="cb53-4"><a href="#cb53-4" tabindex="-1"></a>    <span class="at">dl =</span> <span class="fu">dl_dist</span>(name, <span class="st">&quot;Qurecus robur&quot;</span>)</span>
+<span id="cb53-5"><a href="#cb53-5" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb53-6"><a href="#cb53-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb53-7"><a href="#cb53-7" tabindex="-1"></a><span class="co">#&gt;               name lev dl</span></span>
+<span id="cb53-8"><a href="#cb53-8" tabindex="-1"></a><span class="co">#&gt; 1    Quercus robur   2  1</span></span>
+<span id="cb53-9"><a href="#cb53-9" tabindex="-1"></a><span class="co">#&gt; 2    Quercus rubra   5  4</span></span>
+<span id="cb53-10"><a href="#cb53-10" tabindex="-1"></a><span class="co">#&gt; 3  Fagus sylvatica  14 14</span></span>
+<span id="cb53-11"><a href="#cb53-11" tabindex="-1"></a><span class="co">#&gt; 4 Acer platanoides  14 14</span></span>
+<span id="cb53-12"><a href="#cb53-12" tabindex="-1"></a><span class="co">#&gt; 5  Quercus petraea   9  8</span></span></code></pre></div>
+<p>The “ue” / “re” swap in “Qurecus” counts as 2 edits for Levenshtein
+(delete + insert) but 1 for Damerau-Levenshtein (transposition). For
+full coverage of distance algorithms, threshold tuning, and blocking
+strategies, see <code>vignette(&quot;string-ops&quot;)</code>.</p>
+</div>
+<div id="tree-traversal" class="section level2">
+<h2>Tree traversal</h2>
+<p><code>resolve()</code> and <code>propagate()</code> are scalar
+self-join functions designed for hierarchical (parent-child) data stored
+in a single table. They operate within a batch by matching a foreign key
+column to a primary key column in the same batch, which means the entire
+hierarchy must fit within one row group (or the data must be collected
+first). These functions are particularly useful for taxonomic backbones,
+organizational charts, and bill-of-materials structures where each row
+has a <code>parent_id</code> pointing to another row’s
+<code>id</code>.</p>
+<p><code>resolve(fk, pk, value)</code> returns the <code>value</code>
+column from the row where <code>pk == fk</code>. It is a single-level
+lookup, equivalent to a self left-join on <code>(fk, pk)</code>, but
+without the overhead of materializing a hash table. The lookup is O(n)
+per batch (linear scan), so it works well for hierarchies with up to a
+few million rows.</p>
+<div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" tabindex="-1"></a>taxa <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb54-2"><a href="#cb54-2" tabindex="-1"></a>  <span class="at">id        =</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>, <span class="dv">4</span><span class="dt">L</span>),</span>
+<span id="cb54-3"><a href="#cb54-3" tabindex="-1"></a>  <span class="at">name      =</span> <span class="fu">c</span>(<span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Q. robur&quot;</span>, <span class="st">&quot;Q. petraea&quot;</span>),</span>
+<span id="cb54-4"><a href="#cb54-4" tabindex="-1"></a>  <span class="at">parent_id =</span> <span class="fu">c</span>(<span class="cn">NA</span>, <span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>),</span>
+<span id="cb54-5"><a href="#cb54-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb54-6"><a href="#cb54-6" tabindex="-1"></a>)</span>
+<span id="cb54-7"><a href="#cb54-7" tabindex="-1"></a>ft <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb54-8"><a href="#cb54-8" tabindex="-1"></a><span class="fu">write_vtr</span>(taxa, ft)</span>
+<span id="cb54-9"><a href="#cb54-9" tabindex="-1"></a></span>
+<span id="cb54-10"><a href="#cb54-10" tabindex="-1"></a><span class="fu">tbl</span>(ft) <span class="sc">|&gt;</span></span>
+<span id="cb54-11"><a href="#cb54-11" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">parent_name =</span> <span class="fu">resolve</span>(parent_id, id, name)) <span class="sc">|&gt;</span></span>
+<span id="cb54-12"><a href="#cb54-12" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb54-13"><a href="#cb54-13" tabindex="-1"></a><span class="co">#&gt;   id       name parent_id parent_name</span></span>
+<span id="cb54-14"><a href="#cb54-14" tabindex="-1"></a><span class="co">#&gt; 1  1   Fagaceae        NA        &lt;NA&gt;</span></span>
+<span id="cb54-15"><a href="#cb54-15" tabindex="-1"></a><span class="co">#&gt; 2  2    Quercus         1    Fagaceae</span></span>
+<span id="cb54-16"><a href="#cb54-16" tabindex="-1"></a><span class="co">#&gt; 3  3   Q. robur         2     Quercus</span></span>
+<span id="cb54-17"><a href="#cb54-17" tabindex="-1"></a><span class="co">#&gt; 4  4 Q. petraea         2     Quercus</span></span></code></pre></div>
+<p>Row 1 (Fagaceae) has <code>parent_id = NA</code>, so
+<code>parent_name</code> is NA. Row 3 (Q. robur) has
+<code>parent_id = 2</code>, which matches <code>id = 2</code> (Quercus),
+so <code>parent_name</code> is “Quercus”.</p>
+<p><code>propagate(parent_fk, pk, seed)</code> walks the tree upward
+from each row and fills every node with the nearest non-NA ancestor
+value of <code>seed</code>. Unlike <code>resolve()</code>, which does a
+single-level lookup, <code>propagate()</code> traverses the full
+ancestor chain until it finds a row where the seed expression is non-NA.
+This denormalizes a hierarchy in a single pass, which would otherwise
+require a recursive CTE in SQL or repeated self-joins in dplyr.</p>
+<div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" tabindex="-1"></a><span class="fu">tbl</span>(ft) <span class="sc">|&gt;</span></span>
+<span id="cb55-2"><a href="#cb55-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">family =</span> <span class="fu">propagate</span>(</span>
+<span id="cb55-3"><a href="#cb55-3" tabindex="-1"></a>    parent_id, id,</span>
+<span id="cb55-4"><a href="#cb55-4" tabindex="-1"></a>    <span class="fu">if_else</span>(<span class="fu">is.na</span>(parent_id), name, <span class="cn">NA_character_</span>)</span>
+<span id="cb55-5"><a href="#cb55-5" tabindex="-1"></a>  )) <span class="sc">|&gt;</span></span>
+<span id="cb55-6"><a href="#cb55-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb55-7"><a href="#cb55-7" tabindex="-1"></a><span class="co">#&gt;   id       name parent_id   family</span></span>
+<span id="cb55-8"><a href="#cb55-8" tabindex="-1"></a><span class="co">#&gt; 1  1   Fagaceae        NA Fagaceae</span></span>
+<span id="cb55-9"><a href="#cb55-9" tabindex="-1"></a><span class="co">#&gt; 2  2    Quercus         1 Fagaceae</span></span>
+<span id="cb55-10"><a href="#cb55-10" tabindex="-1"></a><span class="co">#&gt; 3  3   Q. robur         2 Fagaceae</span></span>
+<span id="cb55-11"><a href="#cb55-11" tabindex="-1"></a><span class="co">#&gt; 4  4 Q. petraea         2 Fagaceae</span></span></code></pre></div>
+<p>The seed expression assigns “Fagaceae” to the root (the row with no
+parent) and NA everywhere else. <code>propagate()</code> then walks each
+row’s ancestry until it finds “Fagaceae” and fills it in. All four rows
+now carry the family name.</p>
+</div>
+<div id="format-backends" class="section level2">
+<h2>Format backends</h2>
+<p>vectra reads and writes several file formats beyond
+<code>.vtr</code>. Each backend produces a <code>vectra_node</code> that
+plugs into the same verb pipeline, so you can <code>filter()</code>,
+<code>mutate()</code>, <code>group_by()</code>, and
+<code>summarise()</code> on CSV files, SQLite databases, Excel
+workbooks, and GeoTIFF rasters using identical syntax. The key advantage
+is streaming: format conversion pipelines (e.g., CSV to
+<code>.vtr</code>) process data batch-by-batch without loading the
+entire file into memory.</p>
+<p><code>tbl_csv()</code> scans a CSV file lazily. Column types (int64,
+double, bool, string) are inferred from the first 1000 rows by probing
+each field for numeric, boolean, and date patterns. Gzip-compressed
+files (<code>.csv.gz</code>) are detected automatically by file
+extension and decompressed on the fly. The <code>batch_size</code>
+parameter controls how many rows are read per batch (default
+65,536).</p>
+<div class="sourceCode" id="cb56"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" tabindex="-1"></a>csv_in <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb56-2"><a href="#cb56-2" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv_in, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb56-3"><a href="#cb56-3" tabindex="-1"></a></span>
+<span id="cb56-4"><a href="#cb56-4" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_in) <span class="sc">|&gt;</span></span>
+<span id="cb56-5"><a href="#cb56-5" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb56-6"><a href="#cb56-6" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb56-7"><a href="#cb56-7" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb56-8"><a href="#cb56-8" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  hp</span></span>
+<span id="cb56-9"><a href="#cb56-9" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 110</span></span>
+<span id="cb56-10"><a href="#cb56-10" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 110</span></span>
+<span id="cb56-11"><a href="#cb56-11" tabindex="-1"></a><span class="co">#&gt; 3 21.4   6 110</span></span>
+<span id="cb56-12"><a href="#cb56-12" tabindex="-1"></a><span class="co">#&gt; 4 18.1   6 105</span></span>
+<span id="cb56-13"><a href="#cb56-13" tabindex="-1"></a><span class="co">#&gt; 5 19.2   6 123</span></span>
+<span id="cb56-14"><a href="#cb56-14" tabindex="-1"></a><span class="co">#&gt; 6 17.8   6 123</span></span>
+<span id="cb56-15"><a href="#cb56-15" tabindex="-1"></a><span class="co">#&gt; 7 19.7   6 175</span></span></code></pre></div>
+<p><code>tbl_sqlite()</code> scans a SQLite table. Column types are
+derived from the CREATE TABLE schema. All filtering and aggregation
+happens in vectra’s C engine, not in SQLite.</p>
+<div class="sourceCode" id="cb57"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" tabindex="-1"></a>db <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.sqlite&quot;</span>)</span>
+<span id="cb57-2"><a href="#cb57-2" tabindex="-1"></a>f_src <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb57-3"><a href="#cb57-3" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars, f_src)</span>
+<span id="cb57-4"><a href="#cb57-4" tabindex="-1"></a><span class="fu">tbl</span>(f_src) <span class="sc">|&gt;</span> <span class="fu">write_sqlite</span>(db, <span class="st">&quot;cars&quot;</span>)</span>
+<span id="cb57-5"><a href="#cb57-5" tabindex="-1"></a></span>
+<span id="cb57-6"><a href="#cb57-6" tabindex="-1"></a><span class="fu">tbl_sqlite</span>(db, <span class="st">&quot;cars&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb57-7"><a href="#cb57-7" tabindex="-1"></a>  <span class="fu">filter</span>(mpg <span class="sc">&gt;</span> <span class="dv">25</span>) <span class="sc">|&gt;</span></span>
+<span id="cb57-8"><a href="#cb57-8" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb57-9"><a href="#cb57-9" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb57-10"><a href="#cb57-10" tabindex="-1"></a><span class="co">#&gt; 1 32.4   4  78.7  66 4.08 2.200 19.47  1  1    4    1</span></span>
+<span id="cb57-11"><a href="#cb57-11" tabindex="-1"></a><span class="co">#&gt; 2 30.4   4  75.7  52 4.93 1.615 18.52  1  1    4    2</span></span>
+<span id="cb57-12"><a href="#cb57-12" tabindex="-1"></a><span class="co">#&gt; 3 33.9   4  71.1  65 4.22 1.835 19.90  1  1    4    1</span></span>
+<span id="cb57-13"><a href="#cb57-13" tabindex="-1"></a><span class="co">#&gt; 4 27.3   4  79.0  66 4.08 1.935 18.90  1  1    4    1</span></span>
+<span id="cb57-14"><a href="#cb57-14" tabindex="-1"></a><span class="co">#&gt; 5 26.0   4 120.3  91 4.43 2.140 16.70  0  1    5    2</span></span>
+<span id="cb57-15"><a href="#cb57-15" tabindex="-1"></a><span class="co">#&gt; 6 30.4   4  95.1 113 3.77 1.513 16.90  1  1    5    2</span></span></code></pre></div>
+<p><code>tbl_xlsx()</code> reads an Excel sheet via the openxlsx2
+package (a Suggests dependency, not required for other backends). The
+sheet is read into memory as a data.frame, then converted to a vectra
+node. This is not a streaming operation (the full sheet is loaded), but
+it makes it possible to chain vectra verbs on Excel data without writing
+intermediate files. The <code>sheet</code> argument accepts a name or
+1-based integer index.</p>
+<p><code>tbl_tiff()</code> reads GeoTIFF rasters. Each pixel becomes a
+row with <code>x</code>, <code>y</code>, and <code>band1</code>,
+<code>band2</code>, … columns. Coordinates are pixel centers derived
+from the affine geotransform stored in the TIFF metadata. NoData values
+become NA. This enables spatial queries like
+<code>filter(band1 &gt; 25, x &gt;= xmin, x &lt;= xmax)</code> on
+rasters that are too large to load as matrices. Results can be converted
+back to a raster with <code>terra::rast(df, type = &quot;xyz&quot;)</code>. The
+corresponding <code>write_tiff()</code> function reconstructs the grid
+from x/y columns and writes a GeoTIFF with optional DEFLATE
+compression.</p>
+<p>Streaming format conversion is a common pattern. The entire pipeline
+runs batch-by-batch, so converting a 20 GB CSV file to <code>.vtr</code>
+stays within a few hundred MB of memory. Write functions
+(<code>write_vtr()</code>, <code>write_csv()</code>,
+<code>write_sqlite()</code>, <code>write_tiff()</code>) all accept
+<code>vectra_node</code> inputs and consume batches from the upstream
+pipeline, writing each batch to the output format as it arrives.</p>
+<div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" tabindex="-1"></a>csv_file <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb58-2"><a href="#cb58-2" tabindex="-1"></a>vtr_file <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb58-3"><a href="#cb58-3" tabindex="-1"></a>csv_out <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb58-4"><a href="#cb58-4" tabindex="-1"></a></span>
+<span id="cb58-5"><a href="#cb58-5" tabindex="-1"></a><span class="fu">write.csv</span>(mtcars, csv_file, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb58-6"><a href="#cb58-6" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv_file) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(vtr_file)</span>
+<span id="cb58-7"><a href="#cb58-7" tabindex="-1"></a></span>
+<span id="cb58-8"><a href="#cb58-8" tabindex="-1"></a><span class="fu">tbl</span>(vtr_file) <span class="sc">|&gt;</span></span>
+<span id="cb58-9"><a href="#cb58-9" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">==</span> <span class="dv">6</span>) <span class="sc">|&gt;</span></span>
+<span id="cb58-10"><a href="#cb58-10" tabindex="-1"></a>  <span class="fu">write_csv</span>(csv_out)</span>
+<span id="cb58-11"><a href="#cb58-11" tabindex="-1"></a></span>
+<span id="cb58-12"><a href="#cb58-12" tabindex="-1"></a><span class="fu">read.csv</span>(csv_out) <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
+<span id="cb58-13"><a href="#cb58-13" tabindex="-1"></a><span class="co">#&gt;    mpg cyl  disp  hp drat    wt  qsec vs am gear carb</span></span>
+<span id="cb58-14"><a href="#cb58-14" tabindex="-1"></a><span class="co">#&gt; 1 21.0   6 160.0 110 3.90 2.620 16.46  0  1    4    4</span></span>
+<span id="cb58-15"><a href="#cb58-15" tabindex="-1"></a><span class="co">#&gt; 2 21.0   6 160.0 110 3.90 2.875 17.02  0  1    4    4</span></span>
+<span id="cb58-16"><a href="#cb58-16" tabindex="-1"></a><span class="co">#&gt; 3 21.4   6 258.0 110 3.08 3.215 19.44  1  0    3    1</span></span>
+<span id="cb58-17"><a href="#cb58-17" tabindex="-1"></a><span class="co">#&gt; 4 18.1   6 225.0 105 2.76 3.460 20.22  1  0    3    1</span></span>
+<span id="cb58-18"><a href="#cb58-18" tabindex="-1"></a><span class="co">#&gt; 5 19.2   6 167.6 123 3.92 3.440 18.30  1  0    4    4</span></span>
+<span id="cb58-19"><a href="#cb58-19" tabindex="-1"></a><span class="co">#&gt; 6 17.8   6 167.6 123 3.92 3.440 18.90  1  0    4    4</span></span></code></pre></div>
+<p>For format-specific options, batch sizes, and performance
+considerations, see <code>vignette(&quot;formats&quot;)</code>.</p>
+</div>
+<div id="indexes" class="section level2">
+<h2>Indexes</h2>
+<p>Hash indexes accelerate equality predicates on <code>.vtr</code>
+files. An index is stored as a <code>.vtri</code> sidecar file alongside
+the <code>.vtr</code> file (named
+<code>&lt;path&gt;.&lt;column&gt;.vtri</code> for single-column
+indexes). It maps key hashes to row group indices using FNV-1a hashing,
+enabling O(1) row group identification for
+<code>filter(col == value)</code> and
+<code>filter(col %in% values)</code>. When <code>tbl()</code> opens a
+<code>.vtr</code> file, it automatically detects and loads any
+<code>.vtri</code> sidecar files present in the same directory. The scan
+node then consults the index before reading data, skipping row groups
+that cannot contain matching keys. This composes with zone-map pruning:
+the index narrows down candidate row groups, and zone-map statistics
+further eliminate row groups where the column’s min/max range excludes
+the filter value.</p>
+<p>Create an index with <code>create_index()</code>. Check for an
+existing index with <code>has_index()</code>. Indexes persist on disk
+and survive R sessions.</p>
+<div class="sourceCode" id="cb59"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" tabindex="-1"></a>f_idx <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb59-2"><a href="#cb59-2" tabindex="-1"></a><span class="fu">write_vtr</span>(</span>
+<span id="cb59-3"><a href="#cb59-3" tabindex="-1"></a>  <span class="fu">data.frame</span>(<span class="at">id =</span> letters, <span class="at">val =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">26</span>, <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>),</span>
+<span id="cb59-4"><a href="#cb59-4" tabindex="-1"></a>  f_idx,</span>
+<span id="cb59-5"><a href="#cb59-5" tabindex="-1"></a>  <span class="at">batch_size =</span> <span class="dv">5</span></span>
+<span id="cb59-6"><a href="#cb59-6" tabindex="-1"></a>)</span>
+<span id="cb59-7"><a href="#cb59-7" tabindex="-1"></a></span>
+<span id="cb59-8"><a href="#cb59-8" tabindex="-1"></a><span class="fu">has_index</span>(f_idx, <span class="st">&quot;id&quot;</span>)  <span class="co"># FALSE</span></span>
+<span id="cb59-9"><a href="#cb59-9" tabindex="-1"></a><span class="co">#&gt; [1] FALSE</span></span>
+<span id="cb59-10"><a href="#cb59-10" tabindex="-1"></a><span class="fu">create_index</span>(f_idx, <span class="st">&quot;id&quot;</span>)</span>
+<span id="cb59-11"><a href="#cb59-11" tabindex="-1"></a><span class="fu">has_index</span>(f_idx, <span class="st">&quot;id&quot;</span>)  <span class="co"># TRUE</span></span>
+<span id="cb59-12"><a href="#cb59-12" tabindex="-1"></a><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+<p>With 6 row groups of 5 rows each, a filter on <code>id</code> now
+skips row groups that cannot contain the target value.</p>
+<div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" tabindex="-1"></a><span class="fu">tbl</span>(f_idx) <span class="sc">|&gt;</span></span>
+<span id="cb60-2"><a href="#cb60-2" tabindex="-1"></a>  <span class="fu">filter</span>(id <span class="sc">==</span> <span class="st">&quot;m&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb60-3"><a href="#cb60-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb60-4"><a href="#cb60-4" tabindex="-1"></a><span class="co">#&gt;   id val</span></span>
+<span id="cb60-5"><a href="#cb60-5" tabindex="-1"></a><span class="co">#&gt; 1  m  13</span></span></code></pre></div>
+<p>Composite indexes cover AND-combined equality predicates on multiple
+columns. Pass a character vector to <code>create_index()</code>.</p>
+<div class="sourceCode" id="cb61"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb61-1"><a href="#cb61-1" tabindex="-1"></a>f_comp <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb61-2"><a href="#cb61-2" tabindex="-1"></a><span class="fu">write_vtr</span>(</span>
+<span id="cb61-3"><a href="#cb61-3" tabindex="-1"></a>  <span class="fu">data.frame</span>(</span>
+<span id="cb61-4"><a href="#cb61-4" tabindex="-1"></a>    <span class="at">region =</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="st">&quot;north&quot;</span>, <span class="st">&quot;south&quot;</span>), <span class="at">each =</span> <span class="dv">13</span>),</span>
+<span id="cb61-5"><a href="#cb61-5" tabindex="-1"></a>    <span class="at">id =</span> letters,</span>
+<span id="cb61-6"><a href="#cb61-6" tabindex="-1"></a>    <span class="at">val =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">26</span>,</span>
+<span id="cb61-7"><a href="#cb61-7" tabindex="-1"></a>    <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb61-8"><a href="#cb61-8" tabindex="-1"></a>  ),</span>
+<span id="cb61-9"><a href="#cb61-9" tabindex="-1"></a>  f_comp,</span>
+<span id="cb61-10"><a href="#cb61-10" tabindex="-1"></a>  <span class="at">batch_size =</span> <span class="dv">5</span></span>
+<span id="cb61-11"><a href="#cb61-11" tabindex="-1"></a>)</span>
+<span id="cb61-12"><a href="#cb61-12" tabindex="-1"></a><span class="fu">create_index</span>(f_comp, <span class="fu">c</span>(<span class="st">&quot;region&quot;</span>, <span class="st">&quot;id&quot;</span>))</span>
+<span id="cb61-13"><a href="#cb61-13" tabindex="-1"></a></span>
+<span id="cb61-14"><a href="#cb61-14" tabindex="-1"></a><span class="fu">tbl</span>(f_comp) <span class="sc">|&gt;</span></span>
+<span id="cb61-15"><a href="#cb61-15" tabindex="-1"></a>  <span class="fu">filter</span>(region <span class="sc">==</span> <span class="st">&quot;north&quot;</span>, id <span class="sc">==</span> <span class="st">&quot;c&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb61-16"><a href="#cb61-16" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb61-17"><a href="#cb61-17" tabindex="-1"></a><span class="co">#&gt;   region id val</span></span>
+<span id="cb61-18"><a href="#cb61-18" tabindex="-1"></a><span class="co">#&gt; 1  north  c   3</span></span></code></pre></div>
+<p>The <code>ci</code> argument to <code>create_index()</code> builds a
+case-insensitive index by lowercasing all key values before hashing.
+This is useful for string columns with inconsistent casing (e.g.,
+species names entered by different data providers). When a
+case-insensitive index is present, <code>filter(col == &quot;Quercus&quot;)</code>
+will match “quercus”, “QUERCUS”, and any other casing variant.</p>
+<p>Index pushdown composes with binary search on sorted columns and
+zone-map pruning. A well-indexed <code>.vtr</code> file with many small
+row groups can answer point queries over hundreds of millions of rows by
+reading a single row group. <code>explain()</code> shows whether an
+index was used and how many row groups were pruned. For details on index
+internals, composite index hash combining, and tuning batch size for
+optimal index selectivity, see <code>vignette(&quot;indexing&quot;)</code>.</p>
+</div>
+<div id="incremental-operations" class="section level2">
+<h2>Incremental operations</h2>
+<p>Three functions support incremental workflows on <code>.vtr</code>
+files without full rewrites. These are designed for append-heavy
+pipelines where new data arrives in batches (daily sensor readings,
+transaction logs, biodiversity occurrence records) and rewriting the
+entire file on each update would be prohibitively slow.</p>
+<p><code>append_vtr()</code> adds new rows as additional row groups at
+the end of an existing file. The schema of the new data must match the
+existing file exactly: same column names, same types, same order.
+Existing row groups are untouched; the function writes the new row
+groups after the last existing one and patches the header to update the
+row group count. This is not fully atomic: if the process is interrupted
+between writing the row groups and patching the header, the file may be
+corrupted. For write-once workloads where atomicity matters, use
+<code>write_vtr()</code> (which writes to a temp file and renames).</p>
+<div class="sourceCode" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" tabindex="-1"></a>fa <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb62-2"><a href="#cb62-2" tabindex="-1"></a><span class="fu">write_vtr</span>(mtcars[<span class="dv">1</span><span class="sc">:</span><span class="dv">16</span>, ], fa)</span>
+<span id="cb62-3"><a href="#cb62-3" tabindex="-1"></a><span class="fu">append_vtr</span>(mtcars[<span class="dv">17</span><span class="sc">:</span><span class="dv">32</span>, ], fa)</span>
+<span id="cb62-4"><a href="#cb62-4" tabindex="-1"></a><span class="fu">tbl</span>(fa) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb62-5"><a href="#cb62-5" tabindex="-1"></a><span class="co">#&gt; [1] 32</span></span></code></pre></div>
+<p><code>delete_vtr()</code> marks rows as deleted by writing a
+tombstone sidecar file (<code>&lt;path&gt;.del</code>). The
+<code>.vtr</code> file itself is never modified. The next
+<code>tbl()</code> call automatically excludes tombstoned rows.
+Tombstones are cumulative across multiple <code>delete_vtr()</code>
+calls.</p>
+<div class="sourceCode" id="cb63"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" tabindex="-1"></a><span class="fu">delete_vtr</span>(fa, <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>))  <span class="co"># 0-based row indices</span></span>
+<span id="cb63-2"><a href="#cb63-2" tabindex="-1"></a><span class="fu">tbl</span>(fa) <span class="sc">|&gt;</span> <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">nrow</span>()</span>
+<span id="cb63-3"><a href="#cb63-3" tabindex="-1"></a><span class="co">#&gt; [1] 29</span></span>
+<span id="cb63-4"><a href="#cb63-4" tabindex="-1"></a><span class="fu">unlink</span>(<span class="fu">c</span>(fa, <span class="fu">paste0</span>(fa, <span class="st">&quot;.del&quot;</span>)))</span></code></pre></div>
+<p><code>diff_vtr()</code> computes a key-based logical diff between two
+snapshots of the same dataset. It returns a list with
+<code>$deleted</code> (a vector of key values present in the old file
+but not the new) and <code>$added</code> (a lazy
+<code>vectra_node</code> of rows present in the new file but not the
+old). This is a set-level difference based on key identity, not a binary
+file diff or row-level comparison. Rows with the same key that have
+changed values appear in both <code>$deleted</code> and
+<code>$added</code>, which makes it possible to detect updates by
+intersecting the two sets. The implementation streams both files: pass 1
+builds a hash set from the old file’s key column, pass 2 streams all
+columns from the new file and writes added rows to a temporary
+<code>.vtr</code> file. The temporary file is cleaned up automatically
+when the returned node is garbage-collected.</p>
+<div class="sourceCode" id="cb64"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb64-1"><a href="#cb64-1" tabindex="-1"></a>fd1 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb64-2"><a href="#cb64-2" tabindex="-1"></a>fd2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb64-3"><a href="#cb64-3" tabindex="-1"></a>old <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>, <span class="at">val =</span> letters[<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>],</span>
+<span id="cb64-4"><a href="#cb64-4" tabindex="-1"></a>                  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb64-5"><a href="#cb64-5" tabindex="-1"></a>new <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="fu">c</span>(<span class="dv">3</span><span class="dt">L</span>, <span class="dv">4</span><span class="dt">L</span>, <span class="dv">5</span><span class="dt">L</span>, <span class="dv">6</span><span class="dt">L</span>, <span class="dv">7</span><span class="dt">L</span>),</span>
+<span id="cb64-6"><a href="#cb64-6" tabindex="-1"></a>                  <span class="at">val =</span> <span class="fu">c</span>(<span class="st">&quot;C&quot;</span>, <span class="st">&quot;d&quot;</span>, <span class="st">&quot;e&quot;</span>, <span class="st">&quot;f&quot;</span>, <span class="st">&quot;g&quot;</span>),</span>
+<span id="cb64-7"><a href="#cb64-7" tabindex="-1"></a>                  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb64-8"><a href="#cb64-8" tabindex="-1"></a><span class="fu">write_vtr</span>(old, fd1)</span>
+<span id="cb64-9"><a href="#cb64-9" tabindex="-1"></a><span class="fu">write_vtr</span>(new, fd2)</span>
+<span id="cb64-10"><a href="#cb64-10" tabindex="-1"></a></span>
+<span id="cb64-11"><a href="#cb64-11" tabindex="-1"></a>d <span class="ot">&lt;-</span> <span class="fu">diff_vtr</span>(fd1, fd2, <span class="st">&quot;id&quot;</span>)</span>
+<span id="cb64-12"><a href="#cb64-12" tabindex="-1"></a>d<span class="sc">$</span>deleted</span>
+<span id="cb64-13"><a href="#cb64-13" tabindex="-1"></a><span class="co">#&gt; [1] 1 2</span></span>
+<span id="cb64-14"><a href="#cb64-14" tabindex="-1"></a><span class="fu">collect</span>(d<span class="sc">$</span>added)</span>
+<span id="cb64-15"><a href="#cb64-15" tabindex="-1"></a><span class="co">#&gt;   id val</span></span>
+<span id="cb64-16"><a href="#cb64-16" tabindex="-1"></a><span class="co">#&gt; 1  6   f</span></span>
+<span id="cb64-17"><a href="#cb64-17" tabindex="-1"></a><span class="co">#&gt; 2  7   g</span></span>
+<span id="cb64-18"><a href="#cb64-18" tabindex="-1"></a><span class="fu">unlink</span>(<span class="fu">c</span>(fd1, fd2))</span></code></pre></div>
+<p>Keys 1 and 2 were deleted. Keys 6 and 7 were added. Key 3 appears
+with a changed value (“c” to “C”), which shows up in both deleted and
+added. For incremental ETL patterns and large-data workflows, see
+<code>vignette(&quot;large-data&quot;)</code>.</p>
+</div>
+<div id="materialized-blocks" class="section level2">
+<h2>Materialized blocks</h2>
+<p>A <code>vectra_node</code> is single-use: once <code>collect()</code>
+or <code>write_vtr()</code> consumes it, the C-level external pointer is
+invalidated and the plan cannot be reused. This is a consequence of the
+pull-based execution model, where each node’s <code>next_batch()</code>
+advances internal state that cannot be rewound. For repeated lookups
+against the same dataset (e.g., matching a stream of queries against a
+reference table), <code>materialize()</code> pulls all batches and
+stores the result as a persistent columnar block in memory. The block
+lives until it is garbage-collected or the R session ends.</p>
+<div class="sourceCode" id="cb65"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb65-1"><a href="#cb65-1" tabindex="-1"></a>blk_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb65-2"><a href="#cb65-2" tabindex="-1"></a>  <span class="at">taxonID =</span> <span class="fu">c</span>(<span class="st">&quot;T1&quot;</span>, <span class="st">&quot;T2&quot;</span>, <span class="st">&quot;T3&quot;</span>, <span class="st">&quot;T4&quot;</span>, <span class="st">&quot;T5&quot;</span>),</span>
+<span id="cb65-3"><a href="#cb65-3" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb65-4"><a href="#cb65-4" tabindex="-1"></a>           <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Acer campestre&quot;</span>,</span>
+<span id="cb65-5"><a href="#cb65-5" tabindex="-1"></a>           <span class="st">&quot;Betula pendula&quot;</span>),</span>
+<span id="cb65-6"><a href="#cb65-6" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb65-7"><a href="#cb65-7" tabindex="-1"></a>)</span>
+<span id="cb65-8"><a href="#cb65-8" tabindex="-1"></a>f_blk <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb65-9"><a href="#cb65-9" tabindex="-1"></a><span class="fu">write_vtr</span>(blk_data, f_blk)</span>
+<span id="cb65-10"><a href="#cb65-10" tabindex="-1"></a></span>
+<span id="cb65-11"><a href="#cb65-11" tabindex="-1"></a>blk <span class="ot">&lt;-</span> <span class="fu">materialize</span>(<span class="fu">tbl</span>(f_blk))</span>
+<span id="cb65-12"><a href="#cb65-12" tabindex="-1"></a>blk</span>
+<span id="cb65-13"><a href="#cb65-13" tabindex="-1"></a><span class="co">#&gt; vectra_block [materialized in memory]</span></span></code></pre></div>
+<p><code>block_lookup()</code> performs a hash-based exact lookup on a
+string column of the materialized block. The hash index is built lazily
+on the first call to <code>block_lookup()</code> for a given column and
+cached inside the block for all subsequent calls. This means the first
+lookup pays a one-time O(n) indexing cost and all subsequent lookups are
+O(k) where k is the number of query keys. The <code>ci</code> argument
+enables case-insensitive matching by lowercasing keys before
+hashing.</p>
+<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" tabindex="-1"></a><span class="fu">block_lookup</span>(blk, <span class="st">&quot;name&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>))</span>
+<span id="cb66-2"><a href="#cb66-2" tabindex="-1"></a><span class="co">#&gt;   query_idx taxonID           name</span></span>
+<span id="cb66-3"><a href="#cb66-3" tabindex="-1"></a><span class="co">#&gt; 1         1      T1  Quercus robur</span></span>
+<span id="cb66-4"><a href="#cb66-4" tabindex="-1"></a><span class="co">#&gt; 2         2      T5 Betula pendula</span></span></code></pre></div>
+<p><code>block_fuzzy_lookup()</code> computes string distances between
+query keys and a column in the block, returning all pairs within the
+<code>max_dist</code> threshold. It supports Damerau-Levenshtein
+(<code>&quot;dl&quot;</code>), Levenshtein (<code>&quot;levenshtein&quot;</code>), and
+Jaro-Winkler (<code>&quot;jw&quot;</code>). The <code>block_col</code> and
+<code>block_keys</code> arguments enable exact-match blocking: only rows
+where the blocking column matches the corresponding blocking key are
+compared, which can reduce the number of distance computations by orders
+of magnitude. For example, blocking on genus before fuzzy-matching
+species names restricts comparisons to rows within the same genus. The
+distance computation is OpenMP-parallelized via the
+<code>n_threads</code> argument.</p>
+<div class="sourceCode" id="cb67"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb67-1"><a href="#cb67-1" tabindex="-1"></a><span class="fu">block_fuzzy_lookup</span>(</span>
+<span id="cb67-2"><a href="#cb67-2" tabindex="-1"></a>  blk, <span class="st">&quot;name&quot;</span>,</span>
+<span id="cb67-3"><a href="#cb67-3" tabindex="-1"></a>  <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Pinus silvestris&quot;</span>),</span>
+<span id="cb67-4"><a href="#cb67-4" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb67-5"><a href="#cb67-5" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.2</span></span>
+<span id="cb67-6"><a href="#cb67-6" tabindex="-1"></a>)</span>
+<span id="cb67-7"><a href="#cb67-7" tabindex="-1"></a><span class="co">#&gt;   query_idx fuzzy_dist taxonID             name</span></span>
+<span id="cb67-8"><a href="#cb67-8" tabindex="-1"></a><span class="co">#&gt; 1         1 0.07692308      T1    Quercus robur</span></span>
+<span id="cb67-9"><a href="#cb67-9" tabindex="-1"></a><span class="co">#&gt; 2         2 0.06250000      T2 Pinus sylvestris</span></span></code></pre></div>
+<p>The <code>query_idx</code> column (1-based) maps each result row back
+to the input query vector. The <code>fuzzy_dist</code> column gives the
+normalized distance for each match.</p>
+</div>
+<div id="inspecting-the-plan" class="section level2">
+<h2>Inspecting the plan</h2>
+<p>Every vectra pipeline builds a lazy execution plan as a tree of
+nodes. <code>explain()</code> prints this tree before any data moves,
+which makes it the primary debugging tool for understanding what the
+engine will do when you call <code>collect()</code>. The output shows
+node types (ScanNode, FilterNode, ProjectNode, SortNode, GroupAggNode,
+WindowNode, JoinNode, etc.), their parent-child relationships, and the
+output column schema at each level.</p>
+<div class="sourceCode" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb68-2"><a href="#cb68-2" tabindex="-1"></a>  <span class="fu">filter</span>(cyl <span class="sc">&gt;</span> <span class="dv">4</span>) <span class="sc">|&gt;</span></span>
+<span id="cb68-3"><a href="#cb68-3" tabindex="-1"></a>  <span class="fu">select</span>(mpg, cyl, hp) <span class="sc">|&gt;</span></span>
+<span id="cb68-4"><a href="#cb68-4" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(mpg)) <span class="sc">|&gt;</span></span>
+<span id="cb68-5"><a href="#cb68-5" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
+<span id="cb68-6"><a href="#cb68-6" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
+<span id="cb68-7"><a href="#cb68-7" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb68-8"><a href="#cb68-8" tabindex="-1"></a><span class="co">#&gt; SortNode [materializes] </span></span>
+<span id="cb68-9"><a href="#cb68-9" tabindex="-1"></a><span class="co">#&gt;   ProjectNode [streaming] </span></span>
+<span id="cb68-10"><a href="#cb68-10" tabindex="-1"></a><span class="co">#&gt;     FilterNode [streaming] </span></span>
+<span id="cb68-11"><a href="#cb68-11" tabindex="-1"></a><span class="co">#&gt;       ScanNode [streaming, 3/11 cols (pruned), predicate pushdown, tdc stats] </span></span>
+<span id="cb68-12"><a href="#cb68-12" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb68-13"><a href="#cb68-13" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
+<span id="cb68-14"><a href="#cb68-14" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
+<span id="cb68-15"><a href="#cb68-15" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
+<span id="cb68-16"><a href="#cb68-16" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
+<p>Several things to look for in the plan:</p>
+<p><strong>Streaming vs. materializing.</strong> FilterNode and
+ProjectNode are streaming: they process one batch at a time in constant
+memory. SortNode, GroupAggNode, and WindowNode are materializing: they
+consume all input before producing output. A plan with only streaming
+nodes above the scan will use memory proportional to one batch,
+regardless of file size.</p>
+<p><strong>Column pruning.</strong> ProjectNode appears when
+<code>select()</code> or <code>mutate()</code> is used. It lists only
+the columns that pass through. Columns not listed are never decoded from
+disk in the scan node, saving I/O and decompression work.</p>
+<p><strong>Predicate pushdown.</strong> When a hash index exists on the
+filter column, the ScanNode consults the <code>.vtri</code> index before
+reading row groups. <code>explain()</code> shows the index file path
+when pushdown is active. Zone-map pruning (based on per-row-group
+min/max statistics) applies to all columns automatically, with or
+without an explicit index. Combining both mechanisms gives the fastest
+possible scan: the index identifies candidate row groups by key hash,
+and zone-map statistics further narrow the set.</p>
+<p><strong>Node order.</strong> The plan is printed bottom-up (leaf to
+root). The ScanNode is always at the bottom. Reading the plan from
+bottom to top traces the path data takes through the pipeline: scan from
+disk, filter rows, project columns, sort, limit.</p>
+<p><code>glimpse()</code> provides a quick preview of column types and a
+sample of values without collecting the full result. It reads enough
+data to show one line per column.</p>
+<div class="sourceCode" id="cb69"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span> <span class="fu">glimpse</span>()</span>
+<span id="cb69-2"><a href="#cb69-2" tabindex="-1"></a><span class="co">#&gt; vectra lazy table [? x 11]</span></span>
+<span id="cb69-3"><a href="#cb69-3" tabindex="-1"></a><span class="co">#&gt; $ mpg             &lt;NA&gt; 21.0, 21.0, 22.8, 21.4, 18.7</span></span>
+<span id="cb69-4"><a href="#cb69-4" tabindex="-1"></a><span class="co">#&gt; $ cyl             &lt;NA&gt; 6, 6, 4, 6, 8</span></span>
+<span id="cb69-5"><a href="#cb69-5" tabindex="-1"></a><span class="co">#&gt; $ disp            &lt;NA&gt; 160, 160, 108, 258, 360</span></span>
+<span id="cb69-6"><a href="#cb69-6" tabindex="-1"></a><span class="co">#&gt; $ hp              &lt;NA&gt; 110, 110, 93, 110, 175</span></span>
+<span id="cb69-7"><a href="#cb69-7" tabindex="-1"></a><span class="co">#&gt; $ drat            &lt;NA&gt; 3.90, 3.90, 3.85, 3.08, 3.15</span></span>
+<span id="cb69-8"><a href="#cb69-8" tabindex="-1"></a><span class="co">#&gt; $ wt              &lt;NA&gt; 2.620, 2.875, 2.320, 3.215, 3.440</span></span>
+<span id="cb69-9"><a href="#cb69-9" tabindex="-1"></a><span class="co">#&gt; $ qsec            &lt;NA&gt; 16.46, 17.02, 18.61, 19.44, 17.02</span></span>
+<span id="cb69-10"><a href="#cb69-10" tabindex="-1"></a><span class="co">#&gt; $ vs              &lt;NA&gt; 0, 0, 1, 1, 0</span></span>
+<span id="cb69-11"><a href="#cb69-11" tabindex="-1"></a><span class="co">#&gt; $ am              &lt;NA&gt; 1, 1, 1, 0, 0</span></span>
+<span id="cb69-12"><a href="#cb69-12" tabindex="-1"></a><span class="co">#&gt; $ gear            &lt;NA&gt; 4, 4, 4, 3, 3</span></span>
+<span id="cb69-13"><a href="#cb69-13" tabindex="-1"></a><span class="co">#&gt; $ carb            &lt;NA&gt; 4, 4, 1, 1, 2</span></span></code></pre></div>
+</div>
+<div id="cleanup" class="section level2">
+<h2>Cleanup</h2>
+<div class="sourceCode" id="cb70"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb70-1"><a href="#cb70-1" tabindex="-1"></a><span class="fu">unlink</span>(<span class="fu">c</span>(f, f_batched, f_na, fs, fs2, f_cyl, f_rat, f_ref, f_query, fd,</span>
+<span id="cb70-2"><a href="#cb70-2" tabindex="-1"></a>         ft, csv_in, csv_out, csv_file, vtr_file, db, f_src, f_idx,</span>
+<span id="cb70-3"><a href="#cb70-3" tabindex="-1"></a>         <span class="fu">paste0</span>(f_idx, <span class="st">&quot;.id.vtri&quot;</span>), f_comp,</span>
+<span id="cb70-4"><a href="#cb70-4" tabindex="-1"></a>         <span class="fu">paste0</span>(f_comp, <span class="st">&quot;.region_id.vtri&quot;</span>), f_blk))</span></code></pre></div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

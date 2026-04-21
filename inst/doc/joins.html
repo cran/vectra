@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>Joins</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Joins</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>Most analytical workflows combine data from multiple sources.
+Observations arrive in one file, site metadata lives in another, and a
+taxonomic reference list sits in a third. Joins are the operation that
+stitches them together.</p>
+<p>vectra implements joins as C-level hash join nodes. Like every other
+verb, a join call builds a plan node; nothing executes until
+<code>collect()</code> pulls batches through the tree. The engine
+follows a <strong>build-right, probe-left</strong> model. When execution
+starts, the right-side table is fully materialized into a hash table in
+memory. The left side then streams through batch by batch, probing the
+hash table for matches. This asymmetry has a practical consequence: the
+left side can be arbitrarily large (it never lives in memory all at
+once), but the right side must fit. So we put the smaller table on the
+right.</p>
+<p>vectra provides seven join verbs: <code>left_join()</code>,
+<code>inner_join()</code>, <code>right_join()</code>,
+<code>full_join()</code>, <code>semi_join()</code>,
+<code>anti_join()</code>, and <code>cross_join()</code>. For approximate
+string matching there is also <code>fuzzy_join()</code>. All are S3
+methods on <code>vectra_node</code>, share the same <code>by</code>
+syntax for key specification, and compose freely with other verbs in a
+pipeline.</p>
+<p>We will work with ecological data throughout: species observations,
+site metadata, and a taxonomic reference table. Let us set those up.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>obs_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>sites_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>ref_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>observations <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">4</span>),</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="at">species =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>              <span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>              <span class="st">&quot;Pinus sylvestris&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a>              <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Acer pseudoplatanus&quot;</span>),</span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>  <span class="at">date =</span> <span class="fu">c</span>(<span class="st">&quot;2024-06-01&quot;</span>, <span class="st">&quot;2024-06-01&quot;</span>, <span class="st">&quot;2024-06-15&quot;</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a>           <span class="st">&quot;2024-06-15&quot;</span>, <span class="st">&quot;2024-07-01&quot;</span>, <span class="st">&quot;2024-07-01&quot;</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a>           <span class="st">&quot;2024-07-10&quot;</span>, <span class="st">&quot;2024-07-10&quot;</span>),</span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a>  <span class="at">count =</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">5</span>, <span class="dv">8</span>, <span class="dv">3</span>, <span class="dv">7</span>, <span class="dv">14</span>, <span class="dv">6</span>, <span class="dv">2</span>),</span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a>)</span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" tabindex="-1"></a>sites <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-21"><a href="#cb1-21" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">5</span>),</span>
+<span id="cb1-22"><a href="#cb1-22" tabindex="-1"></a>  <span class="at">latitude =</span> <span class="fu">c</span>(<span class="fl">48.21</span>, <span class="fl">47.07</span>, <span class="fl">46.62</span>, <span class="fl">48.85</span>),</span>
+<span id="cb1-23"><a href="#cb1-23" tabindex="-1"></a>  <span class="at">longitude =</span> <span class="fu">c</span>(<span class="fl">16.37</span>, <span class="fl">15.44</span>, <span class="fl">14.31</span>, <span class="fl">13.02</span>),</span>
+<span id="cb1-24"><a href="#cb1-24" tabindex="-1"></a>  <span class="at">habitat =</span> <span class="fu">c</span>(<span class="st">&quot;forest&quot;</span>, <span class="st">&quot;wetland&quot;</span>, <span class="st">&quot;grassland&quot;</span>, <span class="st">&quot;forest&quot;</span>),</span>
+<span id="cb1-25"><a href="#cb1-25" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb1-26"><a href="#cb1-26" tabindex="-1"></a>)</span>
+<span id="cb1-27"><a href="#cb1-27" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" tabindex="-1"></a>reference <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-29"><a href="#cb1-29" tabindex="-1"></a>  <span class="at">species_name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb1-30"><a href="#cb1-30" tabindex="-1"></a>                   <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb1-31"><a href="#cb1-31" tabindex="-1"></a>                   <span class="st">&quot;Alnus glutinosa&quot;</span>),</span>
+<span id="cb1-32"><a href="#cb1-32" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">c</span>(<span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Pinaceae&quot;</span>, <span class="st">&quot;Fagaceae&quot;</span>,</span>
+<span id="cb1-33"><a href="#cb1-33" tabindex="-1"></a>             <span class="st">&quot;Betulaceae&quot;</span>, <span class="st">&quot;Betulaceae&quot;</span>),</span>
+<span id="cb1-34"><a href="#cb1-34" tabindex="-1"></a>  <span class="at">conservation_status =</span> <span class="fu">c</span>(<span class="st">&quot;LC&quot;</span>, <span class="st">&quot;LC&quot;</span>, <span class="st">&quot;LC&quot;</span>, <span class="st">&quot;LC&quot;</span>, <span class="st">&quot;LC&quot;</span>),</span>
+<span id="cb1-35"><a href="#cb1-35" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb1-36"><a href="#cb1-36" tabindex="-1"></a>)</span>
+<span id="cb1-37"><a href="#cb1-37" tabindex="-1"></a></span>
+<span id="cb1-38"><a href="#cb1-38" tabindex="-1"></a><span class="fu">write_vtr</span>(observations, obs_path)</span>
+<span id="cb1-39"><a href="#cb1-39" tabindex="-1"></a><span class="fu">write_vtr</span>(sites, sites_path)</span>
+<span id="cb1-40"><a href="#cb1-40" tabindex="-1"></a><span class="fu">write_vtr</span>(reference, ref_path)</span></code></pre></div>
+</div>
+<div id="key-specification" class="section level2">
+<h2>Key specification</h2>
+<p>Every join except <code>cross_join()</code> takes a <code>by</code>
+argument that defines which columns to match on. There are four ways to
+specify keys.</p>
+<p><strong>Same-name column.</strong> The simplest case: both tables
+share a column name, and we pass it as a string.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">left_join</span>(<span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count latitude longitude   habitat</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica 2024-07-10     6       NA        NA      &lt;NA&gt;</span></span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus 2024-07-10     2       NA        NA      &lt;NA&gt;</span></span></code></pre></div>
+<p>The result contains all columns from both tables. The key column
+<code>site_id</code> appears once; the remaining columns from each side
+sit beside it.</p>
+<p><strong>Different-name columns.</strong> When the key has a different
+name in each table, we use a named character vector. The name is the
+left-side column; the value is the right-side column.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">inner_join</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path),</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>  <span class="fu">tbl</span>(ref_path),</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;species&quot;</span> <span class="ot">=</span> <span class="st">&quot;species_name&quot;</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="co">#&gt;   site_id          species       date count     family conservation_status</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="co">#&gt; 1       1    Quercus robur 2024-06-01    12   Fagaceae                  LC</span></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co">#&gt; 2       1 Pinus sylvestris 2024-06-01     5   Pinaceae                  LC</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co">#&gt; 3       2    Quercus robur 2024-06-15     8   Fagaceae                  LC</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt; 4       2  Fagus sylvatica 2024-06-15     3   Fagaceae                  LC</span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="co">#&gt; 5       3 Pinus sylvestris 2024-07-01     7   Pinaceae                  LC</span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="co">#&gt; 6       3   Betula pendula 2024-07-01    14 Betulaceae                  LC</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; 7       4  Fagus sylvatica 2024-07-10     6   Fagaceae                  LC</span></span></code></pre></div>
+<p>Here <code>species</code> in the observations table maps to
+<code>species_name</code> in the reference table. The output keeps the
+left-side name (<code>species</code>).</p>
+<p><strong>Natural join.</strong> When <code>by</code> is
+<code>NULL</code> (the default), vectra identifies all columns that
+appear in both tables and joins on all of them. A message tells us which
+columns were selected.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">left_join</span>(<span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path)) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt; Joining by: site_id</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count latitude longitude   habitat</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica 2024-07-10     6       NA        NA      &lt;NA&gt;</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus 2024-07-10     2       NA        NA      &lt;NA&gt;</span></span></code></pre></div>
+<p>Natural joins are convenient for exploratory work. For production
+pipelines, explicit keys are safer because they survive schema changes
+in upstream tables.</p>
+<p><strong>Multi-column keys.</strong> We pass multiple column names as
+a character vector. This defines a composite key where rows must match
+on every column simultaneously.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>survey1_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>survey2_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>),</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="at">year =</span> <span class="fu">c</span>(<span class="dv">2023</span>, <span class="dv">2024</span>, <span class="dv">2023</span>, <span class="dv">2024</span>),</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="at">richness =</span> <span class="fu">c</span>(<span class="dv">5</span>, <span class="dv">7</span>, <span class="dv">3</span>, <span class="dv">4</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a>), survey1_path)</span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>),</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>  <span class="at">year =</span> <span class="fu">c</span>(<span class="dv">2024</span>, <span class="dv">2023</span>, <span class="dv">2024</span>),</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>  <span class="at">temperature =</span> <span class="fu">c</span>(<span class="fl">18.2</span>, <span class="fl">16.1</span>, <span class="fl">17.5</span>)</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>), survey2_path)</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a></span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a><span class="fu">inner_join</span>(</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>  <span class="fu">tbl</span>(survey1_path), <span class="fu">tbl</span>(survey2_path),</span>
+<span id="cb5-18"><a href="#cb5-18" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;site_id&quot;</span>, <span class="st">&quot;year&quot;</span>)</span>
+<span id="cb5-19"><a href="#cb5-19" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb5-20"><a href="#cb5-20" tabindex="-1"></a><span class="co">#&gt;   site_id year richness temperature</span></span>
+<span id="cb5-21"><a href="#cb5-21" tabindex="-1"></a><span class="co">#&gt; 1       1 2024        7        18.2</span></span>
+<span id="cb5-22"><a href="#cb5-22" tabindex="-1"></a><span class="co">#&gt; 2       2 2023        3        16.1</span></span>
+<span id="cb5-23"><a href="#cb5-23" tabindex="-1"></a><span class="co">#&gt; 3       2 2024        4        17.5</span></span></code></pre></div>
+<p>Only the three rows where both <code>site_id</code> and
+<code>year</code> match appear. Site 1 in 2023 had a richness
+measurement but no temperature record, so it drops from the inner join.
+Multi-column keys can also use the named form when column names differ:
+<code>by = c(&quot;site&quot; = &quot;site_id&quot;, &quot;yr&quot; = &quot;year&quot;)</code>.</p>
+</div>
+<div id="left-join" class="section level2">
+<h2>Left join</h2>
+<p><code>left_join()</code> keeps every row from the left table. Where a
+match exists in the right table, the right-side columns are filled in.
+Where no match exists, they become <code>NA</code>.</p>
+<p>This is the workhorse join for data enrichment. We have a large
+observation table and want to attach site coordinates to each row.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>enriched <span class="ot">&lt;-</span> <span class="fu">left_join</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>enriched</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count latitude longitude   habitat</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica 2024-07-10     6       NA        NA      &lt;NA&gt;</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus 2024-07-10     2       NA        NA      &lt;NA&gt;</span></span></code></pre></div>
+<p>Site 4 has observations but does not appear in the sites table. Its
+<code>latitude</code>, <code>longitude</code>, and <code>habitat</code>
+columns are <code>NA</code>. Site 5 is in the sites table but has no
+observations; it does not appear at all because left join preserves the
+left side, not the right.</p>
+<p>Internally, the engine builds a hash table from the right-side table
+(sites) during the build phase. Every row in sites is hashed on
+<code>site_id</code> and stored with its payload columns
+(<code>latitude</code>, <code>longitude</code>, <code>habitat</code>).
+Then the left side (observations) streams through one batch at a time.
+For each left row, the engine computes the hash of <code>site_id</code>,
+probes the hash table, and either copies the matching right-side columns
+into the output or fills them with <code>NA</code> if the probe misses.
+The left row is emitted regardless. This is why left join guarantees
+that the output has at least as many rows as the left table: every left
+row produces exactly one output row per match, or one NA-padded row if
+there is no match.</p>
+<p>Left join is the natural default when we have a primary dataset and
+want to enrich it with attributes from a secondary source. Inner join,
+by contrast, drops every row that lacks a match on the right side, which
+can silently shrink the result. In our example, inner join would discard
+both observations at site 4. Whether that is acceptable depends on the
+analysis. If we plan to model species richness as a function of habitat,
+losing site 4 might be fine because we cannot use those rows without
+habitat data anyway. But if we are computing total species counts across
+all sites, dropping site 4 would undercount. Left join keeps the data
+intact and lets us decide later what to do with the gaps.</p>
+<p>Those <code>NA</code> values in the output carry meaning: they tell
+us which observations lack metadata. We can filter them out, impute
+them, or flag them for data collection. A common pattern is to follow a
+left join with <code>filter(!is.na(habitat))</code> when we want
+inner-join semantics but also want to inspect the unmatched rows first.
+Running the left join, checking the <code>NA</code> rate, and then
+filtering is a safer workflow than jumping straight to inner join
+because it makes the data loss visible.</p>
+<p>The row count of a left join is always at least the row count of the
+left table. It can be larger if the right table has duplicate keys. If
+site_id 1 appeared twice in the sites table, each observation at site 1
+would produce two output rows. A one-to-one key relationship keeps the
+row count equal; a one-to-many relationship on the right side inflates
+it. Checking <code>nrow(result) == nrow(left)</code> after a left join
+is a quick way to confirm the key relationship is one-to-one, which is
+often what we assume but rarely verify.</p>
+<p><strong>Suffix for duplicate column names.</strong> When both tables
+share a non-key column name, vectra appends suffixes to disambiguate.
+The default is <code>c(&quot;.x&quot;, &quot;.y&quot;)</code>.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>extra_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>),</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="at">count =</span> <span class="fu">c</span>(<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">300</span>)</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>), extra_path)</span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="fu">left_join</span>(</span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(extra_path),</span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span>, <span class="at">suffix =</span> <span class="fu">c</span>(<span class="st">&quot;_obs&quot;</span>, <span class="st">&quot;_site&quot;</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count_obs count_site</span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur 2024-06-01        12        100</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris 2024-06-01         5        100</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur 2024-06-15         8        200</span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica 2024-06-15         3        200</span></span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris 2024-07-01         7        300</span></span>
+<span id="cb7-17"><a href="#cb7-17" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula 2024-07-01        14        300</span></span>
+<span id="cb7-18"><a href="#cb7-18" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica 2024-07-10         6         NA</span></span>
+<span id="cb7-19"><a href="#cb7-19" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus 2024-07-10         2         NA</span></span></code></pre></div>
+<p>Both tables have a <code>count</code> column. The left side becomes
+<code>count_obs</code>, the right side <code>count_site</code>. Choosing
+descriptive suffixes avoids the generic <code>.x</code>/<code>.y</code>
+that can be hard to interpret in downstream code.</p>
+</div>
+<div id="inner-join" class="section level2">
+<h2>Inner join</h2>
+<p><code>inner_join()</code> returns only the rows that match on both
+sides. It is the intersection of the two key sets.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">inner_join</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co">#&gt;   site_id          species       date count latitude longitude   habitat</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt; 1       1    Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; 2       1 Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; 3       2    Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; 4       2  Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; 5       3 Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 6       3   Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span></code></pre></div>
+<p>Site 4 (in observations but not in sites) and site 5 (in sites but
+not in observations) both vanish. The result has six rows instead of the
+eight we started with.</p>
+<p>Inner join is the right choice when unmatched rows are meaningless
+for the analysis. If we only want observations where we have spatial
+metadata, inner join gives us exactly that. Compared to a left join
+followed by <code>filter(!is.na(latitude))</code>, the inner join does
+it in a single hash probe pass with no intermediate <code>NA</code> rows
+to filter out.</p>
+<p>When the key relationship is one-to-one on both sides, inner join and
+left join produce the same row count. The difference shows up when there
+are unmatched keys. Checking row counts after each join is a quick
+sanity test for whether the key relationship is what we expected.</p>
+</div>
+<div id="right-and-full-joins" class="section level2">
+<h2>Right and full joins</h2>
+<p><strong>Right join.</strong> <code>right_join()</code> is the mirror
+of <code>left_join()</code>: it keeps every row from the right table and
+fills <code>NA</code> on the left side where there is no match.
+Internally vectra implements it by swapping the two inputs and
+reordering the output columns to match the expected layout.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">right_join</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a><span class="co">#&gt;   site_id          species       date count latitude longitude   habitat</span></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt; 1       1 Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt; 2       1    Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; 3       2  Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; 4       2    Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; 5       3   Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; 6       3 Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; 7       5             &lt;NA&gt;       &lt;NA&gt;    NA    48.85     13.02    forest</span></span></code></pre></div>
+<p>Site 5 now appears with <code>NA</code> values for
+<code>species</code>, <code>date</code>, and <code>count</code>. Site 4
+drops because it has no entry in the right table (sites). A right join
+with the tables in order <code>(A, B)</code> produces the same matches
+as a left join with <code>(B, A)</code>, but the column order follows
+the original call: left-side columns first, then right-side columns.</p>
+<p><strong>Full join.</strong> <code>full_join()</code> keeps every row
+from both sides. Rows with a match get combined; unmatched rows from
+either side are padded with <code>NA</code>.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">full_join</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count latitude longitude   habitat</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur 2024-06-01    12    48.21     16.37    forest</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris 2024-06-01     5    48.21     16.37    forest</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur 2024-06-15     8    47.07     15.44   wetland</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica 2024-06-15     3    47.07     15.44   wetland</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris 2024-07-01     7    46.62     14.31 grassland</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula 2024-07-01    14    46.62     14.31 grassland</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica 2024-07-10     6       NA        NA      &lt;NA&gt;</span></span>
+<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus 2024-07-10     2       NA        NA      &lt;NA&gt;</span></span>
+<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a><span class="co">#&gt; 9       5                &lt;NA&gt;       &lt;NA&gt;    NA    48.85     13.02    forest</span></span></code></pre></div>
+<p>Both site 4 (left-only) and site 5 (right-only) appear. Full join is
+useful when we need to see the complete picture and handle gaps
+explicitly downstream.</p>
+<p>The engine processes full joins in three phases. First, it builds the
+hash table from the right side. Second, it streams the left side,
+emitting matched and unmatched left rows. Third, it walks the hash table
+to emit any right rows that were never probed, flushing them in
+65536-row chunks. This third phase adds a memory overhead equal to the
+unmatched portion of the right side.</p>
+</div>
+<div id="filtering-joins-semi-and-anti" class="section level2">
+<h2>Filtering joins: semi and anti</h2>
+<p>Filtering joins do not bring in columns from the right table. They
+use the right table purely as a lookup to decide which left rows to keep
+or discard.</p>
+<p><strong>Semi join.</strong> <code>semi_join()</code> answers: “which
+of my left rows have at least one match in the right table?” The output
+schema is identical to the left table.</p>
+<p>Consider a scenario where we have a list of target species and want
+to keep only observations of those species.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>targets_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">species =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>),</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>), targets_path)</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">semi_join</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(targets_path), <span class="at">by =</span> <span class="st">&quot;species&quot;</span></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a><span class="co">#&gt;   site_id        species       date count</span></span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="co">#&gt; 1       1  Quercus robur 2024-06-01    12</span></span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="co">#&gt; 2       2  Quercus robur 2024-06-15     8</span></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a><span class="co">#&gt; 3       3 Betula pendula 2024-07-01    14</span></span></code></pre></div>
+<p>Three observations match. The result has the same columns as the
+observations table; no columns from the target list leak through. If a
+species appeared multiple times in the targets table, each observation
+would still appear only once. Semi join deduplicates by design: the
+right table is a set, not a mapping.</p>
+<p>Semi join shows up frequently in spatial and temporal subsetting.
+Suppose we have a table of sites that passed a quality control check,
+and we want to restrict a large observation dataset to only those sites.
+An inner join would work, but it would also attach the QC columns to
+every output row, widening the result for no reason. Semi join keeps the
+observation schema untouched. In pipelines where the output feeds into
+another join or a group-by aggregation, avoiding unnecessary columns
+reduces both memory use and cognitive load when reading the schema.</p>
+<p><strong>Anti join.</strong> <code>anti_join()</code> is the
+complement: “which left rows have no match in the right table?” This is
+the diagnostic workhorse for finding orphan records, missing reference
+entries, and data quality gaps.</p>
+<p>The classic alternative to anti join is
+<code>left_join() |&gt; filter(is.na(key))</code>. Both produce the same
+rows, but anti join is more efficient: the engine never copies
+right-side columns into the output, and it never produces intermediate
+NA-padded rows that the filter then discards. For a left table with 10
+million rows and a right table with 50,000 rows, the
+left-join-then-filter approach allocates space for right-side payload
+columns in every output batch, fills most of them with real data, and
+then throws those rows away. Anti join skips all of that. It probes the
+hash table, checks for a miss, and emits the left row as-is.</p>
+<p>Beyond performance, anti join communicates intent. A reader seeing
+<code>anti_join()</code> immediately knows the goal is to find what is
+missing. A <code>left_join()</code> followed by
+<code>filter(is.na(...))</code> requires reading two lines and mentally
+combining them.</p>
+<p>Which observed species are missing from our taxonomic reference
+list?</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="fu">anti_join</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path),</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>  <span class="fu">tbl</span>(ref_path),</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;species&quot;</span> <span class="ot">=</span> <span class="st">&quot;species_name&quot;</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt;   site_id             species       date count</span></span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a><span class="co">#&gt; 1       4 Acer pseudoplatanus 2024-07-10     2</span></span></code></pre></div>
+<p><em>Acer pseudoplatanus</em> is in the observations but not in the
+reference table. In a real workflow, this flags an incomplete reference
+list or a data entry error.</p>
+<p>The reverse question is equally useful. Which reference species have
+never been observed?</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="fu">anti_join</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="fu">tbl</span>(ref_path),</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>  <span class="fu">tbl</span>(obs_path),</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;species_name&quot;</span> <span class="ot">=</span> <span class="st">&quot;species&quot;</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a><span class="co">#&gt;      species_name     family conservation_status</span></span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="co">#&gt; 1 Alnus glutinosa Betulaceae                  LC</span></span></code></pre></div>
+<p><em>Alnus glutinosa</em> is in the reference but absent from
+observations. Running anti joins in both directions is a standard check
+when validating relational integrity between tables.</p>
+<p>Filtering joins are cheaper than mutating joins when all we need is
+the filter effect. The hash table is built the same way, but no columns
+are copied from the right side, and the output batch can reuse the left
+batch’s memory directly. For wide right-side tables with many columns,
+the savings can be substantial: a mutating join copies every payload
+column for every matched row, while a filtering join touches none of
+them.</p>
+</div>
+<div id="cross-join" class="section level2">
+<h2>Cross join</h2>
+<p><code>cross_join()</code> produces the Cartesian product of two
+tables. Every row on the left is paired with every row on the right.
+There is no <code>by</code> parameter.</p>
+<p>A common use is generating a complete grid of combinations. Suppose
+we want every site-year pair for three years of monitoring.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>years_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">year =</span> <span class="fu">c</span>(<span class="dv">2022</span>, <span class="dv">2023</span>, <span class="dv">2024</span>)), years_path)</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">cross_join</span>(<span class="fu">tbl</span>(sites_path), <span class="fu">tbl</span>(years_path))</span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>grid</span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a><span class="co">#&gt;    site_id latitude longitude   habitat year</span></span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="co">#&gt; 1        1    48.21     16.37    forest 2022</span></span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co">#&gt; 2        1    48.21     16.37    forest 2023</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt; 3        1    48.21     16.37    forest 2024</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a><span class="co">#&gt; 4        2    47.07     15.44   wetland 2022</span></span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a><span class="co">#&gt; 5        2    47.07     15.44   wetland 2023</span></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co">#&gt; 6        2    47.07     15.44   wetland 2024</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co">#&gt; 7        3    46.62     14.31 grassland 2022</span></span>
+<span id="cb15-14"><a href="#cb15-14" tabindex="-1"></a><span class="co">#&gt; 8        3    46.62     14.31 grassland 2023</span></span>
+<span id="cb15-15"><a href="#cb15-15" tabindex="-1"></a><span class="co">#&gt; 9        3    46.62     14.31 grassland 2024</span></span>
+<span id="cb15-16"><a href="#cb15-16" tabindex="-1"></a><span class="co">#&gt; 10       5    48.85     13.02    forest 2022</span></span>
+<span id="cb15-17"><a href="#cb15-17" tabindex="-1"></a><span class="co">#&gt; 11       5    48.85     13.02    forest 2023</span></span>
+<span id="cb15-18"><a href="#cb15-18" tabindex="-1"></a><span class="co">#&gt; 12       5    48.85     13.02    forest 2024</span></span></code></pre></div>
+<p>The result has <code>4 * 3 = 12</code> rows (4 sites times 3 years).
+From here we could left join actual survey data onto this grid to
+identify which site-year combinations lack records.</p>
+<p>Cross joins scale as <code>O(n * m)</code>, so both tables must be
+small enough for the output to fit in memory. vectra collects both sides
+before expanding. Use this for generating lookup grids, parameter
+sweeps, or small combinatorial tables. For large tables it is almost
+never what we want.</p>
+</div>
+<div id="fuzzy-joins" class="section level2">
+<h2>Fuzzy joins</h2>
+<p>Ecological datasets are full of messy names. Field observers write
+“Quercus robar” instead of “Quercus robur”, or “Pinus sylvestris L.”
+instead of “Pinus sylvestris”. Exact joins miss these.
+<code>fuzzy_join()</code> matches rows by approximate string
+distance.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>messy_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>clean_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>  <span class="at">obs_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>),</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>, <span class="st">&quot;Pinus sylvestris L.&quot;</span>,</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a>           <span class="st">&quot;Fagus silvatica&quot;</span>, <span class="st">&quot;Betula pendla&quot;</span>,</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a>           <span class="st">&quot;Acer pseudoplatanus&quot;</span>),</span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>), messy_path)</span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a>  <span class="at">species_name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a>                   <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a>                   <span class="st">&quot;Acer pseudoplatanus&quot;</span>),</span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a>  <span class="at">family =</span> <span class="fu">c</span>(<span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Pinaceae&quot;</span>, <span class="st">&quot;Fagaceae&quot;</span>,</span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a>             <span class="st">&quot;Betulaceae&quot;</span>, <span class="st">&quot;Sapindaceae&quot;</span>),</span>
+<span id="cb16-18"><a href="#cb16-18" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb16-19"><a href="#cb16-19" tabindex="-1"></a>), clean_path)</span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  <span class="fu">tbl</span>(messy_path),</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="fu">tbl</span>(clean_path),</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;name&quot;</span> <span class="ot">=</span> <span class="st">&quot;species_name&quot;</span>),</span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.2</span></span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a><span class="co">#&gt;   obs_id                name        species_name      family fuzzy_dist</span></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a><span class="co">#&gt; 1      1       Quercus robar       Quercus robur    Fagaceae 0.07692308</span></span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a><span class="co">#&gt; 2      2 Pinus sylvestris L.    Pinus sylvestris    Pinaceae 0.15789474</span></span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a><span class="co">#&gt; 3      3     Fagus silvatica     Fagus sylvatica    Fagaceae 0.06666667</span></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a><span class="co">#&gt; 4      4       Betula pendla      Betula pendula  Betulaceae 0.07142857</span></span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a><span class="co">#&gt; 5      5 Acer pseudoplatanus Acer pseudoplatanus Sapindaceae 0.00000000</span></span></code></pre></div>
+<p>The output includes a <code>fuzzy_dist</code> column with the
+normalized distance between the matched strings. Rows that exceed
+<code>max_dist</code> are excluded.</p>
+<p>Choosing the right <code>max_dist</code> threshold requires balancing
+recall against precision. A threshold of 0.1 catches only very minor
+typos (one character in a ten-character string). A threshold of 0.3
+catches more variation but starts admitting false matches: “Pinus mugo”
+and “Pinus nigra” differ by only a few characters and could match if the
+threshold is too loose. The cost of a false match in a species lookup is
+a wrong family or conservation status propagating silently through the
+analysis. Start with a conservative threshold (0.1 or 0.15), inspect the
+<code>fuzzy_dist</code> column in the output, and widen only if
+legitimate matches are being missed. Sorting the result by
+<code>fuzzy_dist</code> in descending order is a quick way to audit the
+worst matches and decide whether the threshold needs tightening.</p>
+<p>The three available methods have different characteristics:</p>
+<ul>
+<li><p><strong><code>&quot;dl&quot;</code></strong> (Damerau-Levenshtein, the
+default): counts insertions, deletions, substitutions, and
+transpositions. Good general-purpose metric for typos.</p></li>
+<li><p><strong><code>&quot;levenshtein&quot;</code></strong>: same as DL but
+without transpositions. Slightly stricter.</p></li>
+<li><p><strong><code>&quot;jw&quot;</code></strong> (Jaro-Winkler): gives more
+weight to matching prefixes. Designed for short strings like personal
+names; works well for genus-level matching.</p></li>
+</ul>
+<p><strong>Blocking for performance.</strong> Fuzzy joins compare every
+left row against every right row (within the distance threshold). For
+large tables this is expensive. The <code>block_by</code> parameter
+restricts comparisons to rows that share an exact match on a blocking
+column.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>messy2_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>clean2_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a>  <span class="at">genus =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Pinus&quot;</span>, <span class="st">&quot;Fagus&quot;</span>, <span class="st">&quot;Betula&quot;</span>),</span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>, <span class="st">&quot;Pinus sylvestris L.&quot;</span>,</span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a>           <span class="st">&quot;Fagus silvatica&quot;</span>, <span class="st">&quot;Betula pendla&quot;</span>),</span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a>), messy2_path)</span>
+<span id="cb18-10"><a href="#cb18-10" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb18-12"><a href="#cb18-12" tabindex="-1"></a>  <span class="at">genus =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Pinus&quot;</span>, <span class="st">&quot;Fagus&quot;</span>,</span>
+<span id="cb18-13"><a href="#cb18-13" tabindex="-1"></a>            <span class="st">&quot;Betula&quot;</span>, <span class="st">&quot;Alnus&quot;</span>),</span>
+<span id="cb18-14"><a href="#cb18-14" tabindex="-1"></a>  <span class="at">species_name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>,</span>
+<span id="cb18-15"><a href="#cb18-15" tabindex="-1"></a>                   <span class="st">&quot;Fagus sylvatica&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb18-16"><a href="#cb18-16" tabindex="-1"></a>                   <span class="st">&quot;Alnus glutinosa&quot;</span>),</span>
+<span id="cb18-17"><a href="#cb18-17" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb18-18"><a href="#cb18-18" tabindex="-1"></a>), clean2_path)</span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>  <span class="fu">tbl</span>(messy2_path),</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>  <span class="fu">tbl</span>(clean2_path),</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;name&quot;</span> <span class="ot">=</span> <span class="st">&quot;species_name&quot;</span>),</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.25</span>,</span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a>  <span class="at">block_by =</span> <span class="fu">c</span>(<span class="st">&quot;genus&quot;</span> <span class="ot">=</span> <span class="st">&quot;genus&quot;</span>)</span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a><span class="co">#&gt;     genus                name genus.y     species_name fuzzy_dist</span></span>
+<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a><span class="co">#&gt; 1 Quercus       Quercus robar Quercus    Quercus robur 0.07692308</span></span>
+<span id="cb19-11"><a href="#cb19-11" tabindex="-1"></a><span class="co">#&gt; 2   Pinus Pinus sylvestris L.   Pinus Pinus sylvestris 0.15789474</span></span>
+<span id="cb19-12"><a href="#cb19-12" tabindex="-1"></a><span class="co">#&gt; 3   Fagus     Fagus silvatica   Fagus  Fagus sylvatica 0.06666667</span></span>
+<span id="cb19-13"><a href="#cb19-13" tabindex="-1"></a><span class="co">#&gt; 4  Betula       Betula pendla  Betula   Betula pendula 0.07142857</span></span></code></pre></div>
+<p>With blocking, each <em>Quercus</em> name is only compared against
+other <em>Quercus</em> entries, each <em>Pinus</em> name against other
+<em>Pinus</em> entries, and so on. Without blocking, a fuzzy join
+between a left table with N rows and a right table with M rows computes
+N * M distance comparisons. Each comparison involves walking both
+strings character by character, so the total cost is O(N * M * L) where
+L is the average string length. For N = 10,000 and M = 100,000, that is
+a billion comparisons. Blocking partitions both tables by the blocking
+column and runs the fuzzy comparison only within matching partitions. If
+the blocking column splits the data into k roughly equal groups, the
+comparison count drops to N * M / k. With 200 genera, that billion
+becomes five million.</p>
+<p>The blocking column must be an exact-match column that is already
+clean on both sides. Genus is a natural choice for species names because
+it is shorter, less prone to typos, and partitions the data well. Other
+good blocking columns include country codes, first letters of names, or
+any categorical variable that coarsely groups the data. If the blocking
+column itself has errors, rows will land in the wrong partition and miss
+their true match entirely, so it is worth cleaning the blocking column
+before relying on it.</p>
+<p>The fuzzy distance computation within each block is parallelized with
+OpenMP, and the <code>n_threads</code> parameter controls the thread
+count.</p>
+</div>
+<div id="multi-column-keys" class="section level2">
+<h2>Multi-column keys</h2>
+<p>When a single column does not uniquely identify the relationship, we
+join on a composite key. This is common with spatial and temporal data
+where the natural key is a site-year or site-date combination.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a>counts_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>effort_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>, <span class="dv">3</span>),</span>
+<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a>  <span class="at">year =</span> <span class="fu">c</span>(<span class="dv">2023</span>, <span class="dv">2024</span>, <span class="dv">2023</span>, <span class="dv">2024</span>, <span class="dv">2024</span>),</span>
+<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a>  <span class="at">n_species =</span> <span class="fu">c</span>(<span class="dv">12</span>, <span class="dv">15</span>, <span class="dv">8</span>, <span class="dv">10</span>, <span class="dv">20</span>)</span>
+<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a>), counts_path)</span>
+<span id="cb20-9"><a href="#cb20-9" tabindex="-1"></a></span>
+<span id="cb20-10"><a href="#cb20-10" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb20-11"><a href="#cb20-11" tabindex="-1"></a>  <span class="at">site_id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">3</span>),</span>
+<span id="cb20-12"><a href="#cb20-12" tabindex="-1"></a>  <span class="at">year =</span> <span class="fu">c</span>(<span class="dv">2023</span>, <span class="dv">2024</span>, <span class="dv">2024</span>, <span class="dv">2023</span>, <span class="dv">2024</span>),</span>
+<span id="cb20-13"><a href="#cb20-13" tabindex="-1"></a>  <span class="at">hours =</span> <span class="fu">c</span>(<span class="fl">4.5</span>, <span class="fl">5.0</span>, <span class="fl">3.0</span>, <span class="fl">6.0</span>, <span class="fl">4.0</span>)</span>
+<span id="cb20-14"><a href="#cb20-14" tabindex="-1"></a>), effort_path)</span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">left_join</span>(</span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a>  <span class="fu">tbl</span>(counts_path), <span class="fu">tbl</span>(effort_path),</span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;site_id&quot;</span>, <span class="st">&quot;year&quot;</span>)</span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a><span class="co">#&gt;   site_id year n_species hours</span></span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a><span class="co">#&gt; 1       1 2023        12   4.5</span></span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a><span class="co">#&gt; 2       1 2024        15   5.0</span></span>
+<span id="cb21-8"><a href="#cb21-8" tabindex="-1"></a><span class="co">#&gt; 3       2 2024        10   3.0</span></span>
+<span id="cb21-9"><a href="#cb21-9" tabindex="-1"></a><span class="co">#&gt; 4       3 2024        20   4.0</span></span>
+<span id="cb21-10"><a href="#cb21-10" tabindex="-1"></a><span class="co">#&gt; 5       2 2023         8    NA</span></span></code></pre></div>
+<p>Site 2 in 2023 has a species count but no matching effort record, so
+the effort column is <code>NA</code> for that row. Site 3 in 2023 has
+effort data but no count, and because this is a left join it does not
+appear in the output at all.</p>
+<p>Composite keys work with all join types. The hash table uses a
+combined hash of all key columns (FNV-1a hash combining), so lookup cost
+does not increase linearly with the number of key columns. There is a
+single hash probe per row regardless of whether the key has one column
+or five.</p>
+<p>When column names differ between tables, the named form works for
+composites too:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a>effort2_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>  <span class="at">loc =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">3</span>),</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>  <span class="at">survey_year =</span> <span class="fu">c</span>(<span class="dv">2023</span>, <span class="dv">2024</span>, <span class="dv">2024</span>, <span class="dv">2023</span>, <span class="dv">2024</span>),</span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a>  <span class="at">hours =</span> <span class="fu">c</span>(<span class="fl">4.5</span>, <span class="fl">5.0</span>, <span class="fl">3.0</span>, <span class="fl">6.0</span>, <span class="fl">4.0</span>)</span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a>), effort2_path)</span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a></span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="fu">left_join</span>(</span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a>  <span class="fu">tbl</span>(counts_path), <span class="fu">tbl</span>(effort2_path),</span>
+<span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;site_id&quot;</span> <span class="ot">=</span> <span class="st">&quot;loc&quot;</span>, <span class="st">&quot;year&quot;</span> <span class="ot">=</span> <span class="st">&quot;survey_year&quot;</span>)</span>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a><span class="co">#&gt;   site_id year n_species hours</span></span>
+<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a><span class="co">#&gt; 1       1 2023        12   4.5</span></span>
+<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a><span class="co">#&gt; 2       1 2024        15   5.0</span></span>
+<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a><span class="co">#&gt; 3       2 2024        10   3.0</span></span>
+<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a><span class="co">#&gt; 4       3 2024        20   4.0</span></span>
+<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a><span class="co">#&gt; 5       2 2023         8    NA</span></span></code></pre></div>
+</div>
+<div id="key-coercion-and-na-handling" class="section level2">
+<h2>Key coercion and NA handling</h2>
+<p>vectra’s join keys follow a type hierarchy:
+<code>bool &lt; int64 &lt; double</code>. When the left key is
+<code>int64</code> and the right key is <code>double</code>, or vice
+versa, both sides are coerced to <code>double</code> before hashing.
+This happens transparently.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>int_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>dbl_path <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="fu">c</span>(<span class="dv">1</span><span class="dt">L</span>, <span class="dv">2</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>), <span class="at">x =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>)), int_path)</span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="fu">c</span>(<span class="fl">1.0</span>, <span class="fl">2.0</span>, <span class="fl">4.0</span>), <span class="at">y =</span> <span class="fu">c</span>(<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">400</span>)), dbl_path)</span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="fu">inner_join</span>(<span class="fu">tbl</span>(int_path), <span class="fu">tbl</span>(dbl_path), <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a><span class="co">#&gt;   id  x   y</span></span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a><span class="co">#&gt; 1  1 10 100</span></span>
+<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="co">#&gt; 2  2 20 200</span></span></code></pre></div>
+<p>The integer <code>1L</code> matches the double <code>1.0</code> after
+coercion. Boolean columns coerce to int64 (FALSE = 0, TRUE = 1) if the
+other side is numeric.</p>
+<p>Joining a string column against a numeric column is an error. vectra
+does not attempt to parse strings as numbers, because that coercion is
+ambiguous (“01” vs. 1, leading zeros, locale-dependent formatting). If
+we need to join string IDs against numeric IDs, we convert explicitly
+with <code>mutate()</code> before the join.</p>
+<p><strong>NA keys never match.</strong> This follows SQL NULL
+semantics. A row with <code>NA</code> in the key column will not match
+any other row, including another <code>NA</code>.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>na_left <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>na_right <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="cn">NA</span>, <span class="dv">3</span>), <span class="at">x =</span> <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">20</span>, <span class="dv">30</span>)</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>), na_left)</span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="cn">NA</span>, <span class="dv">4</span>), <span class="at">y =</span> <span class="fu">c</span>(<span class="dv">100</span>, <span class="dv">200</span>, <span class="dv">400</span>)</span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>), na_right)</span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a></span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="fu">left_join</span>(<span class="fu">tbl</span>(na_left), <span class="fu">tbl</span>(na_right), <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt;   id  x   y</span></span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; 1  1 10 100</span></span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; 2 NA 20  NA</span></span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="co">#&gt; 3  3 30  NA</span></span></code></pre></div>
+<p>Row 2 on the left has <code>id = NA</code>. Even though row 2 on the
+right also has <code>id = NA</code>, they do not match. The left row is
+preserved (because this is a left join) but with <code>NA</code> for
+column <code>y</code>. In an inner join, both NA-keyed rows would drop
+entirely.</p>
+<p>This behavior is consistent and predictable, but it catches people
+off guard when they expect NA-to-NA matching. The consequence for left
+joins is that a left row with an <code>NA</code> key will always appear
+in the output with <code>NA</code>-filled right columns, even if the
+right table also has rows with <code>NA</code> keys. Those right-side
+<code>NA</code>-keyed rows sit unused in the hash table. For inner
+joins, <code>NA</code> keys on either side mean those rows vanish from
+the output entirely. For anti joins, every <code>NA</code>-keyed left
+row is guaranteed to survive because it can never find a match.</p>
+<p>In practice, <code>NA</code> keys usually signal missing data rather
+than a deliberate category. A site_id of <code>NA</code> means “we don’t
+know which site this observation belongs to,” not “this observation
+belongs to the NA site.” SQL NULL semantics align with that
+interpretation: unknown values cannot be equal. If matching on missing
+values is genuinely the goal (rare, but it happens when <code>NA</code>
+represents a shared “unknown” category), replace <code>NA</code> with a
+sentinel value via <code>mutate()</code> before joining.</p>
+</div>
+<div id="memory-and-performance" class="section level2">
+<h2>Memory and performance</h2>
+<p>Understanding the memory profile of joins helps with sizing. vectra’s
+hash join has three cost components:</p>
+<ol style="list-style-type: decimal">
+<li><p><strong>Build phase.</strong> The entire right-side table is
+collected into a hash table. Memory cost is proportional to
+<code>nrow(right) * avg_row_width</code>. Each row in the hash table
+stores all columns (keys + payload), plus hash bucket pointers and
+overflow chains.</p></li>
+<li><p><strong>Probe phase.</strong> The left side streams batch by
+batch. Only one batch lives in memory at a time, regardless of how large
+the left table is. For a table with 100 million rows and 10,000 rows per
+batch, only 10,000 rows of the left side are in memory at any given
+moment.</p></li>
+<li><p><strong>Finalize phase</strong> (full join only). After probing,
+the engine walks the hash table to find unmatched right rows. These are
+flushed in 65536-row chunks. Memory overhead is small since the hash
+table already exists.</p></li>
+</ol>
+<p>The practical rule: <strong>put the smaller table on the
+right.</strong> If we join a 500 million row observation table against a
+10,000 row lookup table, the lookup table goes on the right. Memory
+usage is then roughly <code>10,000 * row_width</code> bytes plus
+overhead for the hash table structure. The 500 million row left side
+streams through without ever being fully in memory.</p>
+<p>To put concrete numbers on “right-side memory,” consider a typical
+lookup table with 5 columns: one int64 key, two double-precision floats,
+and two short strings (average 20 bytes each). Each row occupies roughly
+8 + 8 + 8 + 20 + 20 = 64 bytes of payload, plus ~24 bytes of hash table
+overhead per slot (hash value, next-pointer, validity flags). That gives
+us roughly 90 bytes per row. A right table with 100,000 rows costs about
+9 MB; one with 1 million rows costs about 90 MB. String-heavy tables
+cost more because each string value is stored inline. A table with a
+200-character text column per row could easily triple the per-row
+cost.</p>
+<p>When both tables are large and neither fits comfortably,
+pre-filtering the right side before the join is the single most
+effective optimization. A <code>select()</code> that drops columns not
+needed downstream reduces row width directly. A <code>filter()</code>
+that removes irrelevant rows reduces row count. Both shrink the hash
+table. If the right side has many duplicate keys and we only need one
+row per key (say, the most recent record), aggregating with
+<code>group_by() |&gt; summarise()</code> or deduplicating with a window
+function before the join can cut the right-side size by an order of
+magnitude.</p>
+<p><strong>Filtering joins are cheaper</strong> than mutating joins when
+all we need is the existence check. <code>semi_join()</code> and
+<code>anti_join()</code> still build the right-side hash table, but they
+skip copying right-side payload columns into the output. The output
+reuses the left batch’s memory layout. This makes them faster and more
+memory-efficient than the equivalent pattern of <code>left_join()</code>
+followed by <code>filter(is.na(...))</code> or
+<code>filter(!is.na(...))</code>.</p>
+<p><strong>Hash table sizing.</strong> The engine uses an
+open-addressing hash table with a 70% load factor threshold. For a right
+table with N rows, the table allocates roughly <code>N / 0.7</code>
+slots. The hash function is FNV-1a, which distributes well for both
+numeric and string keys. Composite keys combine per-column hashes with
+FNV-1a mixing, so multi-column keys have the same probe cost as single
+column keys.</p>
+</div>
+<div id="practical-guidance" class="section level2">
+<h2>Practical guidance</h2>
+<p>Choosing the right join type is often the first design decision in a
+pipeline. Here is a decision framework.</p>
+<p><strong>Data enrichment: left join.</strong> We have a primary table
+and want to attach attributes from a lookup table. Not every row will
+match, and we want to keep all primary rows. This is the most common
+pattern in analytical work.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="co"># Attach habitat type to every observation</span></span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a><span class="fu">left_join</span>(<span class="fu">tbl</span>(obs_path), <span class="fu">tbl</span>(sites_path), <span class="at">by =</span> <span class="st">&quot;site_id&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a>  <span class="fu">select</span>(site_id, species, habitat) <span class="sc">|&gt;</span></span>
+<span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb25-5"><a href="#cb25-5" tabindex="-1"></a><span class="co">#&gt;   site_id             species   habitat</span></span>
+<span id="cb25-6"><a href="#cb25-6" tabindex="-1"></a><span class="co">#&gt; 1       1       Quercus robur    forest</span></span>
+<span id="cb25-7"><a href="#cb25-7" tabindex="-1"></a><span class="co">#&gt; 2       1    Pinus sylvestris    forest</span></span>
+<span id="cb25-8"><a href="#cb25-8" tabindex="-1"></a><span class="co">#&gt; 3       2       Quercus robur   wetland</span></span>
+<span id="cb25-9"><a href="#cb25-9" tabindex="-1"></a><span class="co">#&gt; 4       2     Fagus sylvatica   wetland</span></span>
+<span id="cb25-10"><a href="#cb25-10" tabindex="-1"></a><span class="co">#&gt; 5       3    Pinus sylvestris grassland</span></span>
+<span id="cb25-11"><a href="#cb25-11" tabindex="-1"></a><span class="co">#&gt; 6       3      Betula pendula grassland</span></span>
+<span id="cb25-12"><a href="#cb25-12" tabindex="-1"></a><span class="co">#&gt; 7       4     Fagus sylvatica      &lt;NA&gt;</span></span>
+<span id="cb25-13"><a href="#cb25-13" tabindex="-1"></a><span class="co">#&gt; 8       4 Acer pseudoplatanus      &lt;NA&gt;</span></span></code></pre></div>
+<p><strong>Exact intersection: inner join.</strong> We only want rows
+where both sides have data. Useful for restricting analysis to a
+validated subset.</p>
+<p><strong>Completeness check: full join.</strong> We want to see
+everything and handle gaps explicitly. Good for reconciliation between
+two data sources.</p>
+<p><strong>Set membership: semi join.</strong> We want to filter a table
+to rows that exist in a reference set, without adding any columns. More
+efficient than inner join when we do not need the right-side
+columns.</p>
+<p><strong>Finding gaps: anti join.</strong> Orphan records, missing
+entries, incomplete coverage. Anti join is the diagnostic tool for
+relational integrity. Run it in both directions to get the full
+picture.</p>
+<p><strong>All combinations: cross join.</strong> Generating a grid of
+factor levels for downstream left joins. Use sparingly; output grows
+multiplicatively.</p>
+<p><strong>Approximate matching: fuzzy join.</strong> When keys have
+typos, inconsistent formatting, or minor spelling variations that
+prevent exact matching. Always try preprocessing first (trimming
+whitespace, case normalization) because exact joins are faster by orders
+of magnitude.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a><span class="co"># Preprocessing before an exact join</span></span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a><span class="fu">tbl</span>(obs_path) <span class="sc">|&gt;</span></span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">species_clean =</span> <span class="fu">trimws</span>(<span class="fu">tolower</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>  <span class="fu">select</span>(site_id, species_clean, count) <span class="sc">|&gt;</span></span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a><span class="co">#&gt;   site_id       species_clean count</span></span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a><span class="co">#&gt; 1       1       quercus robur    12</span></span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a><span class="co">#&gt; 2       1    pinus sylvestris     5</span></span>
+<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a><span class="co">#&gt; 3       2       quercus robur     8</span></span>
+<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a><span class="co">#&gt; 4       2     fagus sylvatica     3</span></span>
+<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a><span class="co">#&gt; 5       3    pinus sylvestris     7</span></span>
+<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a><span class="co">#&gt; 6       3      betula pendula    14</span></span>
+<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a><span class="co">#&gt; 7       4     fagus sylvatica     6</span></span>
+<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a><span class="co">#&gt; 8       4 acer pseudoplatanus     2</span></span></code></pre></div>
+<p>If <code>tolower()</code> and <code>trimws()</code> bring the keys
+into alignment, an exact join is the better choice. Reserve
+<code>fuzzy_join()</code> for genuine spelling variation that
+normalization cannot resolve.</p>
+<p><strong>Many-to-many relationships.</strong> When both tables have
+duplicate keys, the join produces a row for every combination of
+matching rows. If the left table has 3 rows with <code>id = 1</code> and
+the right table has 4 rows with <code>id = 1</code>, the output has 12
+rows for that key. This multiplicative blowup can be surprising and, for
+large tables, dangerous: a key that appears 1,000 times on the left and
+1,000 times on the right produces a million output rows for that single
+key value.</p>
+<p>Many-to-many joins usually signal a modelling error. The most common
+causes are: duplicate rows in a lookup table that was supposed to have
+unique keys, a join key that is too coarse (joining on <code>year</code>
+when the correct key is <code>site_id + year</code>), or a table that
+represents a genuinely many-to-many relationship but needs an
+intermediate mapping table. To detect the problem, check for duplicate
+keys on each side before joining. A quick
+<code>group_by(key) |&gt; summarise(n = n()) |&gt; filter(n &gt; 1)</code>
+on the right table reveals duplicates. If the relationship is genuinely
+many-to-many and the blowup is intended (e.g., generating all pairwise
+combinations within groups), a cross join within groups may be more
+explicit about what is happening.</p>
+<p><strong>Join ordering in multi-join pipelines.</strong> When a
+pipeline chains several joins, the order matters for both correctness
+and performance. Consider an observation table that needs site metadata,
+taxonomic classification, and sampling effort. We have three right-side
+tables to attach. Performance-wise, the most selective join should go
+first: if the taxonomic reference covers only 80% of the observed
+species and we are doing an inner join on taxonomy, placing that join
+first reduces the row count before the subsequent joins build their hash
+tables. Each downstream join then processes fewer left-side rows. For
+left joins, order does not affect row count (every left row survives),
+but it still affects width: each join adds columns, and wider rows cost
+more to hash and copy in subsequent joins. Attaching the narrowest
+lookup table first keeps intermediate rows slim.</p>
+<p><strong>Self-joins for deduplication.</strong> Anti-joining a table
+against itself (with adjusted keys or filters) can identify duplicate
+records. For instance, finding observations that share a site, species,
+and date but have different counts.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

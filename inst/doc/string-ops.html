@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-04-20" />
+
+<title>String Operations and Fuzzy Matching</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">String Operations and Fuzzy Matching</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-04-20</h4>
+
+
+
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>String-heavy datasets are common in ecology. Species names arrive
+with typos, observer notes contain free-text descriptions, and site
+labels mix upper and lower case in ways that break joins. Cleaning and
+matching these strings is often the slowest part of an analysis
+pipeline, both in wall-clock time and in the number of lines of R code
+required.</p>
+<p>vectra handles all string operations inside its C engine, operating
+directly on raw byte buffers rather than going through R’s internal
+<code>CHARSXP</code> string pool. When you write
+<code>mutate(name_clean = tolower(trimws(species)))</code>, that
+expression is serialized into an execution plan and evaluated in C as
+data flows through the pipeline. No temporary R character vectors are
+allocated, no intermediate copies exist, and the global string cache
+that R maintains for every unique character value is bypassed
+entirely.</p>
+<p>This architecture has two practical consequences. First, string
+operations scale linearly with data size and do not suffer from R’s O(n
+log n) string interning overhead. Second, the CPU-intensive operations
+(regex matching, edit-distance computation) can be parallelized with
+OpenMP because the C engine owns the memory layout. For datasets with
+more than a thousand rows, vectra automatically distributes regex
+<code>grepl</code>, <code>levenshtein</code>, <code>dl_dist</code>, and
+<code>jaro_winkler</code> across available cores.</p>
+<p>This vignette walks through every string operation vectra supports,
+from basic transformations through regex pattern matching to fuzzy
+joins. We will use ecological data throughout: species names with
+realistic errors, site labels from field surveys, and observer notes
+that need cleaning before analysis. The examples are deliberately small
+so that outputs fit on screen, but every operation shown here works
+identically on datasets with millions of rows, streaming through memory
+one row group at a time without materializing the full result until
+<code>collect()</code> is called.</p>
+</div>
+<div id="basic-string-functions" class="section level2">
+<h2>Basic string functions</h2>
+<p>We will start with a small dataset of tree observations where names
+need cleaning. The data has trailing spaces, inconsistent case, and a
+few columns we will want to slice apart.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>trees <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>  <span class="at">species  =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur  &quot;</span>, <span class="st">&quot;  fagus sylvatica&quot;</span>, <span class="st">&quot;ACER platanoides&quot;</span>,</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>               <span class="st">&quot;Betula pendula&quot;</span>, <span class="st">&quot;  Pinus SYLVESTRIS  &quot;</span>),</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>  <span class="at">site     =</span> <span class="fu">c</span>(<span class="st">&quot;plot_A01&quot;</span>, <span class="st">&quot;plot_B12&quot;</span>, <span class="st">&quot;plot_A01&quot;</span>, <span class="st">&quot;plot_C03&quot;</span>, <span class="st">&quot;plot_B12&quot;</span>),</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>  <span class="at">observer =</span> <span class="fu">c</span>(<span class="st">&quot;J. Smith&quot;</span>, <span class="st">&quot;A. Mueller&quot;</span>, <span class="st">&quot;J. Smith&quot;</span>,</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>               <span class="st">&quot;B. Novak&quot;</span>, <span class="st">&quot;A. Mueller&quot;</span>),</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a>  <span class="at">dbh_cm   =</span> <span class="fu">c</span>(<span class="fl">45.2</span>, <span class="fl">38.1</span>, <span class="fl">22.7</span>, <span class="fl">31.0</span>, <span class="fl">55.3</span>),</span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>)</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="fu">write_vtr</span>(trees, f)</span></code></pre></div>
+<div id="trimming-whitespace" class="section level3">
+<h3>Trimming whitespace</h3>
+<p><code>trimws()</code> strips leading and trailing whitespace from
+every value in a column. The C engine operates on the raw bytes, so the
+overhead per string is a single pass to find the first and last
+non-space characters. We apply it inside <code>mutate()</code> just as
+we would in base R.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">species_clean =</span> <span class="fu">trimws</span>(species)) <span class="sc">|&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="fu">select</span>(species, species_clean) <span class="sc">|&gt;</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co">#&gt;                species    species_clean</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co">#&gt; 1      Quercus robur      Quercus robur</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a><span class="co">#&gt; 2      fagus sylvatica  fagus sylvatica</span></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co">#&gt; 3     ACER platanoides ACER platanoides</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co">#&gt; 4       Betula pendula   Betula pendula</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="co">#&gt; 5   Pinus SYLVESTRIS   Pinus SYLVESTRIS</span></span></code></pre></div>
+<p>The original column is preserved alongside the cleaned version. If we
+no longer need it, a subsequent <code>select()</code> drops it from the
+pipeline before any downstream node sees it.</p>
+</div>
+<div id="case-conversion" class="section level3">
+<h3>Case conversion</h3>
+<p><code>toupper()</code> and <code>tolower()</code> convert ASCII
+characters in place. These are pure byte-level operations (A-Z mapped to
+a-z and vice versa), so they are effectively free compared to the I/O
+cost of reading the column from disk.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">species_lower =</span> <span class="fu">tolower</span>(<span class="fu">trimws</span>(species)),</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>         <span class="at">species_upper =</span> <span class="fu">toupper</span>(<span class="fu">trimws</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>  <span class="fu">select</span>(species_lower, species_upper) <span class="sc">|&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a><span class="co">#&gt;      species_lower    species_upper</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a><span class="co">#&gt; 1    quercus robur    QUERCUS ROBUR</span></span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co">#&gt; 2  fagus sylvatica  FAGUS SYLVATICA</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co">#&gt; 3 acer platanoides ACER PLATANOIDES</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt; 4   betula pendula   BETULA PENDULA</span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="co">#&gt; 5 pinus sylvestris PINUS SYLVESTRIS</span></span></code></pre></div>
+<p>Chaining <code>tolower(trimws(...))</code> creates a single
+expression node in the plan. The engine evaluates the innermost function
+first and passes the result directly to the outer one, with no
+intermediate allocation visible from R.</p>
+</div>
+<div id="string-length" class="section level3">
+<h3>String length</h3>
+<p><code>nchar()</code> returns the byte length of each string as a
+double (vectra’s integer type). This is useful for filtering out
+suspiciously short or long entries that might indicate data-entry
+errors.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">name_len =</span> <span class="fu">nchar</span>(<span class="fu">trimws</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="fu">select</span>(species, name_len) <span class="sc">|&gt;</span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt;                species name_len</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt; 1      Quercus robur         13</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; 2      fagus sylvatica       15</span></span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; 3     ACER platanoides       16</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 4       Betula pendula       14</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 5   Pinus SYLVESTRIS         16</span></span></code></pre></div>
+<p>Because vectra operates on raw bytes, <code>nchar()</code> returns
+the byte length, not the number of Unicode code points. For pure ASCII
+text (English letters, digits, common punctuation), bytes and characters
+are the same thing. But for multi-byte UTF-8 characters such as accented
+letters (“ü” = 2 bytes, “é” = 2 bytes) or CJK ideographs (3 bytes each),
+the reported length will be higher than what <code>base::nchar()</code>
+returns in R. The same applies to <code>substr()</code>: its start and
+stop positions refer to byte offsets. In ecological data, this rarely
+matters because taxonomic names and site codes are overwhelmingly ASCII,
+but it is worth keeping in mind if your data contains place names with
+diacritics or observer names in non-Latin scripts.</p>
+</div>
+<div id="extracting-substrings" class="section level3">
+<h3>Extracting substrings</h3>
+<p><code>substr(x, start, stop)</code> and
+<code>substring(x, first, last)</code> both extract a portion of each
+string by position. Positions are 1-based, following R convention. These
+are useful for pulling fixed-width codes out of identifier columns.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">plot_letter =</span> <span class="fu">substr</span>(site, <span class="dv">6</span>, <span class="dv">6</span>),</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>         <span class="at">plot_number =</span> <span class="fu">substr</span>(site, <span class="dv">7</span>, <span class="dv">8</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="fu">select</span>(site, plot_letter, plot_number) <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt;       site plot_letter plot_number</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt; 1 plot_A01           A          01</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt; 2 plot_B12           B          12</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt; 3 plot_A01           A          01</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt; 4 plot_C03           C          03</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; 5 plot_B12           B          12</span></span></code></pre></div>
+<p>The site codes follow a <code>plot_X##</code> pattern, so character 6
+is the letter and characters 7-8 are the numeric part. Both are returned
+as strings.</p>
+</div>
+<div id="prefix-and-suffix-tests" class="section level3">
+<h3>Prefix and suffix tests</h3>
+<p><code>startsWith()</code> and <code>endsWith()</code> return a
+logical column. They take a literal string argument (not a column
+reference) and match it against the beginning or end of each value.
+Because the comparison is a simple memcmp on the byte prefix or suffix,
+it runs faster than a regex equivalent.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">startsWith</span>(site, <span class="st">&quot;plot_A&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">select</span>(species, site) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="co">#&gt;            species     site</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a><span class="co">#&gt; 1  Quercus robur   plot_A01</span></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#&gt; 2 ACER platanoides plot_A01</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">is_mueller =</span> <span class="fu">endsWith</span>(observer, <span class="st">&quot;Mueller&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">select</span>(observer, is_mueller) <span class="sc">|&gt;</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a><span class="co">#&gt;     observer is_mueller</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a><span class="co">#&gt; 1   J. Smith      FALSE</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a><span class="co">#&gt; 2 A. Mueller       TRUE</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a><span class="co">#&gt; 3   J. Smith      FALSE</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a><span class="co">#&gt; 4   B. Novak      FALSE</span></span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt; 5 A. Mueller       TRUE</span></span></code></pre></div>
+<p><code>startsWith</code> and <code>endsWith</code> are particularly
+useful in <code>filter()</code> for subsetting data by site code
+prefixes or file path suffixes, since the C engine can evaluate them
+without compiling a regex.</p>
+</div>
+</div>
+<div id="string-concatenation" class="section level2">
+<h2>String concatenation</h2>
+<p><code>paste()</code> and <code>paste0()</code> concatenate an
+arbitrary number of arguments into a single string column. These are
+N-ary functions: you can pass two columns, five columns, or a mix of
+columns and literal strings. The C engine’s two-pass string builder
+computes the total output length across all arguments first, allocates a
+single buffer, and fills it in one sweep.</p>
+<div id="paste0-no-separator" class="section level3">
+<h3>paste0: no separator</h3>
+<p><code>paste0()</code> joins its arguments with no separator, which is
+the common case for building identifiers or composite keys.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">record_id =</span> <span class="fu">paste0</span>(site, <span class="st">&quot;_&quot;</span>, <span class="fu">trimws</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="fu">select</span>(record_id) <span class="sc">|&gt;</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt;                   record_id</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; 1    plot_A01_Quercus robur</span></span>
+<span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; 2  plot_B12_fagus sylvatica</span></span>
+<span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; 3 plot_A01_ACER platanoides</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; 4   plot_C03_Betula pendula</span></span>
+<span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt; 5 plot_B12_Pinus SYLVESTRIS</span></span></code></pre></div>
+<p>Here we pass three arguments: the <code>site</code> column, a literal
+underscore, and the trimmed species name. The engine handles mixed
+column-and-literal arguments natively.</p>
+</div>
+<div id="paste-custom-separator" class="section level3">
+<h3>paste: custom separator</h3>
+<p><code>paste()</code> uses a space as the default separator, matching
+base R behaviour. The <code>sep</code> parameter overrides this.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">paste</span>(observer, site, <span class="at">sep =</span> <span class="st">&quot; @ &quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">select</span>(label) <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="co">#&gt;                   label</span></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a><span class="co">#&gt; 1   J. Smith @ plot_A01</span></span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; 2 A. Mueller @ plot_B12</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; 3   J. Smith @ plot_A01</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; 4   B. Novak @ plot_C03</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; 5 A. Mueller @ plot_B12</span></span></code></pre></div>
+</div>
+<div id="multi-column-paste" class="section level3">
+<h3>Multi-column paste</h3>
+<p>When building composite labels from more than two columns, passing
+all of them in a single <code>paste()</code> call is cleaner than
+nesting multiple <code>paste0()</code> calls.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">full_label =</span> <span class="fu">paste</span>(observer, site,</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>                            <span class="fu">trimws</span>(species), <span class="at">sep =</span> <span class="st">&quot; | &quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="fu">select</span>(full_label) <span class="sc">|&gt;</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a><span class="co">#&gt;                                 full_label</span></span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; 1      J. Smith | plot_A01 | Quercus robur</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; 2  A. Mueller | plot_B12 | fagus sylvatica</span></span>
+<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a><span class="co">#&gt; 3   J. Smith | plot_A01 | ACER platanoides</span></span>
+<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a><span class="co">#&gt; 4     B. Novak | plot_C03 | Betula pendula</span></span>
+<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt; 5 A. Mueller | plot_B12 | Pinus SYLVESTRIS</span></span></code></pre></div>
+<p>The engine constructs each output string in a single allocation
+regardless of how many arguments are passed, so there is no performance
+penalty for concatenating five columns versus two.</p>
+</div>
+</div>
+<div id="pattern-matching-fixed-strings" class="section level2">
+<h2>Pattern matching: fixed strings</h2>
+<p>vectra’s <code>grepl()</code>, <code>gsub()</code>, and
+<code>sub()</code> accept a <code>fixed</code> parameter that controls
+whether the pattern is treated as a literal byte sequence or as a POSIX
+regular expression. When <code>fixed = TRUE</code> (the default in
+vectra), the engine uses a direct substring search, which avoids the
+cost of compiling a regex automaton. For exact substring tests and
+simple replacements, this is the right choice.</p>
+<p>Note that vectra defaults to <code>fixed = TRUE</code>, which differs
+from base R where <code>fixed</code> defaults to <code>FALSE</code>. We
+chose this default because in our experience the majority of string
+filtering and replacement tasks in data cleaning involve literal
+substrings, not regex patterns. When you need actual regex, pass
+<code>fixed = FALSE</code> explicitly. This is covered in the next
+section.</p>
+<div id="filtering-with-grepl" class="section level3">
+<h3>Filtering with grepl</h3>
+<p><code>grepl(pattern, x, fixed = TRUE)</code> returns a boolean column
+that is <code>TRUE</code> wherever the pattern appears as a literal
+substring. We use it here to find all records where the observer’s
+surname contains “Smith”.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">grepl</span>(<span class="st">&quot;Smith&quot;</span>, observer, <span class="at">fixed =</span> <span class="cn">TRUE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a><span class="co">#&gt;            species     site observer dbh_cm</span></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="co">#&gt; 1  Quercus robur   plot_A01 J. Smith   45.2</span></span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a><span class="co">#&gt; 2 ACER platanoides plot_A01 J. Smith   22.7</span></span></code></pre></div>
+<p>Only one row matches. The fixed-string search scans each byte buffer
+with a Boyer-Moore-style skip, so it scales well even on columns with
+long string values.</p>
+</div>
+<div id="replacing-with-gsub-and-sub" class="section level3">
+<h3>Replacing with gsub and sub</h3>
+<p><code>gsub(pattern, replacement, x, fixed = TRUE)</code> replaces
+every occurrence of the pattern; <code>sub()</code> replaces only the
+first. Both accept <code>fixed = TRUE</code> for literal matching and
+return a new string column.</p>
+<p>A common cleaning task is standardizing separators. Suppose our site
+codes sometimes use underscores and sometimes hyphens.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a>messy_sites <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a>  <span class="at">site =</span> <span class="fu">c</span>(<span class="st">&quot;plot_A01&quot;</span>, <span class="st">&quot;plot-B12&quot;</span>, <span class="st">&quot;plot_A01&quot;</span>, <span class="st">&quot;plot-C03&quot;</span>, <span class="st">&quot;plot_B12&quot;</span>),</span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a>f2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a><span class="fu">write_vtr</span>(messy_sites, f2)</span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a><span class="fu">tbl</span>(f2) <span class="sc">|&gt;</span></span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">site_clean =</span> <span class="fu">gsub</span>(<span class="st">&quot;-&quot;</span>, <span class="st">&quot;_&quot;</span>, site, <span class="at">fixed =</span> <span class="cn">TRUE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a><span class="co">#&gt;       site site_clean</span></span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a><span class="co">#&gt; 1 plot_A01   plot_A01</span></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="co">#&gt; 2 plot-B12   plot_B12</span></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a><span class="co">#&gt; 3 plot_A01   plot_A01</span></span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a><span class="co">#&gt; 4 plot-C03   plot_C03</span></span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="co">#&gt; 5 plot_B12   plot_B12</span></span></code></pre></div>
+<p>Every hyphen becomes an underscore. Since <code>fixed = TRUE</code>
+is the default, writing <code>gsub(&quot;-&quot;, &quot;_&quot;, site)</code> without the
+explicit argument produces the same result.</p>
+</div>
+<div id="sub-first-match-only" class="section level3">
+<h3>sub: first match only</h3>
+<p><code>sub()</code> replaces only the first occurrence. This is useful
+when a pattern might appear multiple times and we want to change just
+the leading instance.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>notes <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="at">note =</span> <span class="fu">c</span>(<span class="st">&quot;tree dead, bark loose, dead branches&quot;</span>,</span>
+<span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>           <span class="st">&quot;alive, healthy canopy&quot;</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>           <span class="st">&quot;dead standing, no bark&quot;</span>),</span>
+<span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a>)</span>
+<span id="cb13-7"><a href="#cb13-7" tabindex="-1"></a>f3 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb13-8"><a href="#cb13-8" tabindex="-1"></a><span class="fu">write_vtr</span>(notes, f3)</span>
+<span id="cb13-9"><a href="#cb13-9" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" tabindex="-1"></a><span class="fu">tbl</span>(f3) <span class="sc">|&gt;</span></span>
+<span id="cb13-11"><a href="#cb13-11" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">note_edited =</span> <span class="fu">sub</span>(<span class="st">&quot;dead&quot;</span>, <span class="st">&quot;DEAD&quot;</span>, note, <span class="at">fixed =</span> <span class="cn">TRUE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb13-12"><a href="#cb13-12" tabindex="-1"></a>  <span class="fu">select</span>(note, note_edited) <span class="sc">|&gt;</span></span>
+<span id="cb13-13"><a href="#cb13-13" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb13-14"><a href="#cb13-14" tabindex="-1"></a><span class="co">#&gt;                                   note                          note_edited</span></span>
+<span id="cb13-15"><a href="#cb13-15" tabindex="-1"></a><span class="co">#&gt; 1 tree dead, bark loose, dead branches tree DEAD, bark loose, dead branches</span></span>
+<span id="cb13-16"><a href="#cb13-16" tabindex="-1"></a><span class="co">#&gt; 2                alive, healthy canopy                alive, healthy canopy</span></span>
+<span id="cb13-17"><a href="#cb13-17" tabindex="-1"></a><span class="co">#&gt; 3               dead standing, no bark               DEAD standing, no bark</span></span></code></pre></div>
+<p>In the first row, only the first “dead” is uppercased; the second
+“dead” in “dead branches” remains unchanged. <code>gsub</code> would
+have replaced both.</p>
+</div>
+</div>
+<div id="pattern-matching-regex" class="section level2">
+<h2>Pattern matching: regex</h2>
+<p>When literal substring matching is not enough, vectra supports full
+POSIX regular expressions by passing <code>fixed = FALSE</code>. The C
+engine compiles each regex pattern once per batch using
+<code>regcomp()</code> and applies it across all rows. For batches with
+more than 1000 rows, the matching loop is parallelized with OpenMP, with
+each thread compiling its own copy of the regex for thread safety.</p>
+<p>The regex dialect is POSIX Extended Regular Expressions (ERE), the
+same dialect used by <code>grep -E</code> on Unix systems. This means
+character classes like <code>[A-Z]</code>, quantifiers <code>+</code>,
+<code>*</code>, <code>?</code>, alternation with <code>|</code>, and
+grouping with <code>()</code> all work as expected. Backreferences in
+replacement strings (<code>\\1</code>, <code>\\2</code>) refer to
+captured groups. Perl-specific extensions like lookaheads, lookbehinds,
+and non-greedy quantifiers (<code>*?</code>) are not supported; this is
+a deliberate constraint that keeps the regex engine simple and
+predictable.</p>
+<div id="regex-filtering-with-grepl" class="section level3">
+<h3>Regex filtering with grepl</h3>
+<p>We will build a dataset with species names that have various
+formatting issues. The regex <code>^[A-Z][a-z]+ [a-z]+$</code> matches
+properly formatted binomial names (capital genus, lowercase epithet,
+single space).</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>species_list <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;fagus sylvatica&quot;</span>, <span class="st">&quot;ACER PLATANOIDES&quot;</span>,</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a>           <span class="st">&quot;Betula pendula&quot;</span>, <span class="st">&quot;Pinus  sylvestris&quot;</span>, <span class="st">&quot;Tilia cordata&quot;</span>),</span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb14-5"><a href="#cb14-5" tabindex="-1"></a>)</span>
+<span id="cb14-6"><a href="#cb14-6" tabindex="-1"></a>f4 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a><span class="fu">write_vtr</span>(species_list, f4)</span>
+<span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="fu">tbl</span>(f4) <span class="sc">|&gt;</span></span>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">valid_format =</span> <span class="fu">grepl</span>(<span class="st">&quot;^[A-Z][a-z]+ [a-z]+$&quot;</span>,</span>
+<span id="cb14-11"><a href="#cb14-11" tabindex="-1"></a>                              name, <span class="at">fixed =</span> <span class="cn">FALSE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb14-12"><a href="#cb14-12" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb14-13"><a href="#cb14-13" tabindex="-1"></a><span class="co">#&gt;                name valid_format</span></span>
+<span id="cb14-14"><a href="#cb14-14" tabindex="-1"></a><span class="co">#&gt; 1     Quercus robur         TRUE</span></span>
+<span id="cb14-15"><a href="#cb14-15" tabindex="-1"></a><span class="co">#&gt; 2   fagus sylvatica        FALSE</span></span>
+<span id="cb14-16"><a href="#cb14-16" tabindex="-1"></a><span class="co">#&gt; 3  ACER PLATANOIDES        FALSE</span></span>
+<span id="cb14-17"><a href="#cb14-17" tabindex="-1"></a><span class="co">#&gt; 4    Betula pendula         TRUE</span></span>
+<span id="cb14-18"><a href="#cb14-18" tabindex="-1"></a><span class="co">#&gt; 5 Pinus  sylvestris        FALSE</span></span>
+<span id="cb14-19"><a href="#cb14-19" tabindex="-1"></a><span class="co">#&gt; 6     Tilia cordata         TRUE</span></span></code></pre></div>
+<p>Three names fail: “fagus sylvatica” (lowercase genus), “ACER
+PLATANOIDES” (all caps), and “Pinus sylvestris” (double space). This
+kind of validation pass is a useful first step before attempting joins
+against a reference taxonomy.</p>
+</div>
+<div id="regex-replacement-with-gsub" class="section level3">
+<h3>Regex replacement with gsub</h3>
+<p><code>gsub()</code> with <code>fixed = FALSE</code> supports POSIX
+regex in the pattern and backreferences in the replacement string.
+Backreferences <code>\\1</code>, <code>\\2</code>, etc. refer to
+captured groups in the pattern.</p>
+<p>Suppose we want to reformat species names from “Genus epithet” to “G.
+epithet” for compact display labels.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="fu">tbl</span>(f4) <span class="sc">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">short_name =</span> <span class="fu">gsub</span>(<span class="st">&quot;^([A-Za-z])[a-z]+ ([a-z]+)$&quot;</span>,</span>
+<span id="cb15-3"><a href="#cb15-3" tabindex="-1"></a>                           <span class="st">&quot;</span><span class="sc">\\</span><span class="st">1. </span><span class="sc">\\</span><span class="st">2&quot;</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" tabindex="-1"></a>                           name, <span class="at">fixed =</span> <span class="cn">FALSE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a>  <span class="fu">select</span>(name, short_name) <span class="sc">|&gt;</span></span>
+<span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a><span class="co">#&gt;                name        short_name</span></span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="co">#&gt; 1     Quercus robur          Q. robur</span></span>
+<span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt; 2   fagus sylvatica      f. sylvatica</span></span>
+<span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a><span class="co">#&gt; 3  ACER PLATANOIDES  ACER PLATANOIDES</span></span>
+<span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a><span class="co">#&gt; 4    Betula pendula        B. pendula</span></span>
+<span id="cb15-12"><a href="#cb15-12" tabindex="-1"></a><span class="co">#&gt; 5 Pinus  sylvestris Pinus  sylvestris</span></span>
+<span id="cb15-13"><a href="#cb15-13" tabindex="-1"></a><span class="co">#&gt; 6     Tilia cordata        T. cordata</span></span></code></pre></div>
+<p>The pattern captures the first letter of the genus as group
+<code>\\1</code> and the entire epithet as group <code>\\2</code>. Rows
+that do not match the pattern are returned unchanged, which is
+consistent with base R’s <code>gsub</code> behaviour.</p>
+</div>
+<div id="sub-with-regex-first-match-only" class="section level3">
+<h3>sub with regex: first match only</h3>
+<p><code>sub()</code> with regex works the same way but replaces only
+the first match. This is handy for stripping a leading prefix that
+varies in length.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>records <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="at">code =</span> <span class="fu">c</span>(<span class="st">&quot;ID:001-Quercus&quot;</span>, <span class="st">&quot;ID:042-Fagus&quot;</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>           <span class="st">&quot;ID:007-Betula&quot;</span>, <span class="st">&quot;ID:113-Pinus&quot;</span>),</span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a>f5 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="fu">write_vtr</span>(records, f5)</span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="fu">tbl</span>(f5) <span class="sc">|&gt;</span></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">genus =</span> <span class="fu">sub</span>(<span class="st">&quot;^ID:[0-9]+-&quot;</span>, <span class="st">&quot;&quot;</span>, code, <span class="at">fixed =</span> <span class="cn">FALSE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a>  <span class="fu">select</span>(code, genus) <span class="sc">|&gt;</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a><span class="co">#&gt;             code   genus</span></span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="co">#&gt; 1 ID:001-Quercus Quercus</span></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a><span class="co">#&gt; 2   ID:042-Fagus   Fagus</span></span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a><span class="co">#&gt; 3  ID:007-Betula  Betula</span></span>
+<span id="cb16-17"><a href="#cb16-17" tabindex="-1"></a><span class="co">#&gt; 4   ID:113-Pinus   Pinus</span></span></code></pre></div>
+<p>The regex <code>^ID:[0-9]+-</code> matches the literal “ID:” prefix,
+one or more digits, and the trailing hyphen. Replacing it with an empty
+string leaves just the genus name.</p>
+</div>
+<div id="str_extract-capturing-structured-parts" class="section level3">
+<h3>str_extract: capturing structured parts</h3>
+<p><code>str_extract(x, pattern)</code> returns the first match of the
+regex pattern, or <code>NA</code> if no match is found. When the pattern
+contains a capture group (round brackets), <code>str_extract</code>
+returns the contents of that group rather than the full match.</p>
+<p>This is particularly useful for pulling structured components out of
+semi-formatted strings. Here we extract numeric plot identifiers from
+site codes.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a>sites <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  <span class="at">site_code =</span> <span class="fu">c</span>(<span class="st">&quot;Forest_Plot_042&quot;</span>, <span class="st">&quot;Meadow_Transect_007&quot;</span>,</span>
+<span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>                <span class="st">&quot;Forest_Plot_113&quot;</span>, <span class="st">&quot;Wetland_Quad_019&quot;</span>),</span>
+<span id="cb17-4"><a href="#cb17-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb17-5"><a href="#cb17-5" tabindex="-1"></a>)</span>
+<span id="cb17-6"><a href="#cb17-6" tabindex="-1"></a>f6 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb17-7"><a href="#cb17-7" tabindex="-1"></a><span class="fu">write_vtr</span>(sites, f6)</span>
+<span id="cb17-8"><a href="#cb17-8" tabindex="-1"></a></span>
+<span id="cb17-9"><a href="#cb17-9" tabindex="-1"></a><span class="fu">tbl</span>(f6) <span class="sc">|&gt;</span></span>
+<span id="cb17-10"><a href="#cb17-10" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">plot_num =</span> <span class="fu">str_extract</span>(site_code, <span class="st">&quot;([0-9]+)&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb17-11"><a href="#cb17-11" tabindex="-1"></a>  <span class="fu">select</span>(site_code, plot_num) <span class="sc">|&gt;</span></span>
+<span id="cb17-12"><a href="#cb17-12" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb17-13"><a href="#cb17-13" tabindex="-1"></a><span class="co">#&gt;             site_code plot_num</span></span>
+<span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a><span class="co">#&gt; 1     Forest_Plot_042      042</span></span>
+<span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a><span class="co">#&gt; 2 Meadow_Transect_007      007</span></span>
+<span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a><span class="co">#&gt; 3     Forest_Plot_113      113</span></span>
+<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a><span class="co">#&gt; 4    Wetland_Quad_019      019</span></span></code></pre></div>
+<p>The capture group <code>([0-9]+)</code> matches one or more digits.
+Since there is a group, <code>str_extract</code> returns the group
+content. Without the parentheses, it would return the full match, which
+in this case is the same.</p>
+<p>A more interesting example extracts the habitat type from the site
+code. The pattern uses a group to capture everything before the first
+underscore.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a><span class="fu">tbl</span>(f6) <span class="sc">|&gt;</span></span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">habitat =</span> <span class="fu">str_extract</span>(site_code, <span class="st">&quot;^([A-Za-z]+)_&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a>  <span class="fu">select</span>(site_code, habitat) <span class="sc">|&gt;</span></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="co">#&gt;             site_code habitat</span></span>
+<span id="cb18-6"><a href="#cb18-6" tabindex="-1"></a><span class="co">#&gt; 1     Forest_Plot_042  Forest</span></span>
+<span id="cb18-7"><a href="#cb18-7" tabindex="-1"></a><span class="co">#&gt; 2 Meadow_Transect_007  Meadow</span></span>
+<span id="cb18-8"><a href="#cb18-8" tabindex="-1"></a><span class="co">#&gt; 3     Forest_Plot_113  Forest</span></span>
+<span id="cb18-9"><a href="#cb18-9" tabindex="-1"></a><span class="co">#&gt; 4    Wetland_Quad_019 Wetland</span></span></code></pre></div>
+<p>The group captures “Forest”, “Meadow”, “Forest”, “Wetland” while the
+trailing underscore is part of the match but not part of the group. This
+approach is cleaner than combining <code>substr</code> with a computed
+position.</p>
+</div>
+</div>
+<div id="fuzzy-string-matching" class="section level2">
+<h2>Fuzzy string matching</h2>
+<p>Exact string matching breaks down when data comes from multiple
+sources with inconsistent spelling. A field botanist writes “Qurecus
+robur” (transposed letters), a database export has “Fagus silvatica”
+(single-letter substitution), and a citizen-science platform records
+“quercus ROBUR” (case mismatch). Fuzzy string matching quantifies how
+different two strings are and lets us match records that are close
+enough.</p>
+<p>vectra provides three families of distance functions, all usable
+inside <code>mutate()</code> and <code>filter()</code>. Each takes two
+string arguments (columns or literals) and returns a numeric distance or
+similarity score. The raw variants (<code>levenshtein</code>,
+<code>dl_dist</code>) return integer edit counts; the normalized
+variants (<code>levenshtein_norm</code>, <code>dl_dist_norm</code>)
+divide by the length of the longer string to produce a value between 0
+and 1; and <code>jaro_winkler</code> returns a similarity score where 1
+means identical.</p>
+<div id="levenshtein-distance" class="section level3">
+<h3>Levenshtein distance</h3>
+<p><code>levenshtein(x, y)</code> counts the minimum number of
+single-character edits (insertions, deletions, substitutions) needed to
+transform <code>x</code> into <code>y</code>. The result is a
+non-negative integer. <code>levenshtein_norm(x, y)</code> divides by the
+length of the longer string, producing a value between 0 (identical) and
+1 (completely different).</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" tabindex="-1"></a>typos <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb19-2"><a href="#cb19-2" tabindex="-1"></a>  <span class="at">field_name =</span> <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Fagus silvatica&quot;</span>,</span>
+<span id="cb19-3"><a href="#cb19-3" tabindex="-1"></a>                 <span class="st">&quot;Acer platanodes&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb19-4"><a href="#cb19-4" tabindex="-1"></a>                 <span class="st">&quot;Pinus sylvestrs&quot;</span>),</span>
+<span id="cb19-5"><a href="#cb19-5" tabindex="-1"></a>  <span class="at">ref_name   =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>,</span>
+<span id="cb19-6"><a href="#cb19-6" tabindex="-1"></a>                 <span class="st">&quot;Acer platanoides&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb19-7"><a href="#cb19-7" tabindex="-1"></a>                 <span class="st">&quot;Pinus sylvestris&quot;</span>),</span>
+<span id="cb19-8"><a href="#cb19-8" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb19-9"><a href="#cb19-9" tabindex="-1"></a>)</span>
+<span id="cb19-10"><a href="#cb19-10" tabindex="-1"></a>f7 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb19-11"><a href="#cb19-11" tabindex="-1"></a><span class="fu">write_vtr</span>(typos, f7)</span>
+<span id="cb19-12"><a href="#cb19-12" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" tabindex="-1"></a><span class="fu">tbl</span>(f7) <span class="sc">|&gt;</span></span>
+<span id="cb19-14"><a href="#cb19-14" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">lev =</span> <span class="fu">levenshtein</span>(field_name, ref_name),</span>
+<span id="cb19-15"><a href="#cb19-15" tabindex="-1"></a>         <span class="at">lev_norm =</span> <span class="fu">levenshtein_norm</span>(field_name, ref_name)) <span class="sc">|&gt;</span></span>
+<span id="cb19-16"><a href="#cb19-16" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb19-17"><a href="#cb19-17" tabindex="-1"></a><span class="co">#&gt;        field_name         ref_name lev   lev_norm</span></span>
+<span id="cb19-18"><a href="#cb19-18" tabindex="-1"></a><span class="co">#&gt; 1   Qurecus robur    Quercus robur   2 0.15384615</span></span>
+<span id="cb19-19"><a href="#cb19-19" tabindex="-1"></a><span class="co">#&gt; 2 Fagus silvatica  Fagus sylvatica   1 0.06666667</span></span>
+<span id="cb19-20"><a href="#cb19-20" tabindex="-1"></a><span class="co">#&gt; 3 Acer platanodes Acer platanoides   1 0.06250000</span></span>
+<span id="cb19-21"><a href="#cb19-21" tabindex="-1"></a><span class="co">#&gt; 4  Betula pendula   Betula pendula   0 0.00000000</span></span>
+<span id="cb19-22"><a href="#cb19-22" tabindex="-1"></a><span class="co">#&gt; 5 Pinus sylvestrs Pinus sylvestris   1 0.06250000</span></span></code></pre></div>
+<p>“Qurecus robur” vs “Quercus robur” has a Levenshtein distance of 2
+(the transposed “re” to “er” counts as two operations: delete and
+insert, or two substitutions depending on the alignment). “Betula
+pendula” matches exactly, giving a distance of 0.</p>
+</div>
+<div id="damerau-levenshtein-distance" class="section level3">
+<h3>Damerau-Levenshtein distance</h3>
+<p><code>dl_dist(x, y)</code> extends Levenshtein by counting
+transpositions of two adjacent characters as a single edit operation.
+This better reflects the kinds of errors humans make when typing.
+<code>dl_dist_norm(x, y)</code> is the normalized variant.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">tbl</span>(f7) <span class="sc">|&gt;</span></span>
+<span id="cb20-2"><a href="#cb20-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">dl =</span> <span class="fu">dl_dist</span>(field_name, ref_name),</span>
+<span id="cb20-3"><a href="#cb20-3" tabindex="-1"></a>         <span class="at">dl_norm =</span> <span class="fu">dl_dist_norm</span>(field_name, ref_name)) <span class="sc">|&gt;</span></span>
+<span id="cb20-4"><a href="#cb20-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb20-5"><a href="#cb20-5" tabindex="-1"></a><span class="co">#&gt;        field_name         ref_name dl    dl_norm</span></span>
+<span id="cb20-6"><a href="#cb20-6" tabindex="-1"></a><span class="co">#&gt; 1   Qurecus robur    Quercus robur  1 0.07692308</span></span>
+<span id="cb20-7"><a href="#cb20-7" tabindex="-1"></a><span class="co">#&gt; 2 Fagus silvatica  Fagus sylvatica  1 0.06666667</span></span>
+<span id="cb20-8"><a href="#cb20-8" tabindex="-1"></a><span class="co">#&gt; 3 Acer platanodes Acer platanoides  1 0.06250000</span></span>
+<span id="cb20-9"><a href="#cb20-9" tabindex="-1"></a><span class="co">#&gt; 4  Betula pendula   Betula pendula  0 0.00000000</span></span>
+<span id="cb20-10"><a href="#cb20-10" tabindex="-1"></a><span class="co">#&gt; 5 Pinus sylvestrs Pinus sylvestris  1 0.06250000</span></span></code></pre></div>
+<p>Compare the first row: “Qurecus” vs “Quercus” is a transposition of
+“r” and “e”. Levenshtein counts this as 2 edits, but Damerau-Levenshtein
+counts it as 1. For human-typed data, DL distance is usually the better
+default because transposition errors are common.</p>
+</div>
+<div id="jaro-winkler-similarity" class="section level3">
+<h3>Jaro-Winkler similarity</h3>
+<p><code>jaro_winkler(x, y)</code> returns a similarity score between 0
+and 1, where 1 means the strings are identical. Unlike the edit-distance
+functions, higher values indicate better matches. Jaro-Winkler gives
+extra weight to matching prefixes, making it particularly effective for
+personal names and short strings where the first few characters are
+usually correct.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" tabindex="-1"></a><span class="fu">tbl</span>(f7) <span class="sc">|&gt;</span></span>
+<span id="cb21-2"><a href="#cb21-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">jw =</span> <span class="fu">jaro_winkler</span>(field_name, ref_name)) <span class="sc">|&gt;</span></span>
+<span id="cb21-3"><a href="#cb21-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb21-4"><a href="#cb21-4" tabindex="-1"></a><span class="co">#&gt;        field_name         ref_name        jw</span></span>
+<span id="cb21-5"><a href="#cb21-5" tabindex="-1"></a><span class="co">#&gt; 1   Qurecus robur    Quercus robur 0.9794872</span></span>
+<span id="cb21-6"><a href="#cb21-6" tabindex="-1"></a><span class="co">#&gt; 2 Fagus silvatica  Fagus sylvatica 0.9447619</span></span>
+<span id="cb21-7"><a href="#cb21-7" tabindex="-1"></a><span class="co">#&gt; 3 Acer platanodes Acer platanoides 0.9875000</span></span>
+<span id="cb21-8"><a href="#cb21-8" tabindex="-1"></a><span class="co">#&gt; 4  Betula pendula   Betula pendula 1.0000000</span></span>
+<span id="cb21-9"><a href="#cb21-9" tabindex="-1"></a><span class="co">#&gt; 5 Pinus sylvestrs Pinus sylvestris 0.9875000</span></span></code></pre></div>
+<p>The scores are all above 0.9 for these examples because the errors
+are small relative to string length. Jaro-Winkler is less informative
+for long strings with small differences (everything scores above 0.95)
+but excels at distinguishing between short strings like surnames.</p>
+</div>
+<div id="choosing-a-distance-metric" class="section level3">
+<h3>Choosing a distance metric</h3>
+<p>The choice depends on the error profile of your data:</p>
+<ul>
+<li><p><strong>Damerau-Levenshtein</strong> (<code>dl_dist</code> /
+<code>dl_dist_norm</code>): the best general default. Handles
+insertions, deletions, substitutions, and transpositions. Use this for
+species names, place names, and any free-text field where typos are the
+primary error source.</p></li>
+<li><p><strong>Levenshtein</strong> (<code>levenshtein</code> /
+<code>levenshtein_norm</code>): appropriate when transpositions are rare
+or when you need compatibility with systems that use classical
+Levenshtein. The scores will be slightly more conservative (higher
+distance) than DL for transposed strings.</p></li>
+<li><p><strong>Jaro-Winkler</strong> (<code>jaro_winkler</code>): best
+for short strings (under 15 characters) and personal names. The prefix
+weighting helps when the first few characters are reliable and errors
+tend to occur later in the string. Less useful for long species names
+where a single-character change barely moves the score.</p></li>
+</ul>
+</div>
+<div id="filtering-by-distance-threshold" class="section level3">
+<h3>Filtering by distance threshold</h3>
+<p>In practice, we often want to flag records that exceed some distance
+threshold from a reference value. Here we filter for species entries
+that are within a normalized DL distance of 0.15 from “Quercus
+robur”.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a>field_data <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a>  <span class="at">species =</span> <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Quercus robor&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>,</span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>              <span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Quercis rubur&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>),</span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>  <span class="at">plot    =</span> <span class="fu">c</span>(<span class="st">&quot;A1&quot;</span>, <span class="st">&quot;A2&quot;</span>, <span class="st">&quot;B1&quot;</span>, <span class="st">&quot;A3&quot;</span>, <span class="st">&quot;B2&quot;</span>, <span class="st">&quot;C1&quot;</span>),</span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb22-6"><a href="#cb22-6" tabindex="-1"></a>)</span>
+<span id="cb22-7"><a href="#cb22-7" tabindex="-1"></a>f8 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb22-8"><a href="#cb22-8" tabindex="-1"></a><span class="fu">write_vtr</span>(field_data, f8)</span>
+<span id="cb22-9"><a href="#cb22-9" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" tabindex="-1"></a><span class="fu">tbl</span>(f8) <span class="sc">|&gt;</span></span>
+<span id="cb22-11"><a href="#cb22-11" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">dist =</span> <span class="fu">dl_dist_norm</span>(species, <span class="st">&quot;Quercus robur&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb22-12"><a href="#cb22-12" tabindex="-1"></a>  <span class="fu">filter</span>(dist <span class="sc">&lt;</span> <span class="fl">0.15</span>) <span class="sc">|&gt;</span></span>
+<span id="cb22-13"><a href="#cb22-13" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb22-14"><a href="#cb22-14" tabindex="-1"></a><span class="co">#&gt;         species plot       dist</span></span>
+<span id="cb22-15"><a href="#cb22-15" tabindex="-1"></a><span class="co">#&gt; 1 Qurecus robur   A1 0.07692308</span></span>
+<span id="cb22-16"><a href="#cb22-16" tabindex="-1"></a><span class="co">#&gt; 2 Quercus robor   A2 0.07692308</span></span>
+<span id="cb22-17"><a href="#cb22-17" tabindex="-1"></a><span class="co">#&gt; 3 Quercus robur   A3 0.00000000</span></span></code></pre></div>
+<p>Only entries close to “Quercus robur” survive the filter. “Fagus
+sylvatica” and “Betula pendula” are too distant, and “Quercis rubur”
+sits right at the boundary (whether it passes depends on the exact
+normalized distance).</p>
+</div>
+<div id="ranking-by-similarity" class="section level3">
+<h3>Ranking by similarity</h3>
+<p>When matching against multiple candidates, sorting by distance gives
+us the best matches first.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="fu">tbl</span>(f8) <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">sim =</span> <span class="fu">jaro_winkler</span>(species, <span class="st">&quot;Quercus robur&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(sim)) <span class="sc">|&gt;</span></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co">#&gt;           species plot       sim</span></span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="co">#&gt; 1   Quercus robur   A3 1.0000000</span></span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="co">#&gt; 2   Qurecus robur   A1 0.9794872</span></span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a><span class="co">#&gt; 3   Quercus robor   A2 0.9692308</span></span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a><span class="co">#&gt; 4   Quercis rubur   B2 0.9358974</span></span>
+<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="co">#&gt; 5 Fagus sylvatica   B1 0.4769231</span></span>
+<span id="cb23-11"><a href="#cb23-11" tabindex="-1"></a><span class="co">#&gt; 6  Betula pendula   C1 0.3644689</span></span></code></pre></div>
+<p>The exact match scores 1.0, and the candidates with small typos rank
+next. This pattern is useful for building a shortlist of probable
+matches to review manually.</p>
+</div>
+</div>
+<div id="fuzzy-joins" class="section level2">
+<h2>Fuzzy joins</h2>
+<p>Fuzzy matching within <code>mutate()</code> works when we already
+have paired columns to compare. More often, we have two separate tables
+and need to find which rows in a messy dataset correspond to which rows
+in a clean reference. This is where <code>fuzzy_join()</code> comes
+in.</p>
+<div id="basic-fuzzy-join" class="section level3">
+<h3>Basic fuzzy join</h3>
+<p><code>fuzzy_join(x, y, by, method, max_dist)</code> joins two vectra
+tables using approximate string matching. The <code>by</code> argument
+is a named character vector of length 1 specifying which columns to
+compare. The result includes all columns from both sides plus a
+<code>fuzzy_dist</code> column with the normalized distance of each
+match.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" tabindex="-1"></a>ref <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb24-2"><a href="#cb24-2" tabindex="-1"></a>  <span class="at">canonical =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>,</span>
+<span id="cb24-3"><a href="#cb24-3" tabindex="-1"></a>                <span class="st">&quot;Acer platanoides&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb24-4"><a href="#cb24-4" tabindex="-1"></a>                <span class="st">&quot;Pinus sylvestris&quot;</span>, <span class="st">&quot;Tilia cordata&quot;</span>),</span>
+<span id="cb24-5"><a href="#cb24-5" tabindex="-1"></a>  <span class="at">family    =</span> <span class="fu">c</span>(<span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Sapindaceae&quot;</span>,</span>
+<span id="cb24-6"><a href="#cb24-6" tabindex="-1"></a>                <span class="st">&quot;Betulaceae&quot;</span>, <span class="st">&quot;Pinaceae&quot;</span>, <span class="st">&quot;Malvaceae&quot;</span>),</span>
+<span id="cb24-7"><a href="#cb24-7" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb24-8"><a href="#cb24-8" tabindex="-1"></a>)</span>
+<span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a>f_ref <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a><span class="fu">write_vtr</span>(ref, f_ref)</span>
+<span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a>messy <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a>  <span class="at">field_species =</span> <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Fagus silvatica&quot;</span>,</span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a>                    <span class="st">&quot;Acer platanodes&quot;</span>, <span class="st">&quot;Betla pendula&quot;</span>,</span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a>                    <span class="st">&quot;Pinis sylvestris&quot;</span>),</span>
+<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a>  <span class="at">count         =</span> <span class="fu">c</span>(<span class="dv">12</span><span class="dt">L</span>, <span class="dv">7</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>, <span class="dv">15</span><span class="dt">L</span>, <span class="dv">9</span><span class="dt">L</span>),</span>
+<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a>)</span>
+<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a>f_messy <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a><span class="fu">write_vtr</span>(messy, f_messy)</span>
+<span id="cb24-21"><a href="#cb24-21" tabindex="-1"></a></span>
+<span id="cb24-22"><a href="#cb24-22" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb24-23"><a href="#cb24-23" tabindex="-1"></a>  <span class="fu">tbl</span>(f_messy), <span class="fu">tbl</span>(f_ref),</span>
+<span id="cb24-24"><a href="#cb24-24" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;field_species&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>),</span>
+<span id="cb24-25"><a href="#cb24-25" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb24-26"><a href="#cb24-26" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.25</span></span>
+<span id="cb24-27"><a href="#cb24-27" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb24-28"><a href="#cb24-28" tabindex="-1"></a><span class="co">#&gt;      field_species count        canonical      family fuzzy_dist</span></span>
+<span id="cb24-29"><a href="#cb24-29" tabindex="-1"></a><span class="co">#&gt; 1    Qurecus robur    12    Quercus robur    Fagaceae 0.07692308</span></span>
+<span id="cb24-30"><a href="#cb24-30" tabindex="-1"></a><span class="co">#&gt; 2  Fagus silvatica     7  Fagus sylvatica    Fagaceae 0.06666667</span></span>
+<span id="cb24-31"><a href="#cb24-31" tabindex="-1"></a><span class="co">#&gt; 3  Acer platanodes     3 Acer platanoides Sapindaceae 0.06250000</span></span>
+<span id="cb24-32"><a href="#cb24-32" tabindex="-1"></a><span class="co">#&gt; 4    Betla pendula    15   Betula pendula  Betulaceae 0.07142857</span></span>
+<span id="cb24-33"><a href="#cb24-33" tabindex="-1"></a><span class="co">#&gt; 5 Pinis sylvestris     9 Pinus sylvestris    Pinaceae 0.06250000</span></span></code></pre></div>
+<p>Each messy field name finds its closest match in the reference table.
+The <code>fuzzy_dist</code> column shows how far apart they are, which
+is useful for flagging matches that might need manual verification (say,
+anything above 0.15).</p>
+</div>
+<div id="methods-dl-levenshtein-jw" class="section level3">
+<h3>Methods: dl, levenshtein, jw</h3>
+<p>The <code>method</code> parameter selects the distance algorithm. The
+three options are <code>&quot;dl&quot;</code> (Damerau-Levenshtein, the default),
+<code>&quot;levenshtein&quot;</code>, and <code>&quot;jw&quot;</code> (Jaro-Winkler). When
+using <code>&quot;jw&quot;</code>, <code>max_dist</code> is interpreted as the
+maximum <em>dissimilarity</em> (i.e.,
+<code>1 - jaro_winkler_score</code>), so <code>max_dist = 0.2</code>
+keeps matches with a Jaro-Winkler score of 0.8 or higher.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb25-2"><a href="#cb25-2" tabindex="-1"></a>  <span class="fu">tbl</span>(f_messy), <span class="fu">tbl</span>(f_ref),</span>
+<span id="cb25-3"><a href="#cb25-3" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;field_species&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>),</span>
+<span id="cb25-4"><a href="#cb25-4" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;jw&quot;</span>,</span>
+<span id="cb25-5"><a href="#cb25-5" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.15</span></span>
+<span id="cb25-6"><a href="#cb25-6" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb25-7"><a href="#cb25-7" tabindex="-1"></a><span class="co">#&gt;      field_species count        canonical      family fuzzy_dist</span></span>
+<span id="cb25-8"><a href="#cb25-8" tabindex="-1"></a><span class="co">#&gt; 1    Qurecus robur    12    Quercus robur    Fagaceae 0.02051282</span></span>
+<span id="cb25-9"><a href="#cb25-9" tabindex="-1"></a><span class="co">#&gt; 2  Fagus silvatica     7  Fagus sylvatica    Fagaceae 0.05523810</span></span>
+<span id="cb25-10"><a href="#cb25-10" tabindex="-1"></a><span class="co">#&gt; 3  Acer platanodes     3 Acer platanoides Sapindaceae 0.01250000</span></span>
+<span id="cb25-11"><a href="#cb25-11" tabindex="-1"></a><span class="co">#&gt; 4    Betla pendula    15   Betula pendula  Betulaceae 0.01666667</span></span>
+<span id="cb25-12"><a href="#cb25-12" tabindex="-1"></a><span class="co">#&gt; 5 Pinis sylvestris     9 Pinus sylvestris    Pinaceae 0.02916667</span></span></code></pre></div>
+<p>Jaro-Winkler produces a tighter match set here because it penalizes
+differences in the prefix more heavily.</p>
+</div>
+<div id="blocking-for-performance" class="section level3">
+<h3>Blocking for performance</h3>
+<p>Without blocking, <code>fuzzy_join</code> compares every probe row
+against every build row. For large tables this is quadratic. The
+<code>block_by</code> parameter specifies a column for exact-match
+blocking: only pairs that share the same blocking key are compared.</p>
+<p>In a taxonomic context, the natural blocking key is the genus. We
+split the genus from both sides and block on it, so “Qurecus robur” is
+only compared against reference rows where the genus starts with “Q” (or
+more precisely, where the blocking column matches exactly).</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>ref_blocked <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>  <span class="at">genus     =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Fagus&quot;</span>, <span class="st">&quot;Acer&quot;</span>,</span>
+<span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>                <span class="st">&quot;Betula&quot;</span>, <span class="st">&quot;Pinus&quot;</span>, <span class="st">&quot;Tilia&quot;</span>),</span>
+<span id="cb26-4"><a href="#cb26-4" tabindex="-1"></a>  <span class="at">canonical =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Fagus sylvatica&quot;</span>,</span>
+<span id="cb26-5"><a href="#cb26-5" tabindex="-1"></a>                <span class="st">&quot;Acer platanoides&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>,</span>
+<span id="cb26-6"><a href="#cb26-6" tabindex="-1"></a>                <span class="st">&quot;Pinus sylvestris&quot;</span>, <span class="st">&quot;Tilia cordata&quot;</span>),</span>
+<span id="cb26-7"><a href="#cb26-7" tabindex="-1"></a>  <span class="at">family    =</span> <span class="fu">c</span>(<span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Fagaceae&quot;</span>, <span class="st">&quot;Sapindaceae&quot;</span>,</span>
+<span id="cb26-8"><a href="#cb26-8" tabindex="-1"></a>                <span class="st">&quot;Betulaceae&quot;</span>, <span class="st">&quot;Pinaceae&quot;</span>, <span class="st">&quot;Malvaceae&quot;</span>),</span>
+<span id="cb26-9"><a href="#cb26-9" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb26-10"><a href="#cb26-10" tabindex="-1"></a>)</span>
+<span id="cb26-11"><a href="#cb26-11" tabindex="-1"></a>f_ref2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb26-12"><a href="#cb26-12" tabindex="-1"></a><span class="fu">write_vtr</span>(ref_blocked, f_ref2)</span>
+<span id="cb26-13"><a href="#cb26-13" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" tabindex="-1"></a>messy_blocked <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb26-15"><a href="#cb26-15" tabindex="-1"></a>  <span class="at">genus_field   =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Fagus&quot;</span>, <span class="st">&quot;Acer&quot;</span>,</span>
+<span id="cb26-16"><a href="#cb26-16" tabindex="-1"></a>                    <span class="st">&quot;Betula&quot;</span>, <span class="st">&quot;Pinus&quot;</span>),</span>
+<span id="cb26-17"><a href="#cb26-17" tabindex="-1"></a>  <span class="at">field_species =</span> <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Fagus silvatica&quot;</span>,</span>
+<span id="cb26-18"><a href="#cb26-18" tabindex="-1"></a>                    <span class="st">&quot;Acer platanodes&quot;</span>, <span class="st">&quot;Betla pendula&quot;</span>,</span>
+<span id="cb26-19"><a href="#cb26-19" tabindex="-1"></a>                    <span class="st">&quot;Pinis sylvestris&quot;</span>),</span>
+<span id="cb26-20"><a href="#cb26-20" tabindex="-1"></a>  <span class="at">count         =</span> <span class="fu">c</span>(<span class="dv">12</span><span class="dt">L</span>, <span class="dv">7</span><span class="dt">L</span>, <span class="dv">3</span><span class="dt">L</span>, <span class="dv">15</span><span class="dt">L</span>, <span class="dv">9</span><span class="dt">L</span>),</span>
+<span id="cb26-21"><a href="#cb26-21" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb26-22"><a href="#cb26-22" tabindex="-1"></a>)</span>
+<span id="cb26-23"><a href="#cb26-23" tabindex="-1"></a>f_messy2 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb26-24"><a href="#cb26-24" tabindex="-1"></a><span class="fu">write_vtr</span>(messy_blocked, f_messy2)</span>
+<span id="cb26-25"><a href="#cb26-25" tabindex="-1"></a></span>
+<span id="cb26-26"><a href="#cb26-26" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb26-27"><a href="#cb26-27" tabindex="-1"></a>  <span class="fu">tbl</span>(f_messy2), <span class="fu">tbl</span>(f_ref2),</span>
+<span id="cb26-28"><a href="#cb26-28" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;field_species&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>),</span>
+<span id="cb26-29"><a href="#cb26-29" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb26-30"><a href="#cb26-30" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.25</span>,</span>
+<span id="cb26-31"><a href="#cb26-31" tabindex="-1"></a>  <span class="at">block_by =</span> <span class="fu">c</span>(<span class="st">&quot;genus_field&quot;</span> <span class="ot">=</span> <span class="st">&quot;genus&quot;</span>)</span>
+<span id="cb26-32"><a href="#cb26-32" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb26-33"><a href="#cb26-33" tabindex="-1"></a><span class="co">#&gt;   genus_field    field_species count   genus        canonical      family</span></span>
+<span id="cb26-34"><a href="#cb26-34" tabindex="-1"></a><span class="co">#&gt; 1     Quercus    Qurecus robur    12 Quercus    Quercus robur    Fagaceae</span></span>
+<span id="cb26-35"><a href="#cb26-35" tabindex="-1"></a><span class="co">#&gt; 2       Fagus  Fagus silvatica     7   Fagus  Fagus sylvatica    Fagaceae</span></span>
+<span id="cb26-36"><a href="#cb26-36" tabindex="-1"></a><span class="co">#&gt; 3        Acer  Acer platanodes     3    Acer Acer platanoides Sapindaceae</span></span>
+<span id="cb26-37"><a href="#cb26-37" tabindex="-1"></a><span class="co">#&gt; 4      Betula    Betla pendula    15  Betula   Betula pendula  Betulaceae</span></span>
+<span id="cb26-38"><a href="#cb26-38" tabindex="-1"></a><span class="co">#&gt; 5       Pinus Pinis sylvestris     9   Pinus Pinus sylvestris    Pinaceae</span></span>
+<span id="cb26-39"><a href="#cb26-39" tabindex="-1"></a><span class="co">#&gt;   fuzzy_dist</span></span>
+<span id="cb26-40"><a href="#cb26-40" tabindex="-1"></a><span class="co">#&gt; 1 0.07692308</span></span>
+<span id="cb26-41"><a href="#cb26-41" tabindex="-1"></a><span class="co">#&gt; 2 0.06666667</span></span>
+<span id="cb26-42"><a href="#cb26-42" tabindex="-1"></a><span class="co">#&gt; 3 0.06250000</span></span>
+<span id="cb26-43"><a href="#cb26-43" tabindex="-1"></a><span class="co">#&gt; 4 0.07142857</span></span>
+<span id="cb26-44"><a href="#cb26-44" tabindex="-1"></a><span class="co">#&gt; 5 0.06250000</span></span></code></pre></div>
+<p>With blocking, each probe row is compared against at most one
+reference row (the one sharing its genus) instead of all six. On real
+datasets with thousands of reference species, this reduces the number of
+distance computations by orders of magnitude.</p>
+</div>
+<div id="thread-control" class="section level3">
+<h3>Thread control</h3>
+<p>The <code>n_threads</code> parameter controls how many OpenMP threads
+the distance computations use. The default is 4, which is a reasonable
+starting point. On a workstation with many cores, increasing it to 8 or
+16 can help for large joins. On a laptop where other processes need CPU
+time, reducing it to 2 is reasonable.</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a><span class="fu">fuzzy_join</span>(</span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a>  <span class="fu">tbl</span>(f_messy), <span class="fu">tbl</span>(f_ref),</span>
+<span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;field_species&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>),</span>
+<span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.25</span>,</span>
+<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>  <span class="at">n_threads =</span> <span class="dv">8</span><span class="dt">L</span></span>
+<span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span></code></pre></div>
+</div>
+</div>
+<div id="block-lookups" class="section level2">
+<h2>Block lookups</h2>
+<p><code>fuzzy_join()</code> is a streaming operation: the probe side
+flows through the pipeline and the build side is materialized into a
+hash table internally. But sometimes we need to look up the same
+reference repeatedly with different query sets, and rebuilding the hash
+table each time is wasteful.</p>
+<p><code>materialize()</code> converts a vectra node into a persistent
+in-memory block. Once materialized, we can probe it with
+<code>block_lookup()</code> (exact matching) or
+<code>block_fuzzy_lookup()</code> (fuzzy matching) as many times as
+needed without re-reading the source data.</p>
+<div id="exact-lookups" class="section level3">
+<h3>Exact lookups</h3>
+<p><code>block_lookup(block, column, keys)</code> performs a hash-based
+exact match on a string column. The hash index is built lazily on the
+first call and cached for subsequent calls.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>blk <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f_ref) <span class="sc">|&gt;</span></span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="fu">select</span>(canonical, family) <span class="sc">|&gt;</span></span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>  <span class="fu">materialize</span>()</span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a><span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonical&quot;</span>,</span>
+<span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a>             <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Betula pendula&quot;</span>))</span>
+<span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a><span class="co">#&gt;   query_idx      canonical     family</span></span>
+<span id="cb28-8"><a href="#cb28-8" tabindex="-1"></a><span class="co">#&gt; 1         1  Quercus robur   Fagaceae</span></span>
+<span id="cb28-9"><a href="#cb28-9" tabindex="-1"></a><span class="co">#&gt; 2         2 Betula pendula Betulaceae</span></span></code></pre></div>
+<p>The result includes a <code>query_idx</code> column that maps each
+result row back to the input key vector (1-based). Queries that match
+multiple rows in the block return all matches.</p>
+</div>
+<div id="case-insensitive-lookups" class="section level3">
+<h3>Case-insensitive lookups</h3>
+<p>Field data often has inconsistent capitalization. The
+<code>ci = TRUE</code> parameter performs case-insensitive matching
+without requiring a separate lowercased column in the reference.</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a><span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonical&quot;</span>,</span>
+<span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a>             <span class="fu">c</span>(<span class="st">&quot;quercus robur&quot;</span>, <span class="st">&quot;BETULA PENDULA&quot;</span>),</span>
+<span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a>             <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a><span class="co">#&gt;   query_idx      canonical     family</span></span>
+<span id="cb29-5"><a href="#cb29-5" tabindex="-1"></a><span class="co">#&gt; 1         1  Quercus robur   Fagaceae</span></span>
+<span id="cb29-6"><a href="#cb29-6" tabindex="-1"></a><span class="co">#&gt; 2         2 Betula pendula Betulaceae</span></span></code></pre></div>
+<p>Both queries match despite the case mismatch. Internally, the engine
+builds a separate case-folded hash index on first use and caches it
+alongside the case-sensitive one.</p>
+</div>
+<div id="fuzzy-lookups" class="section level3">
+<h3>Fuzzy lookups</h3>
+<p><code>block_fuzzy_lookup()</code> computes string distances between
+query keys and every row in the block (or, with blocking, only rows
+sharing a blocking key). The interface mirrors <code>fuzzy_join()</code>
+but operates on a materialized block.</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a>blk2 <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f_ref2) <span class="sc">|&gt;</span></span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>  <span class="fu">select</span>(genus, canonical, family) <span class="sc">|&gt;</span></span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>  <span class="fu">materialize</span>()</span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a><span class="fu">block_fuzzy_lookup</span>(</span>
+<span id="cb30-6"><a href="#cb30-6" tabindex="-1"></a>  blk2, <span class="st">&quot;canonical&quot;</span>,</span>
+<span id="cb30-7"><a href="#cb30-7" tabindex="-1"></a>  <span class="at">keys =</span> <span class="fu">c</span>(<span class="st">&quot;Qurecus robur&quot;</span>, <span class="st">&quot;Fagus silvatica&quot;</span>),</span>
+<span id="cb30-8"><a href="#cb30-8" tabindex="-1"></a>  <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>,</span>
+<span id="cb30-9"><a href="#cb30-9" tabindex="-1"></a>  <span class="at">max_dist =</span> <span class="fl">0.2</span>,</span>
+<span id="cb30-10"><a href="#cb30-10" tabindex="-1"></a>  <span class="at">block_col =</span> <span class="st">&quot;genus&quot;</span>,</span>
+<span id="cb30-11"><a href="#cb30-11" tabindex="-1"></a>  <span class="at">block_keys =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>, <span class="st">&quot;Fagus&quot;</span>),</span>
+<span id="cb30-12"><a href="#cb30-12" tabindex="-1"></a>  <span class="at">n_threads =</span> <span class="dv">2</span><span class="dt">L</span></span>
+<span id="cb30-13"><a href="#cb30-13" tabindex="-1"></a>)</span>
+<span id="cb30-14"><a href="#cb30-14" tabindex="-1"></a><span class="co">#&gt;   query_idx fuzzy_dist   genus       canonical   family</span></span>
+<span id="cb30-15"><a href="#cb30-15" tabindex="-1"></a><span class="co">#&gt; 1         1 0.07692308 Quercus   Quercus robur Fagaceae</span></span>
+<span id="cb30-16"><a href="#cb30-16" tabindex="-1"></a><span class="co">#&gt; 2         2 0.06666667   Fagus Fagus sylvatica Fagaceae</span></span></code></pre></div>
+<p>The <code>block_col</code> and <code>block_keys</code> arguments work
+together: the first query (“Qurecus robur”) is only compared against
+rows where <code>genus == &quot;Quercus&quot;</code>, and the second query against
+rows where <code>genus == &quot;Fagus&quot;</code>. This is the same blocking
+logic as <code>fuzzy_join()</code> but applied to a materialized block
+that can be reused across multiple lookup calls without re-reading
+disk.</p>
+</div>
+</div>
+<div id="performance" class="section level2">
+<h2>Performance</h2>
+<p>String operations in vectra fall into three performance tiers.
+Understanding which tier an operation belongs to helps predict where the
+bottleneck will be in a pipeline.</p>
+<div id="tier-1-byte-level-operations-essentially-free" class="section level3">
+<h3>Tier 1: byte-level operations (essentially free)</h3>
+<p><code>toupper</code>, <code>tolower</code>, <code>trimws</code>,
+<code>nchar</code>, <code>substr</code>, <code>startsWith</code>,
+<code>endsWith</code>, and <code>paste</code>/<code>paste0</code> all
+operate on raw bytes with O(n) single-pass algorithms. Their cost is
+negligible compared to disk I/O. On a modern SSD, reading a 100 MB
+string column takes roughly 50 ms; applying <code>tolower</code> to it
+adds less than 1 ms, so in practice these operations contribute
+negligible overhead compared to the I/O cost of reading the data from
+disk.</p>
+</div>
+<div id="tier-2-pattern-matching-depends-on-pattern-complexity" class="section level3">
+<h3>Tier 2: pattern matching (depends on pattern complexity)</h3>
+<p><code>grepl</code>, <code>gsub</code>, <code>sub</code>, and
+<code>str_extract</code> compile a POSIX regex (or set up a fixed-string
+scanner) and apply it to every row. Fixed-string matching
+(<code>fixed = TRUE</code>) is in tier 1 territory. Regex matching cost
+depends on the pattern: a simple alternation like <code>^(A|B|C)$</code>
+is nearly as fast as fixed, while a pattern with nested quantifiers like
+<code>(.+?)*</code> can be exponentially slow on pathological inputs.
+For batches larger than 1000 rows, the engine distributes the matching
+loop across OpenMP threads with per-thread regex compilation, so
+doubling the available cores roughly halves the wall time.</p>
+<p>The practical advice: use <code>fixed = TRUE</code> (or omit the
+parameter, since it defaults to <code>TRUE</code>) whenever the pattern
+is a literal string. Reserve <code>fixed = FALSE</code> for cases where
+you genuinely need regex features like character classes, alternations,
+or capture groups.</p>
+</div>
+<div id="tier-3-fuzzy-distance-computation-cpu-bound" class="section level3">
+<h3>Tier 3: fuzzy distance computation (CPU-bound)</h3>
+<p><code>levenshtein</code>, <code>dl_dist</code>, and
+<code>jaro_winkler</code> compute an O(m<em>n) dynamic programming
+alignment for each pair of strings, where m and n are the string
+lengths. For column-vs-column comparisons in <code>mutate()</code>, this
+is O(rows </em> m * n). For fuzzy joins without blocking, it is
+O(probe_rows * build_rows <em> m </em> n). Blocking reduces this to
+O(probe_rows * avg_partition_size * m * n), which is why it matters so
+much. A loose <code>max_dist</code> does not change the number of
+distance computations, but it increases the number of rows that survive
+the threshold, and in a many-to-many fuzzy join this can cause a
+combinatorial explosion of output rows. If both tables contain 10,000
+rows and a generous threshold matches each probe row to 50 build rows,
+the result has 500,000 rows. Tightening <code>max_dist</code> or adding
+a <code>block_by</code> column are the two most effective ways to keep
+the output manageable.</p>
+<p>All three distance functions use OpenMP parallelization when the
+input exceeds 1000 rows. The work is distributed with
+<code>schedule(dynamic, 64)</code>, meaning threads grab 64-row chunks
+as they finish, which balances load well when string lengths vary.</p>
+</div>
+<div id="two-pass-string-building" class="section level3">
+<h3>Two-pass string building</h3>
+<p>String-producing expressions (everything that outputs a new string
+column) use a two-pass strategy. The first pass computes the output
+length for each row without writing any bytes. The second pass allocates
+a single contiguous buffer and fills it. This avoids the
+realloc-and-copy pattern that R uses internally, which can fragment
+memory and cause O(n^2) behaviour on long strings. For
+<code>paste()</code> with many arguments or <code>gsub</code> with
+complex replacements, the two-pass approach keeps memory allocation
+linear.</p>
+</div>
+</div>
+<div id="practical-guidance" class="section level2">
+<h2>Practical guidance</h2>
+<div id="which-distance-metric-for-which-use-case" class="section level3">
+<h3>Which distance metric for which use case</h3>
+<p>For taxonomic name matching, <code>dl_dist_norm</code> with a
+threshold of 0.15-0.20 is the workhorse. It catches transpositions (the
+most common typo type in Latin binomials), single-letter substitutions,
+and dropped characters. If your reference list is large and you can
+block on genus, the false-positive rate at 0.20 is low enough for
+automated matching with a manual review pass for distances above
+0.10.</p>
+<p>For matching personal names (observers, collectors, authors),
+<code>jaro_winkler</code> with a threshold of 0.10-0.15 (remember, this
+is dissimilarity, so 0.10 means a similarity score of 0.90 or higher) is
+the better choice. Names are short, and the prefix weighting in
+Jaro-Winkler exploits the fact that people rarely mistype the first
+letter of their own name.</p>
+<p>For free-text fields where errors include missing words, reordered
+words, or abbreviations, none of these character-level metrics work
+well. Consider preprocessing with <code>tolower</code>,
+<code>trimws</code>, and <code>gsub</code> to normalize the strings
+before computing distances.</p>
+</div>
+<div id="choosing-max_dist-thresholds" class="section level3">
+<h3>Choosing max_dist thresholds</h3>
+<p>Start conservative (low <code>max_dist</code>) and increase
+gradually. A <code>max_dist</code> of 0.10 with DL distance catches most
+single-character typos in strings of 10+ characters. At 0.20, you start
+matching strings that differ by two edits, which increases recall but
+also increases false positives. Above 0.30, the match set usually
+contains too much noise to be useful without manual filtering.</p>
+<p>For Jaro-Winkler, the scale is inverted (higher score = better
+match). A <code>max_dist</code> of 0.10 (score &gt;= 0.90) is a
+reasonable starting point. Below 0.05 (score &gt;= 0.95), you catch only
+very minor differences.</p>
+<p>A useful workflow is to run the fuzzy join once with a generous
+threshold, sort the results by <code>fuzzy_dist</code>, and examine the
+matches near the boundary. This gives an empirical sense of where true
+matches end and false positives begin for your specific data.</p>
+</div>
+<div id="handling-encoding-issues" class="section level3">
+<h3>Handling encoding issues</h3>
+<p>vectra operates on raw bytes and assumes UTF-8 encoding. If your
+input data is Latin-1 or another encoding, convert it to UTF-8 before
+writing to <code>.vtr</code> format. In R,
+<code>iconv(x, from = &quot;latin1&quot;, to = &quot;UTF-8&quot;)</code> handles this. Once
+the data is in UTF-8, all string operations work correctly on ASCII
+characters and pass through multi-byte sequences without corruption,
+though the distance metrics count bytes rather than Unicode code points
+for multi-byte characters.</p>
+<p>This byte-level behaviour has a practical implication for distance
+computation: if your strings contain accented characters encoded as
+multi-byte UTF-8 sequences (e.g., “u” + combining accent), the edit
+distance between “u” and “ü” will be larger than 1 because the engine
+sees multiple bytes changing, not a single character. For Latin-alphabet
+ecological data (species names, place names), this is rarely a problem
+because accented characters are uncommon in standardized taxonomic
+databases. If your data does include accented characters, consider
+normalizing them to ASCII before computing distances (e.g., replacing
+“ü” with “u” via <code>gsub</code>).</p>
+</div>
+<div id="common-cleaning-patterns" class="section level3">
+<h3>Common cleaning patterns</h3>
+<p>A typical cleaning pipeline chains several string operations before
+matching. Here is a pattern we use repeatedly for species name
+standardization.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>raw_names <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a>  <span class="at">species =</span> <span class="fu">c</span>(<span class="st">&quot;  Quercus ROBUR &quot;</span>, <span class="st">&quot;fagus sylvatica.&quot;</span>,</span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>              <span class="st">&quot;Acer platanoides (L.)&quot;</span>, <span class="st">&quot;BETULA   pendula&quot;</span>),</span>
+<span id="cb31-4"><a href="#cb31-4" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb31-5"><a href="#cb31-5" tabindex="-1"></a>)</span>
+<span id="cb31-6"><a href="#cb31-6" tabindex="-1"></a>f9 <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb31-7"><a href="#cb31-7" tabindex="-1"></a><span class="fu">write_vtr</span>(raw_names, f9)</span>
+<span id="cb31-8"><a href="#cb31-8" tabindex="-1"></a></span>
+<span id="cb31-9"><a href="#cb31-9" tabindex="-1"></a><span class="fu">tbl</span>(f9) <span class="sc">|&gt;</span></span>
+<span id="cb31-10"><a href="#cb31-10" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">tolower</span>(<span class="fu">trimws</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb31-11"><a href="#cb31-11" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">gsub</span>(<span class="st">&quot;.&quot;</span>, <span class="st">&quot;&quot;</span>, clean, <span class="at">fixed =</span> <span class="cn">TRUE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb31-12"><a href="#cb31-12" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">gsub</span>(<span class="st">&quot; +&quot;</span>, <span class="st">&quot; &quot;</span>, clean, <span class="at">fixed =</span> <span class="cn">FALSE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb31-13"><a href="#cb31-13" tabindex="-1"></a>  <span class="fu">select</span>(species, clean) <span class="sc">|&gt;</span></span>
+<span id="cb31-14"><a href="#cb31-14" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb31-15"><a href="#cb31-15" tabindex="-1"></a><span class="co">#&gt;                 species                clean</span></span>
+<span id="cb31-16"><a href="#cb31-16" tabindex="-1"></a><span class="co">#&gt; 1        Quercus ROBUR         quercus robur</span></span>
+<span id="cb31-17"><a href="#cb31-17" tabindex="-1"></a><span class="co">#&gt; 2      fagus sylvatica.      fagus sylvatica</span></span>
+<span id="cb31-18"><a href="#cb31-18" tabindex="-1"></a><span class="co">#&gt; 3 Acer platanoides (L.) acer platanoides (l)</span></span>
+<span id="cb31-19"><a href="#cb31-19" tabindex="-1"></a><span class="co">#&gt; 4      BETULA   pendula       betula pendula</span></span></code></pre></div>
+<p>The pipeline strips whitespace, lowercases everything, removes
+periods, and collapses multiple spaces into one. Each
+<code>mutate()</code> call creates a streaming node, so chaining them
+costs no extra memory. After this cleaning, the strings are ready for
+exact or fuzzy matching against a standardized reference.</p>
+</div>
+<div id="combining-approaches" class="section level3">
+<h3>Combining approaches</h3>
+<p>The most effective matching strategy layers exact and fuzzy methods.
+Start with an exact join on cleaned names (catching the easy cases at
+near-zero cost), then run a fuzzy join on the unmatched remainder. This
+avoids spending CPU cycles on distance computations for records that
+match perfectly after basic cleaning.</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>ref_clean <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>  <span class="at">canonical =</span> <span class="fu">c</span>(<span class="st">&quot;quercus robur&quot;</span>, <span class="st">&quot;fagus sylvatica&quot;</span>,</span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>                <span class="st">&quot;acer platanoides&quot;</span>, <span class="st">&quot;betula pendula&quot;</span>),</span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a>  <span class="at">status    =</span> <span class="fu">c</span>(<span class="st">&quot;accepted&quot;</span>, <span class="st">&quot;accepted&quot;</span>, <span class="st">&quot;accepted&quot;</span>, <span class="st">&quot;accepted&quot;</span>),</span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a>  <span class="at">stringsAsFactors =</span> <span class="cn">FALSE</span></span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a>)</span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a>f_refc <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a><span class="fu">write_vtr</span>(ref_clean, f_refc)</span>
+<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a></span>
+<span id="cb32-10"><a href="#cb32-10" tabindex="-1"></a>cleaned <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f9) <span class="sc">|&gt;</span></span>
+<span id="cb32-11"><a href="#cb32-11" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">tolower</span>(<span class="fu">trimws</span>(species))) <span class="sc">|&gt;</span></span>
+<span id="cb32-12"><a href="#cb32-12" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">gsub</span>(<span class="st">&quot;.&quot;</span>, <span class="st">&quot;&quot;</span>, clean, <span class="at">fixed =</span> <span class="cn">TRUE</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb32-13"><a href="#cb32-13" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">clean =</span> <span class="fu">gsub</span>(<span class="st">&quot; +&quot;</span>, <span class="st">&quot; &quot;</span>, clean, <span class="at">fixed =</span> <span class="cn">FALSE</span>))</span>
+<span id="cb32-14"><a href="#cb32-14" tabindex="-1"></a></span>
+<span id="cb32-15"><a href="#cb32-15" tabindex="-1"></a><span class="co"># Step 1: exact join on cleaned names</span></span>
+<span id="cb32-16"><a href="#cb32-16" tabindex="-1"></a>exact <span class="ot">&lt;-</span> <span class="fu">left_join</span>(</span>
+<span id="cb32-17"><a href="#cb32-17" tabindex="-1"></a>  cleaned, <span class="fu">tbl</span>(f_refc),</span>
+<span id="cb32-18"><a href="#cb32-18" tabindex="-1"></a>  <span class="at">by =</span> <span class="fu">c</span>(<span class="st">&quot;clean&quot;</span> <span class="ot">=</span> <span class="st">&quot;canonical&quot;</span>)</span>
+<span id="cb32-19"><a href="#cb32-19" tabindex="-1"></a>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb32-20"><a href="#cb32-20" tabindex="-1"></a></span>
+<span id="cb32-21"><a href="#cb32-21" tabindex="-1"></a>exact</span>
+<span id="cb32-22"><a href="#cb32-22" tabindex="-1"></a><span class="co">#&gt;                 species                clean   status</span></span>
+<span id="cb32-23"><a href="#cb32-23" tabindex="-1"></a><span class="co">#&gt; 1        Quercus ROBUR         quercus robur accepted</span></span>
+<span id="cb32-24"><a href="#cb32-24" tabindex="-1"></a><span class="co">#&gt; 2      fagus sylvatica.      fagus sylvatica accepted</span></span>
+<span id="cb32-25"><a href="#cb32-25" tabindex="-1"></a><span class="co">#&gt; 3      BETULA   pendula       betula pendula accepted</span></span>
+<span id="cb32-26"><a href="#cb32-26" tabindex="-1"></a><span class="co">#&gt; 4 Acer platanoides (L.) acer platanoides (l)     &lt;NA&gt;</span></span></code></pre></div>
+<p>Records where <code>status</code> is <code>NA</code> did not match
+exactly and would go to a second pass with <code>fuzzy_join()</code>. In
+this example all four match after cleaning, which is the ideal outcome:
+the fuzzy join handles only the genuinely ambiguous cases.</p>
+<p>This layered strategy reflects how taxonomic name resolution works in
+practice. The Global Biodiversity Information Facility (GBIF) backbone
+taxonomy, for instance, contains over 7 million names. Running a fuzzy
+join against the full list for every input record would be prohibitively
+expensive. Cleaning first, exact-matching second, and fuzzy-matching
+only the remainder keeps the computational cost proportional to the
+number of genuinely problematic records rather than the total dataset
+size. In a typical citizen-science dataset, 80-90% of records match
+exactly after basic normalization, leaving only 10-20% for the distance
+computation stage.</p>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
