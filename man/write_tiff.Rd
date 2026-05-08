@@ -10,6 +10,10 @@ write_tiff(
   compress = FALSE,
   pixel_type = "float64",
   metadata = NULL,
+  crs = NULL,
+  tiled = FALSE,
+  tile_size = 256L,
+  bigtiff = "auto",
   ...
 )
 }
@@ -27,6 +31,30 @@ One of \code{"float64"} (default), \code{"float32"}, \code{"int16"}, \code{"int3
 \item{metadata}{Optional character string of GDAL_METADATA XML to embed
 in the file (tag 42112). Use \code{\link[=tiff_metadata]{tiff_metadata()}} to read it back.}
 
+\item{crs}{Optional CRS to embed as a GeoKey directory (TIFF tag 34735).
+Accepts an integer EPSG code, an \code{"EPSG:xxxx"} string, or a list with
+named fields \code{epsg}, \code{geographic} (\code{TRUE}/\code{FALSE}), and optionally
+\code{citation}. Codes that are not auto-classified as projected/geographic
+default to projected; pass \code{geographic = TRUE} to override.
+Use \code{\link[=tiff_crs]{tiff_crs()}} to read it back.}
+
+\item{tiled}{Logical; write a tiled GeoTIFF (TIFF tags 322/323/324/325)
+instead of strips. Default \code{FALSE}. Tiled layout enables random-access
+block reads and is required for Cloud-Optimized GeoTIFF (COG).}
+
+\item{tile_size}{Integer; tile edge length in pixels. Must be a positive
+multiple of 16 (TIFF spec). Either a single value (square tiles) or a
+length-2 vector \code{c(width, height)}. Default \code{256}. Edge tiles at the
+right and bottom of the image are padded to full tile size with the
+NoData / NaN value.}
+
+\item{bigtiff}{Controls BigTIFF dispatch. \code{"auto"} (default) emits BigTIFF
+when the expected raw payload would exceed the classic-TIFF 4 GB
+ceiling, otherwise emits classic TIFF. \code{TRUE} forces BigTIFF (magic
+\code{0x002B}, 64-bit offsets), useful for round-trip tests on small data.
+\code{FALSE} forces classic TIFF — beware that classic TIFF will silently
+corrupt outputs larger than 4 GB. Tiled BigTIFF is not yet supported.}
+
 \item{...}{Reserved for future use.}
 }
 \value{
@@ -40,10 +68,11 @@ inferred from the x/y coordinate arrays. Missing pixels are written as NaN
 }
 \examples{
 \donttest{
-# Write as int16 with DEFLATE compression
+# Write as int16 with DEFLATE compression and an EPSG:4326 GeoKey
 df <- data.frame(x = 1:4, y = rep(1:2, each = 2), band1 = c(100, 200, 300, 400))
 f <- tempfile(fileext = ".tif")
-write_tiff(df, f, compress = TRUE, pixel_type = "int16")
+write_tiff(df, f, compress = TRUE, pixel_type = "int16", crs = 4326L)
+tiff_crs(f)
 unlink(f)
 }
 

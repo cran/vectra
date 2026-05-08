@@ -19,6 +19,20 @@
 #define TIFF_PIXEL_UINT8    4
 #define TIFF_PIXEL_UINT16   5
 
+/* Compression codes accepted by tiff_writer_open(). Internal to the writer
+   API; the on-disk TIFF Compression tag (259) values are 1/8/5 respectively. */
+#define TIFF_COMPRESS_NONE     0
+#define TIFF_COMPRESS_DEFLATE  1
+#define TIFF_COMPRESS_LZW      2
+
+/* BigTIFF dispatch for the writer.
+     AUTO  — pick automatically based on expected raw size (~3.9 GB cutoff).
+     OFF   — always emit classic TIFF (will silently corrupt past 4 GB).
+     FORCE — always emit BigTIFF (useful for round-trip tests on small data). */
+#define TIFF_BIGTIFF_AUTO   0
+#define TIFF_BIGTIFF_OFF    1
+#define TIFF_BIGTIFF_FORCE  2
+
 /* ---- Reader ---- */
 
 typedef struct TiffReader TiffReader;
@@ -62,6 +76,15 @@ int tiff_reader_extract_points(TiffReader *r, int64_t n_points,
    Returned pointer is owned by the reader — do not free. */
 const char *tiff_reader_metadata(TiffReader *r);
 
+/* CRS metadata from the GeoKey directory (TIFF tags 34735/34736/34737).
+   tiff_reader_epsg() returns the projected CRS EPSG (key 3072) if present,
+   else the geographic CRS EPSG (key 2048), else 0 if no GeoKey directory.
+   tiff_reader_crs_citation() returns the PCS / GT / Geog citation string
+   (keys 3073 / 1026 / 2049, in that priority), or NULL if absent.
+   Returned pointer is owned by the reader — do not free. */
+int32_t     tiff_reader_epsg(TiffReader *r);
+const char *tiff_reader_crs_citation(TiffReader *r);
+
 const char *tiff_reader_errmsg(TiffReader *r);
 void tiff_reader_close(TiffReader *r);
 
@@ -74,16 +97,59 @@ typedef struct TiffWriter TiffWriter;
    n_bands: samples per pixel
    gt: 6-element affine transform (NULL for default identity)
    nodata: nodata value (NaN = no GDAL_NODATA tag)
-   use_deflate: 1 to DEFLATE-compress strips
-   pixel_type: one of TIFF_PIXEL_* constants */
+   compression: one of TIFF_COMPRESS_* constants
+   pixel_type: one of TIFF_PIXEL_* constants
+
+   When compression is LZW the writer also applies horizontal differencing
+   (Predictor 2) before encoding for integer pixel types and emits the
+   Predictor tag (317 = 2) in the IFD. Float pixel types skip the predictor
+   (Predictor = 1) because byte-wise subtraction of float bit patterns is
+   not meaningful — that matches GDAL's behaviour.
+
+   Auto-promotes to BigTIFF when the expected raw payload exceeds the
+   classic-TIFF 4 GB ceiling (minus a small header budget). Use
+   tiff_writer_open_ex to force a particular mode. */
 int tiff_writer_open(const char *path, TiffWriter **out,
                            int64_t width, int64_t height, int n_bands,
                            const double *gt, double nodata,
-                           int use_deflate, int pixel_type);
+                           int compression, int pixel_type);
+
+/* Create a tiled GeoTIFF writer.
+   compression: one of TIFF_COMPRESS_* constants (composes with tiling).
+   tile_width, tile_height: positive multiples of 16 (TIFF spec).
+     Pass 0 for both to use strip layout (equivalent to tiff_writer_open).
+   Edge tiles at the right/bottom of the image are padded with NoData/NaN
+   to full tile size, as required by the TIFF spec. */
+int tiff_writer_open_tiled(const char *path, TiffWriter **out,
+                           int64_t width, int64_t height, int n_bands,
+                           const double *gt, double nodata,
+                           int compression, int pixel_type,
+                           int tile_width, int tile_height);
+
+/* Like tiff_writer_open, but with explicit control over BigTIFF dispatch.
+   compression: one of TIFF_COMPRESS_* constants.
+   bigtiff_mode: TIFF_BIGTIFF_AUTO (default), TIFF_BIGTIFF_OFF, or
+                 TIFF_BIGTIFF_FORCE. */
+int tiff_writer_open_ex(const char *path, TiffWriter **out,
+                        int64_t width, int64_t height, int n_bands,
+                        const double *gt, double nodata,
+                        int compression, int pixel_type,
+                        int bigtiff_mode);
 
 /* Attach GDAL_METADATA XML to be written into tag 42112.
    Must be called before tiff_writer_finish(). */
 void tiff_writer_set_metadata(TiffWriter *w, const char *xml);
+
+/* Embed CRS metadata as a GeoKey directory (TIFF tag 34735).
+   Pass exactly one positive EPSG (the other should be 0):
+     epsg_geographic > 0 → GeographicTypeGeoKey  (geographic CRS)
+     epsg_projected  > 0 → ProjectedCSTypeGeoKey (projected CRS)
+   When both are 0 the writer emits no GeoKey directory.
+   citation may be NULL; when non-NULL it is written into GeoAsciiParams
+   (tag 34737) and referenced by PCSCitationGeoKey or GeogCitationGeoKey.
+   Must be called before tiff_writer_finish(). */
+void tiff_writer_set_crs(TiffWriter *w, int32_t epsg_geographic,
+                         int32_t epsg_projected, const char *citation);
 
 /* Write a block of rows [row_start, row_start+n_rows).
    bands[b] = array of width * n_rows doubles, row-major.

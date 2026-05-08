@@ -3,6 +3,7 @@
 #include "array.h"
 #include "batch.h"
 #include "error.h"
+#include "grow.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -37,11 +38,8 @@ static void dv_init(DblVec *v) {
 }
 
 static void dv_push(DblVec *v, double val) {
-    if (v->len >= v->cap) {
-        v->cap *= 2;
-        v->data = (double *)realloc(v->data, (size_t)v->cap * sizeof(double));
-        if (!v->data) vectra_error("realloc failed for DblVec");
-    }
+    vec_grow_to((void **)&v->data, &v->cap, v->len + 1, sizeof(double),
+                "DblVec");
     v->data[v->len++] = val;
 }
 
@@ -95,11 +93,26 @@ static double find_resolution(const double *uniq, int64_t n) {
 /* ------------------------------------------------------------------ */
 
 void tiff_write_node(VecNode *node, const char *path, int use_deflate) {
-    tiff_write_node_typed(node, path, use_deflate, TIFF_PIXEL_FLOAT64, NULL);
+    tiff_write_node_typed(node, path, use_deflate, TIFF_PIXEL_FLOAT64, NULL,
+                          0, 0, NULL, 0, 0);
 }
 
 void tiff_write_node_typed(VecNode *node, const char *path, int use_deflate,
-                           int pixel_type, const char *metadata_xml) {
+                           int pixel_type, const char *metadata_xml,
+                           int epsg_geographic, int epsg_projected,
+                           const char *crs_citation,
+                           int tile_width, int tile_height) {
+    tiff_write_node_typed_ex(node, path, use_deflate, pixel_type, metadata_xml,
+                             epsg_geographic, epsg_projected, crs_citation,
+                             tile_width, tile_height, TIFF_BIGTIFF_AUTO);
+}
+
+void tiff_write_node_typed_ex(VecNode *node, const char *path, int use_deflate,
+                              int pixel_type, const char *metadata_xml,
+                              int epsg_geographic, int epsg_projected,
+                              const char *crs_citation,
+                              int tile_width, int tile_height,
+                              int bigtiff_mode) {
     const VecSchema *schema = &node->output_schema;
     int n_cols = schema->n_cols;
 
@@ -217,9 +230,21 @@ void tiff_write_node_typed(VecNode *node, const char *path, int use_deflate,
     else if (pixel_type == TIFF_PIXEL_UINT8)  nodata_val = 255.0;
     else if (pixel_type == TIFF_PIXEL_UINT16) nodata_val = 65535.0;
 
-    if (tiff_writer_open(path, &writer, width, height, n_bands,
-                                gt, nodata_val, use_deflate,
-                                pixel_type) != 0) {
+    int compression_code = use_deflate ? TIFF_COMPRESS_DEFLATE
+                                       : TIFF_COMPRESS_NONE;
+    int tw = tile_width  > 0 ? tile_width  : 0;
+    int th = tile_height > 0 ? tile_height : 0;
+    int open_rc;
+    if (tw > 0 && th > 0) {
+        open_rc = tiff_writer_open_tiled(path, &writer, width, height, n_bands,
+                                         gt, nodata_val, compression_code,
+                                         pixel_type, tw, th);
+    } else {
+        open_rc = tiff_writer_open_ex(path, &writer, width, height, n_bands,
+                                      gt, nodata_val, compression_code,
+                                      pixel_type, bigtiff_mode);
+    }
+    if (open_rc != 0) {
         const char *msg = writer ? tiff_writer_errmsg(writer) : "unknown";
         tiff_writer_close(writer);
         vectra_error("write_tiff failed: %s", msg);
@@ -227,6 +252,10 @@ void tiff_write_node_typed(VecNode *node, const char *path, int use_deflate,
 
     if (metadata_xml)
         tiff_writer_set_metadata(writer, metadata_xml);
+
+    if (epsg_geographic > 0 || epsg_projected > 0 || crs_citation)
+        tiff_writer_set_crs(writer, epsg_geographic, epsg_projected,
+                            crs_citation);
 
     /* Write all rows at once */
     if (tiff_writer_write_rows(writer, 0, height,

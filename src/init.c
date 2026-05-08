@@ -27,6 +27,40 @@ SEXP C_read_vtr_tdc(SEXP path_sexp);
 SEXP C_read_vtr_tdc_annotations(SEXP path_sexp);
 SEXP C_read_vtr_tdc_stats(SEXP path_sexp);
 
+/* VECR raster entries (r_bridge_raster.c). */
+SEXP C_vec_write_raster(SEXP path_sexp, SEXP data_sexp, SEXP dims_sexp,
+                        SEXP dtype_sexp, SEXP tile_size_sexp,
+                        SEXP gt_sexp, SEXP epsg_sexp, SEXP nodata_sexp,
+                        SEXP band_names_sexp, SEXP compression_sexp);
+SEXP C_vec_open_raster(SEXP path_sexp);
+SEXP C_vec_read_window(SEXP ptr_sexp, SEXP band_sexp, SEXP level_sexp,
+                       SEXP col_min_sexp, SEXP row_min_sexp,
+                       SEXP col_max_sexp, SEXP row_max_sexp);
+SEXP C_vec_extract_points(SEXP ptr_sexp, SEXP x_sexp, SEXP y_sexp);
+SEXP C_vec_close_raster(SEXP ptr_sexp);
+SEXP C_vec_build_overviews(SEXP path_sexp, SEXP n_levels_sexp,
+                           SEXP resampling_sexp, SEXP compression_sexp);
+SEXP C_vec_to_tiff(SEXP vec_path_sexp, SEXP tiff_path_sexp,
+                   SEXP use_deflate_sexp);
+SEXP C_vec_write_time_cube(SEXP path_sexp, SEXP data_sexp, SEXP dims_sexp,
+                           SEXP times_sexp, SEXP dtype_sexp,
+                           SEXP tile_size_sexp,
+                           SEXP gt_sexp, SEXP epsg_sexp, SEXP nodata_sexp,
+                           SEXP band_names_sexp, SEXP compression_sexp);
+SEXP C_vec_read_time_slice(SEXP ptr_sexp, SEXP band_sexp, SEXP level_sexp,
+                           SEXP time_sexp,
+                           SEXP col_min_sexp, SEXP row_min_sexp,
+                           SEXP col_max_sexp, SEXP row_max_sexp);
+SEXP C_vec_write_pixel_cube(SEXP path_sexp, SEXP data_sexp, SEXP dims_sexp,
+                            SEXP times_sexp, SEXP dtype_sexp,
+                            SEXP tile_size_sexp,
+                            SEXP gt_sexp, SEXP epsg_sexp, SEXP nodata_sexp,
+                            SEXP band_names_sexp, SEXP compression_sexp);
+SEXP C_vec_read_pixel_series(SEXP ptr_sexp, SEXP col_sexp, SEXP row_sexp,
+                             SEXP band_sexp, SEXP level_sexp);
+SEXP C_vec_raster_times(SEXP ptr_sexp, SEXP band_sexp, SEXP level_sexp);
+SEXP C_vec_raster_layout(SEXP ptr_sexp);
+
 static const R_CallMethodDef CallEntries[] = {
     {"C_write_vtr",    (DL_FUNC) &C_write_vtr,    7},
     {"C_scan_node",    (DL_FUNC) &C_scan_node,     1},
@@ -50,8 +84,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_tiff_scan_meta",         (DL_FUNC) &C_tiff_scan_meta,         1},
     {"C_tiff_extract_points",    (DL_FUNC) &C_tiff_extract_points,    3},
     {"C_write_tiff",             (DL_FUNC) &C_write_tiff,             3},
-    {"C_write_tiff_typed",       (DL_FUNC) &C_write_tiff_typed,       5},
+    {"C_write_tiff_typed",       (DL_FUNC) &C_write_tiff_typed,       11},
     {"C_tiff_read_metadata",     (DL_FUNC) &C_tiff_read_metadata,     1},
+    {"C_tiff_read_crs",          (DL_FUNC) &C_tiff_read_crs,          1},
     {"C_write_vtr_node", (DL_FUNC) &C_write_vtr_node, 7},
     {"C_append_vtr",     (DL_FUNC) &C_append_vtr,     2},
     {"C_delete_vtr",     (DL_FUNC) &C_delete_vtr,      2},
@@ -68,6 +103,19 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_read_vtr_tdc",             (DL_FUNC) &C_read_vtr_tdc,             1},
     {"C_read_vtr_tdc_annotations", (DL_FUNC) &C_read_vtr_tdc_annotations, 1},
     {"C_read_vtr_tdc_stats",       (DL_FUNC) &C_read_vtr_tdc_stats,       1},
+    {"C_vec_write_raster",         (DL_FUNC) &C_vec_write_raster,         10},
+    {"C_vec_open_raster",          (DL_FUNC) &C_vec_open_raster,          1},
+    {"C_vec_read_window",          (DL_FUNC) &C_vec_read_window,          7},
+    {"C_vec_extract_points",       (DL_FUNC) &C_vec_extract_points,       3},
+    {"C_vec_close_raster",         (DL_FUNC) &C_vec_close_raster,         1},
+    {"C_vec_build_overviews",      (DL_FUNC) &C_vec_build_overviews,      4},
+    {"C_vec_to_tiff",              (DL_FUNC) &C_vec_to_tiff,              3},
+    {"C_vec_write_time_cube",      (DL_FUNC) &C_vec_write_time_cube,      11},
+    {"C_vec_read_time_slice",      (DL_FUNC) &C_vec_read_time_slice,      8},
+    {"C_vec_write_pixel_cube",     (DL_FUNC) &C_vec_write_pixel_cube,     11},
+    {"C_vec_read_pixel_series",    (DL_FUNC) &C_vec_read_pixel_series,    5},
+    {"C_vec_raster_times",         (DL_FUNC) &C_vec_raster_times,         3},
+    {"C_vec_raster_layout",        (DL_FUNC) &C_vec_raster_layout,        1},
     {NULL, NULL, 0}
 };
 

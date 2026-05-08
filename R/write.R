@@ -117,22 +117,45 @@ write_sqlite.data.frame <- function(x, path, table, ...) {
 #'   `"uint8"`, or `"uint16"`.
 #' @param metadata Optional character string of GDAL_METADATA XML to embed
 #'   in the file (tag 42112). Use [tiff_metadata()] to read it back.
+#' @param crs Optional CRS to embed as a GeoKey directory (TIFF tag 34735).
+#'   Accepts an integer EPSG code, an `"EPSG:xxxx"` string, or a list with
+#'   named fields `epsg`, `geographic` (`TRUE`/`FALSE`), and optionally
+#'   `citation`. Codes that are not auto-classified as projected/geographic
+#'   default to projected; pass `geographic = TRUE` to override.
+#'   Use [tiff_crs()] to read it back.
+#' @param tiled Logical; write a tiled GeoTIFF (TIFF tags 322/323/324/325)
+#'   instead of strips. Default `FALSE`. Tiled layout enables random-access
+#'   block reads and is required for Cloud-Optimized GeoTIFF (COG).
+#' @param tile_size Integer; tile edge length in pixels. Must be a positive
+#'   multiple of 16 (TIFF spec). Either a single value (square tiles) or a
+#'   length-2 vector `c(width, height)`. Default `256`. Edge tiles at the
+#'   right and bottom of the image are padded to full tile size with the
+#'   NoData / NaN value.
+#' @param bigtiff Controls BigTIFF dispatch. `"auto"` (default) emits BigTIFF
+#'   when the expected raw payload would exceed the classic-TIFF 4 GB
+#'   ceiling, otherwise emits classic TIFF. `TRUE` forces BigTIFF (magic
+#'   `0x002B`, 64-bit offsets), useful for round-trip tests on small data.
+#'   `FALSE` forces classic TIFF — beware that classic TIFF will silently
+#'   corrupt outputs larger than 4 GB. Tiled BigTIFF is not yet supported.
 #' @param ... Reserved for future use.
 #'
 #' @return Invisible `NULL`.
 #'
 #' @examples
 #' \donttest{
-#' # Write as int16 with DEFLATE compression
+#' # Write as int16 with DEFLATE compression and an EPSG:4326 GeoKey
 #' df <- data.frame(x = 1:4, y = rep(1:2, each = 2), band1 = c(100, 200, 300, 400))
 #' f <- tempfile(fileext = ".tif")
-#' write_tiff(df, f, compress = TRUE, pixel_type = "int16")
+#' write_tiff(df, f, compress = TRUE, pixel_type = "int16", crs = 4326L)
+#' tiff_crs(f)
 #' unlink(f)
 #' }
 #'
 #' @export
 write_tiff <- function(x, path, compress = FALSE, pixel_type = "float64",
-                       metadata = NULL, ...) {
+                       metadata = NULL, crs = NULL,
+                       tiled = FALSE, tile_size = 256L,
+                       bigtiff = "auto", ...) {
   UseMethod("write_tiff")
 }
 
@@ -141,10 +164,101 @@ write_tiff <- function(x, path, compress = FALSE, pixel_type = "float64",
   uint8 = 4L, uint16 = 5L
 )
 
+# Mirrors TIFF_BIGTIFF_AUTO / TIFF_BIGTIFF_OFF / TIFF_BIGTIFF_FORCE in
+# src/tiff_format.h. Keep these in lockstep — they're shipped through
+# C_write_tiff_typed as plain integers.
+.BIGTIFF_AUTO  <- 0L
+.BIGTIFF_OFF   <- 1L
+.BIGTIFF_FORCE <- 2L
+
+.parse_bigtiff <- function(bigtiff) {
+  if (is.null(bigtiff)) return(.BIGTIFF_AUTO)
+  if (is.character(bigtiff) && length(bigtiff) == 1) {
+    if (identical(bigtiff, "auto")) return(.BIGTIFF_AUTO)
+    stop("bigtiff string must be \"auto\" (got '", bigtiff, "')")
+  }
+  if (is.logical(bigtiff) && length(bigtiff) == 1 && !is.na(bigtiff)) {
+    return(if (bigtiff) .BIGTIFF_FORCE else .BIGTIFF_OFF)
+  }
+  stop("bigtiff must be \"auto\", TRUE, or FALSE")
+}
+
+# Translate a user-supplied `crs` argument into (epsg_geographic,
+# epsg_projected, citation). The C side requires us to commit each EPSG to
+# exactly one slot. We classify with a small table covering the common
+# geographic codes (4326 WGS84, 4269 NAD83, the EPSG:42xx historical block
+# and EPSG:4xxx geographic block); everything else is treated as projected,
+# matching the behavior most users want for UTM/Web Mercator/national grids.
+.crs_is_geographic_code <- function(epsg) {
+  if (is.na(epsg)) return(FALSE)
+  # EPSG geographic 2D CRS block is roughly 4001..4999, with a few outliers
+  # in 4xxxx that we don't try to enumerate.
+  epsg >= 4001L && epsg <= 4999L
+}
+
+.parse_crs <- function(crs) {
+  if (is.null(crs)) return(list(epsg_g = 0L, epsg_p = 0L, cit = NULL))
+
+  cit <- NULL
+  geographic <- NULL
+  epsg <- NA_integer_
+
+  if (is.list(crs)) {
+    if (!is.null(crs$epsg))      epsg <- as.integer(crs$epsg)
+    if (!is.null(crs$citation))  cit  <- as.character(crs$citation)
+    if (!is.null(crs$geographic)) geographic <- isTRUE(crs$geographic)
+  } else if (is.character(crs) && length(crs) == 1) {
+    m <- regmatches(crs, regexec("^EPSG:(\\d+)$", crs, ignore.case = TRUE))[[1]]
+    if (length(m) == 2) epsg <- as.integer(m[2])
+    else stop("crs string must look like 'EPSG:xxxx', got '", crs, "'")
+  } else if (is.numeric(crs) && length(crs) == 1) {
+    epsg <- as.integer(crs)
+  } else {
+    stop("crs must be NULL, an integer EPSG, an 'EPSG:xxxx' string, ",
+         "or a list with $epsg")
+  }
+
+  if (is.na(epsg) || epsg <= 0)
+    stop("crs needs a positive integer EPSG code")
+
+  if (is.null(geographic))
+    geographic <- .crs_is_geographic_code(epsg)
+
+  if (geographic)
+    list(epsg_g = epsg, epsg_p = 0L, cit = cit)
+  else
+    list(epsg_g = 0L, epsg_p = epsg, cit = cit)
+}
+
+# Translate (tiled, tile_size) into integer (tile_w, tile_h) for the C side.
+# tile_size accepts a single integer (square tiles) or length-2 c(w, h).
+.parse_tile_size <- function(tiled, tile_size) {
+  if (!isTRUE(tiled)) return(list(w = 0L, h = 0L))
+
+  if (is.null(tile_size))
+    stop("tile_size must be supplied when tiled = TRUE")
+  if (!is.numeric(tile_size) || any(is.na(tile_size)))
+    stop("tile_size must be a positive integer")
+  if (length(tile_size) == 1L) {
+    w <- as.integer(tile_size); h <- w
+  } else if (length(tile_size) == 2L) {
+    w <- as.integer(tile_size[1]); h <- as.integer(tile_size[2])
+  } else {
+    stop("tile_size must have length 1 or 2")
+  }
+  if (w <= 0 || h <= 0)
+    stop("tile_size must be positive")
+  if (w %% 16L != 0L || h %% 16L != 0L)
+    stop("tile_size must be a multiple of 16 (TIFF spec)")
+  list(w = w, h = h)
+}
+
 #' @export
 write_tiff.vectra_node <- function(x, path, compress = FALSE,
                                    pixel_type = "float64",
-                                   metadata = NULL, ...) {
+                                   metadata = NULL, crs = NULL,
+                                   tiled = FALSE, tile_size = 256L,
+                                   bigtiff = "auto", ...) {
   check_scalar_string(path)
   path <- normalizePath(path, mustWork = FALSE)
 
@@ -156,17 +270,25 @@ write_tiff.vectra_node <- function(x, path, compress = FALSE,
   if (!is.null(metadata) && (!is.character(metadata) || length(metadata) != 1))
     stop("metadata must be a single character string or NULL")
 
+  cs <- .parse_crs(crs)
+  ts <- .parse_tile_size(tiled, tile_size)
+  bt <- .parse_bigtiff(bigtiff)
+
   # Always use the typed path — it handles all pixel types including float64
-  .Call(C_write_tiff_typed, x$.node, path, as.logical(compress), pt, metadata)
+  .Call(C_write_tiff_typed, x$.node, path, as.logical(compress), pt, metadata,
+        cs$epsg_g, cs$epsg_p, cs$cit, ts$w, ts$h, bt)
   invisible(NULL)
 }
 
 #' @export
 write_tiff.data.frame <- function(x, path, compress = FALSE,
                                   pixel_type = "float64",
-                                  metadata = NULL, ...) {
+                                  metadata = NULL, crs = NULL,
+                                  tiled = FALSE, tile_size = 256L,
+                                  bigtiff = "auto", ...) {
   write_tiff.vectra_node(df_to_node(x), path, compress, pixel_type,
-                         metadata, ...)
+                         metadata, crs, tiled = tiled,
+                         tile_size = tile_size, bigtiff = bigtiff, ...)
 }
 
 #' Write data to a .vtr file

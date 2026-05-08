@@ -42,6 +42,17 @@ static void fill_string_col_from_batch(SEXP col, int64_t offset,
         int64_t start = arr->buf.str.offsets[j];
         int64_t end = arr->buf.str.offsets[j + 1];
         int slen = (int)(end - start);
+
+        /* Empty strings: shortcut to R's interned empty CHARSXP, skipping
+         * the cache and Rf_mkCharLenCE entirely. arr->buf.str.data may be
+         * NULL when every row in the batch is empty/NA, and feeding NULL
+         * into memcmp / Rf_mkCharLenCE trips UBSAN's nonnull check even
+         * though the length is zero. */
+        if (slen == 0) {
+            SET_STRING_ELT(col, (R_xlen_t)ri, R_BlankString);
+            continue;
+        }
+
         const char *sptr = arr->buf.str.data + start;
 
         SEXP cs = R_NilValue;
@@ -103,7 +114,9 @@ static SEXP apply_annotation(SEXP col, const char *ann) {
     if (!ann) return col;
 
     if (strcmp(ann, "Date") == 0) {
-        Rf_setAttrib(col, R_ClassSymbol, Rf_mkString("Date"));
+        SEXP cls = PROTECT(Rf_mkString("Date"));
+        Rf_setAttrib(col, R_ClassSymbol, cls);
+        UNPROTECT(1);
         return col;
     }
     if (strncmp(ann, "POSIXct|", 8) == 0) {
@@ -112,8 +125,11 @@ static SEXP apply_annotation(SEXP col, const char *ann) {
         SET_STRING_ELT(cls, 0, Rf_mkChar("POSIXct"));
         SET_STRING_ELT(cls, 1, Rf_mkChar("POSIXt"));
         Rf_setAttrib(col, R_ClassSymbol, cls);
-        if (tz[0] != '\0')
-            Rf_setAttrib(col, Rf_install("tzone"), Rf_mkString(tz));
+        if (tz[0] != '\0') {
+            SEXP tzv = PROTECT(Rf_mkString(tz));
+            Rf_setAttrib(col, Rf_install("tzone"), tzv);
+            UNPROTECT(1);
+        }
         UNPROTECT(1);
         return col;
     }
@@ -143,8 +159,9 @@ static SEXP apply_annotation(SEXP col, const char *ann) {
                                          levels, n_levels);
         }
         Rf_setAttrib(icol, R_LevelsSymbol, levels);
-        Rf_setAttrib(icol, R_ClassSymbol, Rf_mkString("factor"));
-        UNPROTECT(2);
+        SEXP fcls = PROTECT(Rf_mkString("factor"));
+        Rf_setAttrib(icol, R_ClassSymbol, fcls);
+        UNPROTECT(3);
         return icol;
     }
     return col;
@@ -752,9 +769,16 @@ SEXP vec_collect(VecNode *root) {
                         else {
                             int64_t start = arr.buf.str.offsets[j];
                             int64_t end = arr.buf.str.offsets[j + 1];
-                            SET_STRING_ELT(cols[i], (R_xlen_t)ri,
-                                Rf_mkCharLenCE(arr.buf.str.data + start,
-                                               (int)(end - start), CE_UTF8));
+                            int slen = (int)(end - start);
+                            /* Skip Rf_mkCharLenCE on a NULL+0 pointer when
+                             * the batch only holds empty/NA strings. */
+                            if (slen == 0) {
+                                SET_STRING_ELT(cols[i], (R_xlen_t)ri, R_BlankString);
+                            } else {
+                                SET_STRING_ELT(cols[i], (R_xlen_t)ri,
+                                    Rf_mkCharLenCE(arr.buf.str.data + start,
+                                                   slen, CE_UTF8));
+                            }
                         }
                     }
                 }

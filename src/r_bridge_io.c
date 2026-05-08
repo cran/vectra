@@ -5,6 +5,7 @@
 #include "csv_scan.h"
 #include "sql_scan.h"
 #include "sql_write.h"
+#include "tiff_format.h"
 #include "tiff_scan.h"
 #include "tiff_write.h"
 #include "vtr_write.h"
@@ -62,12 +63,22 @@ typedef struct {
     int use_deflate;
     int pixel_type;
     const char *metadata_xml;
+    int epsg_geographic;
+    int epsg_projected;
+    const char *crs_citation;
+    int tile_width;
+    int tile_height;
+    int bigtiff_mode;  /* TIFF_BIGTIFF_* */
 } TiffTypedCtx;
 
 static void tiff_typed_writer(VecNode *node, const char *path, void *ctx) {
     TiffTypedCtx *tc = (TiffTypedCtx *)ctx;
-    tiff_write_node_typed(node, path, tc->use_deflate, tc->pixel_type,
-                          tc->metadata_xml);
+    tiff_write_node_typed_ex(node, path, tc->use_deflate, tc->pixel_type,
+                             tc->metadata_xml,
+                             tc->epsg_geographic, tc->epsg_projected,
+                             tc->crs_citation,
+                             tc->tile_width, tc->tile_height,
+                             tc->bigtiff_mode);
 }
 
 typedef struct {
@@ -143,13 +154,19 @@ VtrQuantizeSpec *parse_quantize(SEXP quantize_sexp, SEXP col_names, int n_cols) 
     int n_q = Rf_length(quantize_sexp);
     if (n_q == 0) return NULL;
 
-    SEXP q_names = Rf_getAttrib(quantize_sexp, R_NamesSymbol);
-    if (q_names == R_NilValue || TYPEOF(q_names) != STRSXP)
+    /* PROTECT q_names: rchk treats getAttrib results as fresh-allocated
+     * SEXPs even when they're rooted via `quantize_sexp`'s attribute
+     * pairlist. The Rf_warning / Rf_asReal calls inside the loop below
+     * can allocate. */
+    SEXP q_names = PROTECT(Rf_getAttrib(quantize_sexp, R_NamesSymbol));
+    if (q_names == R_NilValue || TYPEOF(q_names) != STRSXP) {
+        UNPROTECT(1);
         return NULL;
+    }
 
     VtrQuantizeSpec *qspecs = (VtrQuantizeSpec *)calloc((size_t)n_cols,
                                                         sizeof(VtrQuantizeSpec));
-    if (!qspecs) return NULL;
+    if (!qspecs) { UNPROTECT(1); return NULL; }
 
     for (int qi = 0; qi < n_q; qi++) {
         const char *qcol = CHAR(STRING_ELT(q_names, qi));
@@ -185,7 +202,10 @@ VtrQuantizeSpec *parse_quantize(SEXP quantize_sexp, SEXP col_names, int n_cols) 
         VecType target = VEC_INT16; /* default */
         int has_scale = 0;
 
-        SEXP snames = Rf_getAttrib(spec, R_NamesSymbol);
+        /* PROTECT snames per iteration: balanced UNPROTECT before continue
+         * or end-of-iteration. The Rf_asReal / Rf_warning calls below can
+         * trigger GC. */
+        SEXP snames = PROTECT(Rf_getAttrib(spec, R_NamesSymbol));
         int slen = Rf_length(spec);
 
         for (int si = 0; si < slen; si++) {
@@ -221,6 +241,7 @@ VtrQuantizeSpec *parse_quantize(SEXP quantize_sexp, SEXP col_names, int n_cols) 
         }
 
         if (!has_scale || scale <= 0) {
+            UNPROTECT(1); /* snames */
             Rf_warning("quantize: column '%s' needs positive scale or precision", qcol);
             continue;
         }
@@ -229,8 +250,11 @@ VtrQuantizeSpec *parse_quantize(SEXP quantize_sexp, SEXP col_names, int n_cols) 
         qspecs[ci].scale = scale;
         qspecs[ci].offset = offset;
         qspecs[ci].target_type = target;
+
+        UNPROTECT(1); /* snames */
     }
 
+    UNPROTECT(1); /* q_names */
     return qspecs;
 }
 
@@ -243,7 +267,10 @@ VtrSpatialSpec *parse_spatial(SEXP spatial_sexp, SEXP col_names, int n_cols) {
     if (spatial_sexp == R_NilValue || TYPEOF(spatial_sexp) != VECSXP)
         return NULL;
 
-    SEXP s_names = Rf_getAttrib(spatial_sexp, R_NamesSymbol);
+    /* PROTECT s_names: rchk treats getAttrib results as fresh-allocated
+     * SEXPs even when they're rooted via spatial_sexp. The Rf_asReal /
+     * Rf_asInteger calls below can allocate. */
+    SEXP s_names = PROTECT(Rf_getAttrib(spatial_sexp, R_NamesSymbol));
 
     /* Check if this is a global spec (has nx/ny at top level) or per-column */
     int is_global = 0;
@@ -259,7 +286,7 @@ VtrSpatialSpec *parse_spatial(SEXP spatial_sexp, SEXP col_names, int n_cols) {
 
     VtrSpatialSpec *sspecs = (VtrSpatialSpec *)calloc((size_t)n_cols,
                                                        sizeof(VtrSpatialSpec));
-    if (!sspecs) return NULL;
+    if (!sspecs) { UNPROTECT(1); return NULL; }
 
     if (is_global) {
         /* Apply to all numeric columns */
@@ -281,6 +308,7 @@ VtrSpatialSpec *parse_spatial(SEXP spatial_sexp, SEXP col_names, int n_cols) {
 
         if (nx == 0 || ny == 0) {
             free(sspecs);
+            UNPROTECT(1); /* s_names */
             return NULL;
         }
 
@@ -308,7 +336,8 @@ VtrSpatialSpec *parse_spatial(SEXP spatial_sexp, SEXP col_names, int n_cols) {
             }
             if (ci < 0) continue;
 
-            SEXP sn = Rf_getAttrib(spec, R_NamesSymbol);
+            /* PROTECT sn per iteration; balanced UNPROTECT at end. */
+            SEXP sn = PROTECT(Rf_getAttrib(spec, R_NamesSymbol));
             uint32_t nx = 0, ny = 0;
             int predictor = -1;
             uint16_t tile_size = 32;
@@ -333,9 +362,12 @@ VtrSpatialSpec *parse_spatial(SEXP spatial_sexp, SEXP col_names, int n_cols) {
                 sspecs[ci].predictor = predictor;
                 sspecs[ci].tile_size = tile_size;
             }
+
+            UNPROTECT(1); /* sn */
         }
     }
 
+    UNPROTECT(1); /* s_names */
     return sspecs;
 }
 
@@ -472,12 +504,42 @@ SEXP C_tiff_extract_points(SEXP path_sexp, SEXP x_sexp, SEXP y_sexp) {
 
 SEXP C_write_tiff_typed(SEXP node_xptr, SEXP path_sexp,
                         SEXP compress_sexp, SEXP pixel_type_sexp,
-                        SEXP metadata_sexp) {
+                        SEXP metadata_sexp,
+                        SEXP epsg_geog_sexp, SEXP epsg_proj_sexp,
+                        SEXP crs_citation_sexp,
+                        SEXP tile_width_sexp, SEXP tile_height_sexp,
+                        SEXP bigtiff_sexp) {
     TiffTypedCtx ctx;
     ctx.use_deflate = Rf_asLogical(compress_sexp);
     ctx.pixel_type = Rf_asInteger(pixel_type_sexp);
     ctx.metadata_xml = (metadata_sexp == R_NilValue)
                         ? NULL : CHAR(STRING_ELT(metadata_sexp, 0));
+    ctx.epsg_geographic = (epsg_geog_sexp == R_NilValue)
+                          ? 0 : Rf_asInteger(epsg_geog_sexp);
+    ctx.epsg_projected  = (epsg_proj_sexp == R_NilValue)
+                          ? 0 : Rf_asInteger(epsg_proj_sexp);
+    if (ctx.epsg_geographic == NA_INTEGER) ctx.epsg_geographic = 0;
+    if (ctx.epsg_projected  == NA_INTEGER) ctx.epsg_projected  = 0;
+    ctx.crs_citation = (crs_citation_sexp == R_NilValue)
+                        ? NULL : CHAR(STRING_ELT(crs_citation_sexp, 0));
+    ctx.tile_width  = (tile_width_sexp  == R_NilValue)
+                       ? 0 : Rf_asInteger(tile_width_sexp);
+    ctx.tile_height = (tile_height_sexp == R_NilValue)
+                       ? 0 : Rf_asInteger(tile_height_sexp);
+    if (ctx.tile_width  == NA_INTEGER) ctx.tile_width  = 0;
+    if (ctx.tile_height == NA_INTEGER) ctx.tile_height = 0;
+
+    /* bigtiff: integer 0/1/2 = AUTO/OFF/FORCE. Defaults to AUTO when NULL. */
+    ctx.bigtiff_mode = TIFF_BIGTIFF_AUTO;
+    if (bigtiff_sexp != R_NilValue) {
+        int bm = Rf_asInteger(bigtiff_sexp);
+        if (bm == NA_INTEGER) bm = TIFF_BIGTIFF_AUTO;
+        if (bm == TIFF_BIGTIFF_OFF || bm == TIFF_BIGTIFF_FORCE
+            || bm == TIFF_BIGTIFF_AUTO) {
+            ctx.bigtiff_mode = bm;
+        }
+    }
+
     return write_node_dispatch(node_xptr, path_sexp, tiff_typed_writer, &ctx);
 }
 
@@ -515,14 +577,16 @@ SEXP C_tiff_scan_meta(SEXP node_xptr) {
     TiffScanNode *sn = (TiffScanNode *)node;
     TiffReader *r = sn->reader;
 
-    SEXP result = PROTECT(Rf_allocVector(VECSXP, 5));
-    SEXP names = PROTECT(Rf_allocVector(STRSXP, 5));
+    SEXP result = PROTECT(Rf_allocVector(VECSXP, 7));
+    SEXP names = PROTECT(Rf_allocVector(STRSXP, 7));
 
     SET_STRING_ELT(names, 0, Rf_mkChar("width"));
     SET_STRING_ELT(names, 1, Rf_mkChar("height"));
     SET_STRING_ELT(names, 2, Rf_mkChar("nbands"));
     SET_STRING_ELT(names, 3, Rf_mkChar("gt"));
     SET_STRING_ELT(names, 4, Rf_mkChar("nodata"));
+    SET_STRING_ELT(names, 5, Rf_mkChar("epsg"));
+    SET_STRING_ELT(names, 6, Rf_mkChar("crs_citation"));
 
     SET_VECTOR_ELT(result, 0, Rf_ScalarReal((double)tiff_reader_width(r)));
     SET_VECTOR_ELT(result, 1, Rf_ScalarReal((double)tiff_reader_height(r)));
@@ -538,8 +602,51 @@ SEXP C_tiff_scan_meta(SEXP node_xptr) {
     else
         SET_VECTOR_ELT(result, 4, Rf_ScalarReal(NA_REAL));
 
+    int32_t epsg = tiff_reader_epsg(r);
+    SET_VECTOR_ELT(result, 5,
+        Rf_ScalarInteger(epsg > 0 ? (int)epsg : NA_INTEGER));
+
+    const char *cit = tiff_reader_crs_citation(r);
+    if (cit)
+        SET_VECTOR_ELT(result, 6, Rf_mkString(cit));
+    else
+        SET_VECTOR_ELT(result, 6, Rf_ScalarString(NA_STRING));
+
     Rf_setAttrib(result, R_NamesSymbol, names);
     UNPROTECT(3);
+    return result;
+}
+
+/* --- C_tiff_read_crs --- */
+
+SEXP C_tiff_read_crs(SEXP path_sexp) {
+    const char *fpath = CHAR(STRING_ELT(path_sexp, 0));
+
+    TiffReader *reader = NULL;
+    if (tiff_reader_open(fpath, &reader) != 0) {
+        const char *msg = reader ? tiff_reader_errmsg(reader) : "unknown";
+        tiff_reader_close(reader);
+        vectra_error("cannot open GeoTIFF: %s", msg);
+    }
+
+    SEXP result = PROTECT(Rf_allocVector(VECSXP, 2));
+    SEXP names  = PROTECT(Rf_allocVector(STRSXP, 2));
+    SET_STRING_ELT(names, 0, Rf_mkChar("epsg"));
+    SET_STRING_ELT(names, 1, Rf_mkChar("citation"));
+
+    int32_t epsg = tiff_reader_epsg(reader);
+    SET_VECTOR_ELT(result, 0,
+        Rf_ScalarInteger(epsg > 0 ? (int)epsg : NA_INTEGER));
+
+    const char *cit = tiff_reader_crs_citation(reader);
+    if (cit)
+        SET_VECTOR_ELT(result, 1, Rf_mkString(cit));
+    else
+        SET_VECTOR_ELT(result, 1, Rf_ScalarString(NA_STRING));
+
+    Rf_setAttrib(result, R_NamesSymbol, names);
+    tiff_reader_close(reader);
+    UNPROTECT(2);
     return result;
 }
 
