@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-05-07" />
+<meta name="date" content="2026-06-12" />
 
 <title>Working with Large Data</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Working with Large Data</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-05-07</h4>
+<h4 class="date">2026-06-12</h4>
 
 
 
@@ -590,7 +590,13 @@ small-batch file can prune most groups using zone maps:</p>
 <span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;   year &lt;int64&gt;</span></span>
 <span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   abundance &lt;int64&gt;</span></span>
 <span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt;   cover_pct &lt;double&gt;</span></span>
-<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt;   quality &lt;string&gt;</span></span></code></pre></div>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt;   quality &lt;string&gt;</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: streaming scan&gt;</span></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 per consumption (lazy)</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(one batch)</span></span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n) per pass</span></span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt;   note             : plain query node; re-reading re-runs the upstream pipeline</span></span></code></pre></div>
 <p>CSV and SQLite sources also have a <code>batch_size</code> parameter,
 but it controls how many rows the scanner reads per pull rather than how
 the file is structured on disk. The default of 65,536 works well for

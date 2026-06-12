@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-05-07" />
+<meta name="date" content="2026-06-12" />
 
 <title>Getting Started with vectra</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Getting Started with vectra</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-05-07</h4>
+<h4 class="date">2026-06-12</h4>
 
 
 
@@ -582,7 +582,13 @@ where predicate pushdown applies.</p>
 <span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
 <span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
 <span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
-<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: streaming scan&gt;</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 per consumption (lazy)</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(one batch)</span></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n) per pass</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt;   note             : plain query node; re-reading re-runs the upstream pipeline</span></span></code></pre></div>
 <p>The ProjectNode prunes columns before the data reaches R. The
 FilterNode sits below it, and the ScanNode reads from disk. When a hash
 index exists on the filter column, the scan node probes the
@@ -1885,7 +1891,13 @@ output column schema at each level.</p>
 <span id="cb68-13"><a href="#cb68-13" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
 <span id="cb68-14"><a href="#cb68-14" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
 <span id="cb68-15"><a href="#cb68-15" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
-<span id="cb68-16"><a href="#cb68-16" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
+<span id="cb68-16"><a href="#cb68-16" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
+<span id="cb68-17"><a href="#cb68-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb68-18"><a href="#cb68-18" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: streaming scan&gt;</span></span>
+<span id="cb68-19"><a href="#cb68-19" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 per consumption (lazy)</span></span>
+<span id="cb68-20"><a href="#cb68-20" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(one batch)</span></span>
+<span id="cb68-21"><a href="#cb68-21" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n) per pass</span></span>
+<span id="cb68-22"><a href="#cb68-22" tabindex="-1"></a><span class="co">#&gt;   note             : plain query node; re-reading re-runs the upstream pipeline</span></span></code></pre></div>
 <p>Several things to look for in the plan:</p>
 <p><strong>Streaming vs. materializing.</strong> FilterNode and
 ProjectNode are streaming: they process one batch at a time in constant

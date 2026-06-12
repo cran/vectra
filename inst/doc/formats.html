@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-05-07" />
+<meta name="date" content="2026-06-12" />
 
 <title>Format Backends</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Format Backends</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-05-07</h4>
+<h4 class="date">2026-06-12</h4>
 
 
 
@@ -810,9 +810,9 @@ data per block.</p>
 <span id="cb17-14"><a href="#cb17-14" tabindex="-1"></a><span class="fu">tbl_csv</span>(csv) <span class="sc">|&gt;</span> <span class="fu">write_vtr</span>(f_default)</span>
 <span id="cb17-15"><a href="#cb17-15" tabindex="-1"></a></span>
 <span id="cb17-16"><a href="#cb17-16" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Small batches:&quot;</span>, <span class="fu">file.size</span>(f_small), <span class="st">&quot;bytes</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a><span class="co">#&gt; Small batches: 8254 bytes</span></span>
+<span id="cb17-17"><a href="#cb17-17" tabindex="-1"></a><span class="co">#&gt; Small batches: 8258 bytes</span></span>
 <span id="cb17-18"><a href="#cb17-18" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Default:      &quot;</span>, <span class="fu">file.size</span>(f_default), <span class="st">&quot;bytes</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a><span class="co">#&gt; Default:       8254 bytes</span></span></code></pre></div>
+<span id="cb17-19"><a href="#cb17-19" tabindex="-1"></a><span class="co">#&gt; Default:       8258 bytes</span></span></code></pre></div>
 <p>For <code>tbl_tiff</code>, the default batch size is 256 raster rows,
 reflecting the high per-row density of raster data. Increasing it speeds
 up reads on files with few bands. Decreasing it helps when many bands
