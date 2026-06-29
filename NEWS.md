@@ -1,3 +1,219 @@
+# vectra 0.9.7
+
+## Geometry functions in mutate(), filter(), and summarise()
+
+* A family of `st_*` geometry functions now runs inside the expression verbs,
+  on the GEOS C library straight off the hex-WKB geometry column, with no
+  per-batch round-trip through `sf`. `tbl(f) |> filter(st_area(geometry) > 1e6)`
+  prunes the stream in C, and `mutate(geometry = st_centroid(geometry))` adds a
+  new hex-WKB geometry column. See `?geom_expressions`.
+* Measures (return a number): `st_area()`, `st_length()` / `st_perimeter()`,
+  `st_x()`, `st_y()`, `st_npoints()`, `st_ngeometries()`, and the binary
+  `st_distance()`.
+* Predicates (return TRUE/FALSE): unary `st_is_valid()`, `st_is_empty()`,
+  `st_is_simple()`, and the binary topological relations `st_intersects()`,
+  `st_within()`, `st_contains()`, `st_overlaps()`, `st_touches()`,
+  `st_crosses()`, `st_equals()`, `st_disjoint()`, `st_covers()`,
+  `st_covered_by()`. The second geometry is another geometry column, a constant
+  `sf`/`sfc` object (parsed once and reused across the stream), or a hex-WKB
+  string.
+* Transforms (return a geometry as hex-WKB): `st_centroid()`,
+  `st_point_on_surface()`, `st_boundary()`, `st_envelope()`,
+  `st_convex_hull()`, `st_make_valid()`, the parameterized `st_buffer(g, dist)`
+  and `st_simplify(g, tol)`, and the type name `st_geometry_type()`.
+* The per-row decode is parallelized with OpenMP. A missing or unparseable
+  geometry yields `NA` for that row rather than an error.
+
+## Documentation
+
+* New vignettes covering the spatial surface added since 0.9.1: "Geometry
+  functions in expressions" (the `st_*` functions inside `mutate()`/`filter()`/
+  `summarise()`), "Coverage and topology" (the set-wise verbs:
+  `spatial_polygonize()`, `spatial_line_merge()`, `spatial_simplify()`,
+  `spatial_eliminate()`, `spatial_explode()`, `spatial_topology()`,
+  `spatial_centerline()`, `spatial_construct()`, `spatial_snap_grid()`,
+  `spatial_locate()`), and "Network analysis" (`spatial_network()`,
+  `spatial_route()`, `spatial_service_area()`).
+
+## Bug fixes
+
+* Fixed installation failure on R-devel with clang 22 (CRAN's
+  `r-devel-linux-x86_64-fedora-clang`). Six source files included `<omp.h>`
+  directly after R's headers; clang 22's `omp.h` begins with a `declare
+  variant match(...)` clause that R's `match` -> `Rf_match` macro rewrote into
+  invalid syntax. All OpenMP usage now routes through `vec_omp.h`, which
+  forward-declares the runtime functions instead of including the wrapper.
+
+# vectra 0.9.6
+
+## Network analysis
+
+* `spatial_network()` builds a routable graph from a line layer: nodes at line
+  endpoints (snapped within `tolerance`), edges weighted by geometry length or a
+  `weight` column, optionally directed with one-way codes (`direction`,
+  `weight_to`). The graph and the shortest-path solver are native C (a
+  binary-heap Dijkstra over a CSR adjacency, no `igraph` dependency); the graph
+  is held resident in a `vectra_network` object, the network counterpart of a
+  resident `sf` `y`, while the query verbs stream.
+* `spatial_route()` streams a layer of origins past a resident network and
+  returns the shortest path from each origin to one or more destinations `to`,
+  one row per (origin, destination) with the cost and the route geometry. With
+  `geometry = FALSE` it returns only the cost, so a destination set per origin is
+  the origin-destination cost matrix in long form. Unreachable pairs return an
+  infinite cost rather than dropping the row.
+* `spatial_service_area()` streams origins and, per origin, returns the part of
+  the network reachable within a cost budget -- the convex-hull service area
+  (`output = "polygon"`), the reachable edges (`"lines"`), or the reachable
+  nodes (`"nodes"`). A vector `cost` returns nested travel-cost isochrone bands,
+  one row per (origin, band).
+* The solver parallelises over a batch of origins with OpenMP; the graph is the
+  resident budget while the query side scales by streaming.
+
+# vectra 0.9.5
+
+## Coverage cleanup
+
+* `spatial_eliminate()` cleans a polygon coverage by absorbing every feature
+  smaller than `max_area` into a neighbour (the QGIS "Eliminate"): each sliver
+  joins the neighbour it shares the longest border with, or the largest-area
+  neighbour with `into = "largest_area"`. An area-rooted union-find collapses
+  chains of slivers so a connected run flows to its single largest member, whose
+  attributes survive, and a sliver with no neighbour is kept unchanged. Rides the
+  partition tier alongside `spatial_dissolve()`.
+
+# vectra 0.9.4
+
+## Centerline and planar topology
+
+* `spatial_centerline()` traces the centerline (medial axis) of each streamed
+  polygon from the Voronoi diagram of its densified boundary: the Voronoi edges
+  that fall inside the polygon are its skeleton, merged into maximal lines.
+  `density` sets the boundary sampling and `prune` drops the short spurs the
+  skeleton grows toward convex corners. The usual approximation for river or road
+  centerlines from a filled shape; non-polygon geometry passes through unchanged.
+* `spatial_topology()` decomposes a polygon coverage into the arcs of its planar
+  topology: the unioned boundaries are noded so a shared border becomes one arc,
+  tagged with the identifiers of the (up to two) polygons on either side -- two
+  for an internal shared edge, one for an outer edge. Rides the partition tier
+  and is the inverse of `spatial_polygonize()`.
+
+# vectra 0.9.3
+
+## Set-wise topology verbs and linear referencing
+
+* `spatial_polygonize()` builds the polygonal faces enclosed by a line network
+  (the QGIS "Polygonize", the inverse of taking polygon boundaries): a group's
+  lines are unioned and noded, then the faces of that arrangement are returned,
+  one per row. Like `spatial_dissolve()` and `spatial_construct()` it rides the
+  partition tier, with an optional `by` to polygonize within groups.
+* `spatial_line_merge()` sews line segments that meet end to end into maximal
+  linestrings (the line counterpart of a dissolve), one row per chain; segments
+  meeting at a junction of degree greater than two stay separate.
+* `spatial_simplify()` simplifies a polygon coverage without tearing shared
+  edges: boundaries are unioned so a shared border is one line, noded into arcs,
+  each arc simplified once with its junction endpoints pinned, and
+  re-polygonized, so adjacent polygons stay edge-matched with no slivers. This is
+  the topology-preserving simplification a per-feature
+  `spatial_map(~ sf::st_simplify())` cannot give, because that simplifies each
+  polygon's copy of a shared border independently. Each simplified face keeps its
+  source polygon's attributes.
+* `spatial_locate()` locates streamed points along a resident line layer (linear
+  referencing): each point gets its nearest line's identifier, the measure
+  (distance along that line), and the perpendicular offset, with an optional
+  `snap` onto the line. The inverse (a measure back to a point) is
+  `sf::st_line_interpolate()` through `spatial_map()`.
+* The partition tier shared by `spatial_dissolve()`, `spatial_construct()`, and
+  the three new set-wise verbs is now a single internal `.partition_each` router
+  rather than re-inlined in each verb.
+
+# vectra 0.9.2
+
+## Two-layer `spatial_overlay()`
+
+* `spatial_overlay()` gains a second layer `y`: instead of self-unioning one
+  layer it nodes two layers into one planar partition and carries the attributes
+  of the covering `x`-record and `y`-record onto each piece. A `how` argument
+  selects which pieces to keep -- `"intersection"` (covered by both),
+  `"union"` (every piece of either, the absent side filled with `NA`),
+  `"identity"` (all of `x` split by `y`), or `"symdiff"` (pieces in exactly one
+  layer). `vars_y` selects the carried `y` columns, and a name shared with an `x`
+  column is disambiguated with a `.x` / `.y` suffix. `y` accepts an `sf` object
+  or a file path (`layer_y` / `query_y`) read in batches, and must share the CRS
+  of `x`. With `y = NULL` (the default) the behaviour is unchanged. This reuses
+  the existing noding, deduplication, component-tiling, and streaming machinery,
+  so a two-layer overlay scales the same way the self-union does.
+
+## `spatial_explode()`
+
+* New `spatial_explode()` streams a query and splits every multipart geometry
+  into its single-part components -- a `MULTIPOLYGON` into one row per polygon, a
+  `MULTILINESTRING` into linestrings, a `MULTIPOINT` into points, and a
+  `GEOMETRYCOLLECTION` into its members (recursively) -- copying the source
+  attributes onto each part. Single-part and empty geometries pass through as one
+  row. An optional `part` argument names a 1-based part-index column. It is the
+  streaming counterpart of the QGIS "multipart to singleparts" tool, processing
+  one batch at a time, and the inverse of `spatial_dissolve()`.
+
+## `spatial_construct()`
+
+* New `spatial_construct()` builds a set-wise geometry construction from a whole
+  feature set -- the constructions a per-feature `spatial_map()` cannot express.
+  A `kind` argument selects it: `"convex_hull"`, `"concave_hull"`, `"envelope"`,
+  `"oriented_box"`, `"enclosing_circle"`, `"inscribed_circle"`, `"pole"` (the
+  pole of inaccessibility, the centre of the maximum inscribed circle),
+  `"voronoi"`, and `"delaunay"`. Like `spatial_dissolve()` it rides the partition
+  tier: a `by` argument routes the layer into one shard per group and builds one
+  construction per group, with `NULL` constructing from the whole layer. The
+  enclosing kinds emit one feature per group; the tessellations emit one polygon
+  per cell, each carrying the group's `by` values.
+
+## `spatial_snap_grid()` and `spatial_snap()`
+
+* New `spatial_snap_grid()` rounds a streamed layer's coordinates to a regular
+  grid of a given spacing and repairs the result, one batch at a time. It is the
+  fixed-precision snap-rounding `spatial_overlay()` applies internally, exposed
+  as a standalone verb, so a layer can be cleaned of slivers or pre-noded to a
+  common precision without running a full overlay. The snap runs in C straight
+  off the hex-WKB column, one cleaned geometry per input feature.
+* New `spatial_snap()` snaps a streamed layer's vertices and edges toward a
+  resident reference layer when they lie within a tolerance (the QGIS "snap
+  geometries to layer"), closing the small gaps and overshoots between two layers
+  that should share a boundary. The reference layer stays resident while the left
+  stream flows past one batch at a time.
+
+## `spatial_knn()`
+
+* New `spatial_knn()` finds, for each feature of a streamed layer, the `k`
+  nearest features of a small resident layer, returning one row per (left,
+  neighbour) pair with the neighbour's rank, identifier, and distance. Where
+  `spatial_join()` with `st_nearest_feature` attaches only the single nearest
+  match, this returns the top `k` and the distances -- the nearest-`k` query and
+  the building block of a distance matrix. Distances follow `sf::st_distance()`
+  (planar in CRS units, or great-circle metres when spherical geometry is on).
+
+## `spatial_smooth()`
+
+* New `spatial_smooth()` rounds the corners of streamed lines and polygons by
+  Chaikin corner-cutting, one batch at a time. Each iteration replaces every
+  vertex with two points a quarter and three-quarters along its adjacent edges;
+  open lines keep their endpoints, polygon rings are cut cyclically. The
+  smoothing is computed directly on the coordinates (no GEOS call), so it is
+  dependency-light. Densifying and sampling points along a line stay
+  `spatial_map()` recipes (`~ sf::st_segmentize(.x, dfMaxLength)`,
+  `~ sf::st_line_sample(.x, n)`).
+
+## `spatial_split()`
+
+* New `spatial_split()` cuts a streamed layer against a small resident `blade`
+  layer (the QGIS "split with lines"), one batch at a time: a polygon is divided
+  into the faces the blade carves out, a line into the arcs between crossings, and
+  each piece is emitted as its own row with the source attributes copied. A
+  feature the blade misses passes through as a single piece. With
+  `extract = "points"` it instead returns the points where each feature meets the
+  blade (the "line intersections" tool), dropping features that do not cross. The
+  split is built from \pkg{sf}/GEOS noding and polygonization and expects planar
+  coordinates.
+
 # vectra 0.9.1
 
 ## `spatial_overlay()` noding and deduplication

@@ -576,6 +576,45 @@
   acc$finish(crs = if (!is.null(out_crs)) out_crs else crs, empty_geom = out_geom)
 }
 
+# Decompose one sfg into its single-part components: a MULTI* into its parts, a
+# GEOMETRYCOLLECTION recursively into the parts of its members, and an already
+# single-part geometry into itself. An empty multi-geometry has no parts, so it
+# passes through as a single row rather than vanishing.
+.parts_of <- function(g) {
+  out <- switch(class(g)[2L],
+    MULTIPOLYGON    = lapply(unclass(g), sf::st_polygon),
+    MULTILINESTRING = lapply(unclass(g), sf::st_linestring),
+    MULTIPOINT      = {
+      m <- unclass(g)
+      if (!length(m)) list()
+      else lapply(seq_len(nrow(m)), function(i) sf::st_point(m[i, ]))
+    },
+    GEOMETRYCOLLECTION = unlist(lapply(g, .parts_of), recursive = FALSE),
+    list(g))
+  if (length(out)) out else list(g)
+}
+
+# Explode one decoded sf batch: replace each multipart feature with one row per
+# part, replicating the attributes. `part` (when set) numbers the parts within
+# each input feature, 1-based.
+.explode_batch <- function(sb, part) {
+  if (!is.null(part) && part %in% names(sb))
+    stop(sprintf("part column '%s' already exists in `x`; pass part=", part))
+  if (nrow(sb) == 0L) {
+    if (!is.null(part)) sb[[part]] <- integer(0)
+    return(sb)
+  }
+  g     <- sf::st_geometry(sb)
+  parts <- lapply(g, .parts_of)
+  np    <- lengths(parts)
+  out   <- sb[rep.int(seq_len(nrow(sb)), np), , drop = FALSE]
+  sf::st_geometry(out) <- sf::st_sfc(unlist(parts, recursive = FALSE),
+                                     crs = sf::st_crs(g))
+  if (!is.null(part))
+    out[[part]] <- unlist(lapply(np, seq_len), use.names = FALSE)
+  out
+}
+
 # -- front doors --------------------------------------------------------------
 
 #' Stream a query through an sf transform
@@ -649,6 +688,61 @@ spatial_map <- function(x, fn, geom = "geometry", coords = NULL, crs = NA,
   if (is.null(out_geom)) out_geom <- if (is.null(coords)) geom else "geometry"
   fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
   .spatial_stream(x, fn, geom, coords, crs, out_geom, fr)
+}
+
+#' Explode multipart geometries into single-part features
+#'
+#' Streams a lazy vectra query and splits every multipart geometry into its
+#' component single-part geometries: a `MULTIPOLYGON` becomes one row per
+#' polygon, a `MULTILINESTRING` one row per linestring, a `MULTIPOINT` one row
+#' per point, and a `GEOMETRYCOLLECTION` one row per member (recursively). The
+#' attributes of the source feature are copied onto each part. Already
+#' single-part geometries pass through unchanged, as does an empty geometry
+#' (kept as one row). This is the streaming counterpart of the QGIS
+#' "multipart to singleparts" tool and of [sf::st_cast()] to a single-part type.
+#'
+#' One batch is decoded, exploded, and spilled at a time, so peak memory tracks
+#' one batch and its parts, not the whole layer.
+#'
+#' @inheritParams spatial_map
+#' @param part Optional name of an integer column numbering the parts within each
+#'   source feature, 1-based. Default `NULL` adds no such column.
+#'
+#' @return A `vectra_node` of single-part features, backed by temporary `.vtr`
+#'   spills (removed when the node is garbage-collected) and carrying the input
+#'   CRS.
+#'
+#' @seealso [spatial_map()] for per-feature transforms, [spatial_dissolve()] to
+#'   merge features the other way, [collect_sf()] to materialize as `sf`.
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' mp <- sf::st_multipolygon(list(
+#'   list(rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0, 0))),
+#'   list(rbind(c(2, 2), c(3, 2), c(3, 3), c(2, 3), c(2, 2)))))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   id = 1L,
+#'   geometry = sf::st_as_binary(sf::st_sfc(mp), hex = TRUE)
+#' ), f)
+#'
+#' # One row per polygon, attributes copied, parts numbered.
+#' tbl(f) |> spatial_explode(part = "part_id") |> collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_explode <- function(x, geom = "geometry", crs = NA, out_geom = NULL,
+                            part = NULL, flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (build one with tbl(), tbl_csv(), ...)")
+  if (!is.null(part) && (!is.character(part) || length(part) != 1L))
+    stop("`part` must be a single column name, or NULL")
+  crs <- .resolve_crs(x, crs)
+  if (is.null(out_geom)) out_geom <- geom
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  .spatial_stream(x, function(sb) .explode_batch(sb, part),
+                  geom, coords = NULL, crs = crs, out_geom = out_geom,
+                  flush_rows = fr)
 }
 
 #' Spatial join a streamed query against a resident sf object
@@ -1290,6 +1384,501 @@ spatial_clip <- function(x, mask, erase = FALSE, geom = "geometry",
   .spatial_stream(x, batch_fn, geom, coords, crs, out_geom, fr)
 }
 
+# -- snapping and topology cleanup --------------------------------------------
+
+# Snap one batch's geometry to a fixed-precision grid using the same C
+# snap-rounding the overlay noder uses internally: each geometry crosses to C as
+# WKB, is rounded to the `size` lattice and made valid, and comes back as cleaned
+# WKB. The count is preserved (one cleaned geometry per input), so attributes
+# ride through untouched.
+.snap_grid_batch <- function(sb, size, nt) {
+  g  <- sf::st_geometry(sb)
+  w  <- sf::st_as_binary(g, EWKB = FALSE)
+  pr <- .Call(C_overlay_parse, w, as.double(size), as.integer(nt))
+  g2 <- sf::st_as_sfc(structure(pr[[2L]], class = "WKB"), EWKB = FALSE)
+  sf::st_set_geometry(sb, sf::st_set_crs(g2, sf::st_crs(g)))
+}
+
+#' Snap a streamed layer's coordinates to a fixed grid
+#'
+#' Rounds every coordinate of a streamed layer to a regular grid of spacing
+#' `size` (in CRS units) and repairs the result, one batch at a time. This is the
+#' fixed-precision snap-rounding the overlay noder
+#' ([spatial_overlay()]) applies internally, exposed as a standalone verb: it
+#' merges near-coincident vertices and removes the slivers that floating-point
+#' coordinates leave between shared boundaries, so a layer can be cleaned (or
+#' pre-noded to a common precision) without running a full overlay. Snapping is
+#' done in C straight off the hex-WKB column; one cleaned geometry comes back per
+#' input feature, so attributes ride through untouched.
+#'
+#' Geometry travels through the engine as hex-encoded WKB in a string column and
+#' the CRS is carried on the returned node; use [collect_sf()] to materialize.
+#' The \pkg{sf} package is an optional dependency (Suggests).
+#'
+#' @inheritParams spatial_map
+#' @param size Grid spacing in CRS units (a positive number). Coordinates are
+#'   rounded to the nearest multiple; a larger `size` snaps more aggressively.
+#'
+#' @return A `vectra_node` of the snapped geometry with `x`'s attributes, backed
+#'   by temporary `.vtr` spills (removed when the node is garbage-collected) and
+#'   carrying the input CRS.
+#'
+#' @seealso [spatial_snap()] to snap toward another layer instead of a grid,
+#'   [spatial_overlay()] whose noding uses the same snap-rounding, [collect_sf()].
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' p <- sf::st_polygon(list(rbind(c(0.04, 0.03), c(1.02, 0.01),
+#'                                c(0.98, 1.03), c(0.01, 0.97), c(0.04, 0.03))))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   id = 1L, geometry = sf::st_as_binary(sf::st_sfc(p), hex = TRUE)
+#' ), f)
+#'
+#' # Snap the jittered corners back onto a 0.1 grid.
+#' tbl(f) |> spatial_snap_grid(0.1) |> collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_snap_grid <- function(x, size, geom = "geometry", crs = NA,
+                              out_geom = NULL, flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed layer to snap)")
+  if (!is.numeric(size) || length(size) != 1L || !is.finite(size) || size <= 0)
+    stop("`size` must be a single positive number (the grid spacing)")
+  crs <- .resolve_crs(x, crs)
+  if (is.null(out_geom)) out_geom <- geom
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  nt <- .spatial_threads()
+  .spatial_stream(x, function(sb) .snap_grid_batch(sb, size, nt),
+                  geom, coords = NULL, crs = crs, out_geom = out_geom,
+                  flush_rows = fr)
+}
+
+#' Snap a streamed layer toward a resident reference layer
+#'
+#' Streams a large layer `x` through the engine and snaps each batch's vertices
+#' toward a small resident reference layer `y` when they lie within `tolerance`
+#' (in CRS units), one batch at a time (the QGIS "snap geometries to layer").
+#' Vertices and edges of `x` closer than `tolerance` to `y` are pulled onto `y`,
+#' which closes the small gaps and overshoots between two layers that should
+#' share a boundary. The reference layer stays resident while the billion-row
+#' left stream flows past; the snap itself is \pkg{sf}'s [sf::st_snap()].
+#'
+#' Geometry travels through the engine as hex-encoded WKB in a string column and
+#' the CRS is carried on the returned node; use [collect_sf()] to materialize.
+#' When `y` carries no CRS it inherits the stream's. The \pkg{sf} package is an
+#' optional dependency (Suggests).
+#'
+#' @inheritParams spatial_map
+#' @param y An `sf` or `sfc` object: the resident reference layer to snap toward.
+#' @param tolerance Snapping distance in CRS units (a positive number). Vertices
+#'   and edges of `x` within this distance of `y` are moved onto `y`.
+#'
+#' @return A `vectra_node` of the snapped geometry with `x`'s attributes, backed
+#'   by temporary `.vtr` spills (removed when the node is garbage-collected) and
+#'   carrying the input CRS.
+#'
+#' @seealso [spatial_snap_grid()] to snap to a grid instead of a layer,
+#'   [spatial_clip()] for the resident-mask streaming pattern, [collect_sf()].
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' ref <- sf::st_sfc(sf::st_linestring(rbind(c(0, 0), c(10, 0))))
+#' line <- sf::st_linestring(rbind(c(0, 0.2), c(5, 0.1), c(10, 0.2)))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   id = 1L, geometry = sf::st_as_binary(sf::st_sfc(line), hex = TRUE)
+#' ), f)
+#'
+#' # Pull the near-zero vertices down onto the reference line.
+#' tbl(f) |> spatial_snap(ref, tolerance = 0.5) |> collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_snap <- function(x, y, tolerance, geom = "geometry", coords = NULL,
+                         crs = NA, out_geom = NULL, flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed layer to snap)")
+  if (!inherits(y, "sf") && !inherits(y, "sfc"))
+    stop("`y` must be an sf or sfc object (the resident reference layer)")
+  if (!is.numeric(tolerance) || length(tolerance) != 1L ||
+      !is.finite(tolerance) || tolerance <= 0)
+    stop("`tolerance` must be a single positive number (the snap distance)")
+  crs  <- .resolve_crs(x, crs)
+  y    <- .align_resident_crs(y, crs)
+  yg   <- sf::st_geometry(y)
+  if (is.null(out_geom)) out_geom <- if (is.null(coords)) geom else "geometry"
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  batch_fn <- function(sb) sf::st_snap(sb, yg, tolerance = tolerance)
+  .spatial_stream(x, batch_fn, geom, coords, crs, out_geom, fr)
+}
+
+# -- line / polygon smoothing (Chaikin corner-cutting) ------------------------
+
+# One Chaikin pass over an open polyline: each segment P_i -> P_{i+1} yields two
+# points at 1/4 and 3/4 of the way, cutting the corner. `keep_ends` pins the
+# first and last vertices so an open line is not shortened at its tips. Repeated
+# `iterations` times; a line too short to cut is returned unchanged.
+.chaikin_open <- function(m, iterations, keep_ends) {
+  for (it in seq_len(iterations)) {
+    n <- nrow(m)
+    if (n < 3L) break
+    i <- seq_len(n - 1L)
+    q <- 0.75 * m[i, , drop = FALSE] + 0.25 * m[i + 1L, , drop = FALSE]
+    r <- 0.25 * m[i, , drop = FALSE] + 0.75 * m[i + 1L, , drop = FALSE]
+    body <- matrix(0, 2L * length(i), ncol(m))
+    body[seq.int(1L, by = 2L, length.out = length(i)), ] <- q
+    body[seq.int(2L, by = 2L, length.out = length(i)), ] <- r
+    m <- if (keep_ends) rbind(m[1L, , drop = FALSE], body, m[n, , drop = FALSE])
+         else body
+  }
+  m
+}
+
+# One Chaikin pass over a closed ring (first vertex repeated as the last). The
+# cut runs cyclically over every edge, including the closing one, and the result
+# is re-closed; corner-cutting shrinks the ring slightly, as Chaikin does.
+.chaikin_ring <- function(m, iterations) {
+  for (it in seq_len(iterations)) {
+    p <- m[-nrow(m), , drop = FALSE]
+    k <- nrow(p)
+    if (k < 3L) break
+    nxt  <- p[c(2:k, 1L), , drop = FALSE]
+    q <- 0.75 * p + 0.25 * nxt
+    r <- 0.25 * p + 0.75 * nxt
+    body <- matrix(0, 2L * k, ncol(p))
+    body[seq.int(1L, by = 2L, length.out = k), ] <- q
+    body[seq.int(2L, by = 2L, length.out = k), ] <- r
+    m <- rbind(body, body[1L, , drop = FALSE])
+  }
+  m
+}
+
+# Smooth one sfg: open polylines cut with `keep_ends`, polygon rings cut
+# cyclically, multi/collection types recursed. Point geometry is returned as-is.
+.smooth_sfg <- function(g, iterations, keep_ends) {
+  switch(class(g)[2L],
+    LINESTRING = sf::st_linestring(.chaikin_open(unclass(g), iterations, keep_ends)),
+    MULTILINESTRING = sf::st_multilinestring(
+      lapply(unclass(g), .chaikin_open, iterations, keep_ends)),
+    POLYGON = sf::st_polygon(lapply(unclass(g), .chaikin_ring, iterations)),
+    MULTIPOLYGON = sf::st_multipolygon(lapply(unclass(g), function(rings)
+      lapply(rings, .chaikin_ring, iterations))),
+    GEOMETRYCOLLECTION = sf::st_geometrycollection(
+      lapply(g, .smooth_sfg, iterations, keep_ends)),
+    g)
+}
+
+.smooth_batch <- function(sb, iterations, keep_ends) {
+  if (nrow(sb) == 0L) return(sb)
+  g  <- sf::st_geometry(sb)
+  g2 <- sf::st_sfc(lapply(g, .smooth_sfg, iterations, keep_ends),
+                   crs = sf::st_crs(g))
+  sf::st_set_geometry(sb, g2)
+}
+
+#' Smooth streamed line and polygon geometry
+#'
+#' Rounds the corners of every line and polygon in a streamed layer by Chaikin
+#' corner-cutting, one batch at a time. Each iteration replaces every vertex with
+#' two points a quarter and three-quarters of the way along its adjacent edges,
+#' so sharp angles become a sequence of short chamfers that read as a smooth
+#' curve; more `iterations` give a smoother result with more vertices. Open lines
+#' keep their endpoints (`keep_ends`); polygon rings are cut cyclically and shrink
+#' slightly, as Chaikin smoothing does. Point geometry passes through unchanged.
+#'
+#' The smoothing is computed directly on the coordinates (no GEOS call), so it is
+#' dependency-light; \pkg{sf} is used only to decode and rebuild each batch.
+#' Geometry travels through the engine as hex-encoded WKB in a string column and
+#' the CRS is carried on the returned node; use [collect_sf()] to materialize.
+#'
+#' @inheritParams spatial_map
+#' @param iterations Number of corner-cutting passes (a positive integer). Each
+#'   pass roughly doubles the vertex count. Default `2`.
+#' @param keep_ends If `TRUE` (default), pin the first and last vertex of an open
+#'   line so it is not shortened at its tips. Ignored for closed rings.
+#'
+#' @return A `vectra_node` of the smoothed geometry with `x`'s attributes, backed
+#'   by temporary `.vtr` spills (removed when the node is garbage-collected) and
+#'   carrying the input CRS.
+#'
+#' @seealso [spatial_map()] for per-feature transforms such as densifying with
+#'   `~ sf::st_segmentize(.x, dfMaxLength)` or sampling points along a line with
+#'   `~ sf::st_line_sample(.x, n)`, [collect_sf()] to materialize as `sf`.
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' zig <- sf::st_linestring(rbind(c(0, 0), c(1, 1), c(2, 0), c(3, 1), c(4, 0)))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   id = 1L, geometry = sf::st_as_binary(sf::st_sfc(zig), hex = TRUE)
+#' ), f)
+#'
+#' # Smooth the zig-zag with three corner-cutting passes.
+#' tbl(f) |> spatial_smooth(iterations = 3) |> collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_smooth <- function(x, iterations = 2L, keep_ends = TRUE,
+                           geom = "geometry", crs = NA, out_geom = NULL,
+                           flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed layer to smooth)")
+  if (!is.numeric(iterations) || length(iterations) != 1L ||
+      !is.finite(iterations) || iterations < 1)
+    stop("`iterations` must be a single positive integer")
+  iterations <- as.integer(iterations)
+  crs <- .resolve_crs(x, crs)
+  if (is.null(out_geom)) out_geom <- geom
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  .spatial_stream(x, function(sb) .smooth_batch(sb, iterations, keep_ends),
+                  geom, coords = NULL, crs = crs, out_geom = out_geom,
+                  flush_rows = fr)
+}
+
+# -- k-nearest neighbours (with distances) ------------------------------------
+
+# Find the k nearest resident-y features for each row of one decoded left batch
+# and return one row per (left, neighbour) pair: the left columns replicated,
+# plus the neighbour's rank (1 = nearest), its identifier `yid`, and the
+# distance. Distances come from the full left-by-y distance matrix (y is the
+# small resident side), reduced to the k smallest per left row.
+.knn_batch <- function(sb, yg, yid, k, rank_col, id_col, dist_col) {
+  ny <- length(yg)
+  kk <- min(as.integer(k), ny)
+  nl <- nrow(sb)
+  if (nl == 0L || kk == 0L) {
+    out <- sb[integer(0), , drop = FALSE]
+    out[[rank_col]] <- integer(0)
+    out[[id_col]]   <- yid[integer(0)]
+    out[[dist_col]] <- numeric(0)
+    return(out)
+  }
+  d <- matrix(as.numeric(sf::st_distance(sb, yg)), nrow = nl)
+  ord <- t(apply(d, 1L, order))[, seq_len(kk), drop = FALSE]
+  left_idx <- rep(seq_len(nl), each = kk)
+  nb_pos   <- as.integer(t(ord))
+  out <- sb[left_idx, , drop = FALSE]
+  out[[rank_col]] <- rep.int(seq_len(kk), nl)
+  out[[id_col]]   <- yid[nb_pos]
+  out[[dist_col]] <- d[cbind(left_idx, nb_pos)]
+  rownames(out) <- NULL
+  out
+}
+
+#' k nearest neighbours of a streamed layer, with distances
+#'
+#' Streams a large left side `x` through the engine and, for each feature, finds
+#' the `k` nearest features of a small resident layer `y`, returning one row per
+#' (left, neighbour) pair with the neighbour's rank, identifier, and distance.
+#' Where [spatial_join()] with [sf::st_nearest_feature] attaches only the single
+#' nearest match, this returns the top `k` and the distances themselves -- the
+#' nearest-`k` query and the building block of a distance matrix. The billion-row
+#' left stream never materializes; `y` (the candidate neighbours) stays resident.
+#'
+#' Distances are \pkg{sf}'s [sf::st_distance()]: planar (CRS units) on projected
+#' or unprojected planar data, great-circle (metres) on geographic coordinates
+#' with spherical geometry on (`sf::sf_use_s2()`). Each batch forms its
+#' left-by-`y` distance matrix, so `y` should be the small side; when `y` carries
+#' no CRS it inherits the stream's. The left geometry rides through unchanged
+#' (replicated once per neighbour). The \pkg{sf} package is an optional
+#' dependency (Suggests).
+#'
+#' @inheritParams spatial_map
+#' @param y An `sf` or `sfc` object: the resident candidate-neighbour layer.
+#' @param k Number of nearest neighbours to return per left feature (capped at
+#'   the number of `y` features). Default `1`.
+#' @param y_id Optional name of a column in `y` whose value identifies each
+#'   neighbour in the output. Default `NULL` uses `y`'s 1-based row index.
+#' @param id_col,dist_col,rank_col Names of the output columns holding the
+#'   neighbour identifier, the distance, and the 1-based rank (1 = nearest).
+#'   Defaults `"neighbor"`, `"distance"`, `"rank"`.
+#'
+#' @return A `vectra_node` of one row per (left, neighbour) pair -- `x`'s columns
+#'   (geometry included) plus the rank, neighbour identifier, and distance --
+#'   backed by temporary `.vtr` spills (removed when the node is garbage-
+#'   collected) and carrying the input CRS.
+#'
+#' @seealso [spatial_join()] for a nearest-feature attribute join, [collect_sf()]
+#'   to materialize as `sf`.
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' nc <- sf::st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+#' towns <- sf::st_centroid(sf::st_geometry(nc))[1:5]
+#' towns <- sf::st_sf(town = nc$NAME[1:5], geometry = towns)
+#'
+#' set.seed(1)
+#' pts <- sf::st_coordinates(sf::st_sample(nc, 100))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(id = seq_len(nrow(pts)), x = pts[, 1], y = pts[, 2]), f)
+#'
+#' # The two nearest towns to each point, with distances.
+#' tbl(f) |>
+#'   spatial_knn(towns, k = 2, coords = c("x", "y"), crs = sf::st_crs(nc),
+#'               y_id = "town") |>
+#'   collect() |> head()
+#' unlink(f)
+#'
+#' @export
+spatial_knn <- function(x, y, k = 1L, geom = "geometry", coords = NULL,
+                        crs = NA, y_id = NULL, id_col = "neighbor",
+                        dist_col = "distance", rank_col = "rank",
+                        out_geom = NULL, flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed left side)")
+  if (!inherits(y, "sf") && !inherits(y, "sfc"))
+    stop("`y` must be an sf or sfc object (the resident neighbour layer)")
+  if (!is.numeric(k) || length(k) != 1L || !is.finite(k) || k < 1)
+    stop("`k` must be a single positive integer")
+  crs <- .resolve_crs(x, crs)
+  y   <- .align_resident_crs(y, crs)
+  yg  <- sf::st_geometry(y)
+  yid <- if (is.null(y_id)) seq_len(length(yg)) else {
+    if (!inherits(y, "sf") || !y_id %in% names(y))
+      stop(sprintf("`y_id` column '%s' not found in `y`", y_id))
+    y[[y_id]]
+  }
+  if (is.null(out_geom)) out_geom <- if (is.null(coords)) geom else "geometry"
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  batch_fn <- function(sb)
+    .knn_batch(sb, yg, yid, k, rank_col, id_col, dist_col)
+  .spatial_stream(x, batch_fn, geom, coords, crs, out_geom, fr)
+}
+
+# -- split / line intersection (cut against a resident blade) -----------------
+
+# Split one geometry by the resident blade. A polygon's boundary is merged with
+# the blade, noded, and re-polygonized; the faces whose interior point falls
+# inside the original polygon are the pieces. A line is merged with the blade,
+# noded, and cast to single segments; the arcs that lie on the original line are
+# the pieces. A geometry the blade does not cut returns as a single piece, so a
+# feature never vanishes. Returns an sfc of one or more pieces.
+.split_one <- function(g, blade_u, crs) {
+  gs <- sf::st_sfc(g, crs = crs)
+  switch(class(g)[2L],
+    POLYGON = ,
+    MULTIPOLYGON = {
+      b     <- sf::st_sfc(sf::st_boundary(g), crs = crs)
+      noded <- sf::st_node(sf::st_union(c(b, blade_u)))
+      faces <- sf::st_collection_extract(sf::st_polygonize(noded), "POLYGON")
+      if (!length(faces)) return(gs)
+      ip   <- sf::st_point_on_surface(faces)
+      keep <- faces[lengths(sf::st_within(ip, gs)) > 0L]
+      if (length(keep)) keep else gs
+    },
+    LINESTRING = ,
+    MULTILINESTRING = {
+      noded <- sf::st_node(sf::st_union(c(gs, blade_u)))
+      segs  <- sf::st_cast(noded, "LINESTRING", warn = FALSE)
+      if (!length(segs)) return(gs)
+      keep <- segs[lengths(sf::st_covered_by(segs, gs)) > 0L]
+      if (length(keep)) keep else gs
+    },
+    gs)
+}
+
+# Intersection points of one geometry with the resident blade, as a single
+# (multi)point sfg; an empty geometry when they do not cross.
+.cross_points <- function(g, blade_u, crs) {
+  ip <- suppressWarnings(sf::st_intersection(sf::st_sfc(g, crs = crs), blade_u))
+  if (!length(ip)) return(sf::st_multipoint())
+  pts <- suppressWarnings(sf::st_collection_extract(ip, "POINT"))
+  if (!length(pts)) return(sf::st_multipoint())
+  sf::st_combine(pts)[[1L]]
+}
+
+.split_batch <- function(sb, blade_u, crs, extract) {
+  if (nrow(sb) == 0L) return(sb)
+  crs <- .as_crs(crs)
+  g <- sf::st_geometry(sb)
+  if (extract == "points") {
+    pts <- sf::st_sfc(lapply(seq_along(g),
+                             function(i) .cross_points(g[[i]], blade_u, crs)),
+                      crs = crs)
+    keep <- !sf::st_is_empty(pts)
+    out  <- sb[keep, , drop = FALSE]
+    sf::st_geometry(out) <- pts[keep]
+    out
+  } else {
+    pieces <- lapply(seq_along(g), function(i) .split_one(g[[i]], blade_u, crs))
+    np  <- lengths(pieces)
+    out <- sb[rep.int(seq_len(nrow(sb)), np), , drop = FALSE]
+    sf::st_geometry(out) <- sf::st_sfc(unlist(pieces, recursive = FALSE),
+                                       crs = crs)
+    rownames(out) <- NULL
+    out
+  }
+}
+
+#' Split a streamed layer by a resident blade, or return its crossing points
+#'
+#' Streams a large layer `x` through the engine and cuts each batch's geometry
+#' against a small resident `blade` layer (the QGIS "split with lines"), one
+#' batch at a time. With `extract = "pieces"` (the default) every feature is
+#' divided where the blade crosses it -- a polygon into the faces the blade carves
+#' out, a line into the arcs between crossings -- and each piece is emitted as its
+#' own row with the source attributes copied; a feature the blade does not cross
+#' passes through as a single piece. With `extract = "points"` the verb instead
+#' returns, per feature, the points where it meets the blade (the "line
+#' intersections" tool), dropping features that do not cross.
+#'
+#' The split is built from \pkg{sf}/GEOS noding and polygonization, so it expects
+#' projected or unprojected planar data; geographic coordinates are best
+#' projected first. The blade is dissolved to one geometry once and held resident
+#' while the left stream flows past. Geometry travels through the engine as
+#' hex-encoded WKB in a string column and the CRS is carried on the returned
+#' node; when `blade` carries no CRS it inherits the stream's. The \pkg{sf}
+#' package is an optional dependency (Suggests).
+#'
+#' @inheritParams spatial_map
+#' @param blade An `sf` or `sfc` object whose geometry cuts the stream (typically
+#'   lines, but any geometry whose boundary can node `x`).
+#' @param extract `"pieces"` (default) to emit the split pieces, or `"points"`
+#'   to emit the intersection points of each feature with the blade.
+#'
+#' @return A `vectra_node`: with `extract = "pieces"`, one row per piece carrying
+#'   `x`'s attributes; with `extract = "points"`, one row per crossing feature
+#'   carrying its intersection points. Backed by temporary `.vtr` spills (removed
+#'   when the node is garbage-collected) and carrying the input CRS.
+#'
+#' @seealso [spatial_clip()] to cut against a mask without dividing into pieces,
+#'   [spatial_overlay()] to node two polygon layers into a partition,
+#'   [collect_sf()] to materialize as `sf`.
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' sq <- sf::st_polygon(list(rbind(c(0, 0), c(4, 0), c(4, 4), c(0, 4), c(0, 0))))
+#' blade <- sf::st_sfc(sf::st_linestring(rbind(c(2, -1), c(2, 5))))
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   id = 1L, geometry = sf::st_as_binary(sf::st_sfc(sq), hex = TRUE)
+#' ), f)
+#'
+#' # Split the square into two halves along the blade.
+#' tbl(f) |> spatial_split(blade) |> collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_split <- function(x, blade, extract = c("pieces", "points"),
+                          geom = "geometry", crs = NA, out_geom = NULL,
+                          flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed layer to split)")
+  if (!inherits(blade, "sf") && !inherits(blade, "sfc"))
+    stop("`blade` must be an sf or sfc object (the resident cutting layer)")
+  extract <- match.arg(extract)
+  crs   <- .resolve_crs(x, crs)
+  blade <- .align_resident_crs(blade, crs)
+  blade_u <- sf::st_set_crs(sf::st_union(sf::st_geometry(blade)), .as_crs(crs))
+  if (is.null(out_geom)) out_geom <- geom
+  fr <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
+  .spatial_stream(x, function(sb) .split_batch(sb, blade_u, crs, extract),
+                  geom, coords = NULL, crs = crs, out_geom = out_geom,
+                  flush_rows = fr)
+}
+
 # -- dissolve (aggregate geometries by group) ---------------------------------
 
 # Composite group label for a batch: one string per row joining the `by`
@@ -1373,34 +1962,17 @@ spatial_dissolve <- function(x, by = NULL, ..., geom = "geometry", crs = NA,
   crs <- .resolve_crs(x, crs)
   dots <- list(...)
 
-  spill <- tempfile(fileext = ".vtr")
-  on.exit(unlink(spill), add = TRUE)
-  write_vtr(x, spill)
-
-  schema <- .Call(C_node_schema, tbl(spill)$.node)
-  miss <- setdiff(c(by, geom), schema$name)
-  if (length(miss))
-    stop(sprintf("column(s) not found in the stream: %s",
-                 paste(miss, collapse = ", ")))
-
-  budget <- getOption("vectra.partition_budget", .PARTITION_BUDGET)
-  res <- .partition_router(spill, .dissolve_assign(by), budget)
-  on.exit(unlink(unlist(res$runs, use.names = FALSE)), add = TRUE)
-
-  fr  <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
-  acc <- .run_accumulator(fr)
-  for (lab in sort(names(res$runs))) {
-    df <- collect(.concat_runs(res$runs[[lab]]))
+  group_fn <- function(df) {
     # Native union off the hex-WKB column. Extra st_union arguments (e.g.
     # is_coverage = TRUE) are not expressible through GEOSUnaryUnion, and
     # geographic data with s2 on unions on the sphere, so both union through sf
     # instead; the planar projected case unions natively.
     if (length(dots) || !.geos_planar_ok(crs)) {
-      sb     <- .sf_decode_chunk(df, geom, NULL, crs)
-      u      <- do.call(sf::st_union, c(list(sf::st_geometry(sb)), dots))
-      u_hex  <- sf::st_as_binary(u, hex = TRUE)
+      sb    <- .sf_decode_chunk(df, geom, NULL, crs)
+      u     <- do.call(sf::st_union, c(list(sf::st_geometry(sb)), dots))
+      u_hex <- sf::st_as_binary(u, hex = TRUE)
     } else {
-      u_hex  <- .Call(C_geos_union_hex, as.character(df[[geom]]))
+      u_hex <- .Call(C_geos_union_hex, as.character(df[[geom]]))
     }
     row <- if (is.null(by)) df[1, character(0), drop = FALSE]
            else df[1, by, drop = FALSE]
@@ -1408,9 +1980,159 @@ spatial_dissolve <- function(x, by = NULL, ..., geom = "geometry", crs = NA,
       for (nm in names(.fun)) row[[nm]] <- .fun[[nm]](df)
     row[[geom]] <- u_hex
     rownames(row) <- NULL
-    acc$push(.coerce_for_vtr(row))
+    row
   }
-  acc$finish(crs = crs, empty_geom = geom)
+  .partition_each(x, by, geom, crs, group_fn, flush_rows)
+}
+
+# -- set-wise geometry constructions ------------------------------------------
+
+# The constructions that need every feature of a group at once. Each maps the
+# group's combined geometry `gu` (a length-1 sfc) to the construction: the
+# enclosing kinds return one geometry, the tessellation kinds (voronoi,
+# delaunay) return one polygon per cell. `pole` is the centre of the maximum
+# inscribed circle (the point inside the shape farthest from its edges, the QGIS
+# "pole of inaccessibility"). The inscribed-circle and pole kinds need a positive
+# tolerance; the caller supplies one derived from the extent when none is given.
+.CONSTRUCT_KINDS <- c("convex_hull", "concave_hull", "envelope", "oriented_box",
+                      "enclosing_circle", "inscribed_circle", "pole",
+                      "voronoi", "delaunay")
+
+# Tolerance for the kinds that require one. inscribed_circle/pole take a small
+# fraction of the bounding-box diagonal so the circle is found to a sensible
+# precision; the tessellations accept 0 (GEOS picks its own snap).
+.construct_tol <- function(gu, kind) {
+  if (!kind %in% c("inscribed_circle", "pole")) return(0)
+  bb <- sf::st_bbox(gu)
+  d  <- sqrt((bb[["xmax"]] - bb[["xmin"]])^2 + (bb[["ymax"]] - bb[["ymin"]])^2)
+  if (is.finite(d) && d > 0) d * 1e-3 else 1e-6
+}
+
+# Build the construction for one group. `gu` is the group's combined geometry
+# (an sfc of length 1); returns an sfc of the result (length 1 for the enclosing
+# kinds, one polygon per cell for the tessellations). The inscribed-circle path
+# drops the empty companion geometry sf returns alongside the circle.
+.construct_group <- function(gu, kind, ratio, allow_holes, tol) {
+  switch(kind,
+    convex_hull      = sf::st_convex_hull(gu),
+    concave_hull     = sf::st_concave_hull(gu, ratio = ratio,
+                                           allow_holes = allow_holes),
+    envelope         = sf::st_as_sfc(sf::st_bbox(gu)),
+    oriented_box     = sf::st_minimum_rotated_rectangle(gu),
+    enclosing_circle = sf::st_minimum_bounding_circle(gu),
+    inscribed_circle = {
+      ic <- sf::st_inscribed_circle(gu, dTolerance = tol)
+      ic[!sf::st_is_empty(ic)]
+    },
+    pole = {
+      ic <- sf::st_inscribed_circle(gu, dTolerance = tol)
+      ic <- ic[!sf::st_is_empty(ic)]
+      suppressWarnings(sf::st_centroid(ic))
+    },
+    voronoi  = sf::st_collection_extract(
+                 sf::st_voronoi(gu, dTolerance = tol), "POLYGON"),
+    delaunay = sf::st_collection_extract(
+                 sf::st_triangulate(gu, dTolerance = tol), "POLYGON"))
+}
+
+#' Build a set-wise geometry construction, optionally per group
+#'
+#' Constructs one geometry (or a tessellation) from a whole set of features --
+#' the constructions a per-feature [spatial_map()] cannot express because they
+#' need every feature in scope at once. Like [spatial_dissolve()] it rides the
+#' **partition tier**: `x` is spilled once and routed into one disjoint shard per
+#' `by` group in a single bounded pass, then each shard's geometry is combined
+#' and the construction built with \pkg{sf}. With no `by`, the whole layer yields
+#' one construction. Peak memory is the routing budget during the pass, then one
+#' group's geometry while it is built -- partition on a key whose groups fit in
+#' memory.
+#'
+#' `kind` selects the construction:
+#' \describe{
+#'   \item{`"convex_hull"`}{the convex hull of the set.}
+#'   \item{`"concave_hull"`}{the concave hull (`ratio`, `allow_holes`).}
+#'   \item{`"envelope"`}{the axis-aligned bounding rectangle.}
+#'   \item{`"oriented_box"`}{the minimum-area rotated bounding rectangle.}
+#'   \item{`"enclosing_circle"`}{the minimum bounding circle.}
+#'   \item{`"inscribed_circle"`}{the maximum inscribed circle (largest circle
+#'     that fits inside the set's union).}
+#'   \item{`"pole"`}{the pole of inaccessibility -- the centre of the maximum
+#'     inscribed circle, the point inside the shape farthest from its edges.}
+#'   \item{`"voronoi"`}{the Voronoi tessellation, one polygon per cell.}
+#'   \item{`"delaunay"`}{the Delaunay triangulation, one polygon per triangle.}
+#' }
+#' The enclosing kinds and `pole` emit one feature per group; `voronoi` and
+#' `delaunay` emit one feature per cell, each carrying the group's `by` values.
+#'
+#' Geometry travels through the engine as hex-encoded WKB in a string column and
+#' the CRS is carried on the returned node; use [collect_sf()] to materialize.
+#' Topology is \pkg{sf}/GEOS throughout (an optional dependency, Suggests); some
+#' constructions need projected coordinates.
+#'
+#' @inheritParams spatial_map
+#' @param kind The construction to build; one of the values above.
+#' @param by Character vector of attribute columns to construct within: one
+#'   construction (or tessellation) per distinct combination of their values.
+#'   `NULL` (default) builds a single construction from the whole layer.
+#' @param ratio For `kind = "concave_hull"`, the concaveness in `[0, 1]` (1 is
+#'   the convex hull). Default `0.3`.
+#' @param allow_holes For `kind = "concave_hull"`, whether the hull may contain
+#'   holes. Default `FALSE`.
+#' @param tolerance Distance tolerance for the kinds that take one
+#'   (`"inscribed_circle"`, `"pole"`, `"voronoi"`, `"delaunay"`). `0` (default)
+#'   lets the inscribed-circle kinds derive a tolerance from the extent and the
+#'   tessellations use the GEOS default.
+#'
+#' @return A `vectra_node` of the construction -- one row per group for the
+#'   enclosing kinds, one row per cell for the tessellations -- carrying the
+#'   `by` columns and the input CRS, backed by temporary `.vtr` spills removed
+#'   when the node is garbage-collected.
+#'
+#' @seealso [spatial_dissolve()] to merge a group into one feature,
+#'   [spatial_map()] for per-feature transforms, [collect_sf()] to materialize.
+#'
+#' @examplesIf requireNamespace("sf", quietly = TRUE)
+#' nc <- sf::st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+#' nc$band <- nc$SID74 > 5
+#' f <- tempfile(fileext = ".vtr")
+#' write_vtr(data.frame(
+#'   band = nc$band,
+#'   geometry = sf::st_as_binary(sf::st_geometry(nc), hex = TRUE)
+#' ), f)
+#'
+#' # One convex hull per band.
+#' tbl(f) |>
+#'   spatial_construct("convex_hull", by = "band", crs = sf::st_crs(nc)) |>
+#'   collect_sf()
+#' unlink(f)
+#'
+#' @export
+spatial_construct <- function(x, kind = .CONSTRUCT_KINDS, by = NULL,
+                              geom = "geometry", crs = NA, ratio = 0.3,
+                              allow_holes = FALSE, tolerance = 0,
+                              flush_rows = NULL) {
+  .check_sf()
+  if (!inherits(x, "vectra_node"))
+    stop("`x` must be a vectra_node (the streamed layer to construct from)")
+  kind <- match.arg(kind)
+  if (!is.null(by) && !is.character(by))
+    stop("`by` must be a character vector of column names, or NULL")
+  crs <- .resolve_crs(x, crs)
+
+  group_fn <- function(df) {
+    sb <- .sf_decode_chunk(df, geom, NULL, crs)
+    gu <- sf::st_union(sf::st_geometry(sb))
+    tol <- if (tolerance > 0) tolerance else .construct_tol(gu, kind)
+    out <- .construct_group(gu, kind, ratio, allow_holes, tol)
+    out <- out[!sf::st_is_empty(out)]
+    if (!length(out)) return(NULL)
+    rowdf <- if (is.null(by)) data.frame(matrix(nrow = length(out), ncol = 0))
+             else df[rep(1L, length(out)), by, drop = FALSE]
+    rowdf[[geom]] <- sf::st_as_binary(out, hex = TRUE)
+    rownames(rowdf) <- NULL
+    rowdf
+  }
+  .partition_each(x, by, geom, crs, group_fn, flush_rows)
 }
 
 #' Rasterize a streamed point layer onto a fixed grid
@@ -2369,18 +3091,33 @@ st_write.vectra_node <- function(obj, dsn, layer = NULL, ..., geom = "geometry",
 #' fraction of a percent that floating-point sliver artefacts on invalid input
 #' otherwise introduce. Inputs are also passed through [sf::st_make_valid()].
 #'
-#' The input `x` must be a resident `sf` object: building the overlap graph and
-#' intersecting needs the geometries in memory. The exploded result, which is
-#' typically several times larger, is what streams to disk.
+#' With a second layer `y`, the same machinery overlays two layers instead of
+#' self-unioning one: both layers are noded together into one planar partition,
+#' and each piece carries the attributes of the `x` record and the `y` record
+#' that cover it. `how` selects which pieces to keep -- the intersection (pieces
+#' covered by both), the union (every piece of either), `x` split by `y`
+#' (`"identity"`), or the parts in exactly one layer (`"symdiff"`). With
+#' `y = NULL` (the default) the function self-unions `x` and `how` is ignored.
 #'
 #' @param x An `sf` object with polygon or multipolygon geometry, or a single
 #'   path to a vector file (e.g. a GeoPackage). A path is read in feature batches
 #'   via `layer` / `query`, so the whole layer is never held in memory at once --
 #'   peak memory then tracks the cleaned geometry, not the source size, which lets
 #'   a larger-than-RAM layer overlay on a modest machine.
+#' @param y Optional second layer to overlay `x` against, in the same forms `x`
+#'   accepts (an `sf` object or a file path read via `layer_y` / `query_y`). It
+#'   must share the CRS of `x`. `NULL` (the default) self-unions `x`.
 #' @param vars Character vector of attribute columns of `x` to carry onto each
 #'   piece. Default `NULL` keeps them all; name a subset to keep the streamed
 #'   output narrow.
+#' @param vars_y Character vector of attribute columns of `y` to carry onto each
+#'   piece (two-layer overlay only). Default `NULL` keeps them all. A name shared
+#'   with an `x` column is disambiguated with a `.x` / `.y` suffix in the output.
+#' @param how For a two-layer overlay, which pieces to keep: `"intersection"`
+#'   (covered by both layers; the default), `"union"` (every piece of either,
+#'   the absent side's attributes filled with `NA`), `"identity"` (all of `x`,
+#'   split by `y`, with `y`'s attributes where it covers and `NA` elsewhere), or
+#'   `"symdiff"` (pieces in exactly one layer). Ignored when `y = NULL`.
 #' @param piece Name of the integer piece-id column added to the output (the key
 #'   you group by to resolve overlaps). Default `"piece_id"`.
 #' @param geom Name of the output hex-WKB geometry column. Default `"geometry"`.
@@ -2423,13 +3160,16 @@ st_write.vectra_node <- function(obj, dsn, layer = NULL, ..., geom = "geometry",
 #'   overlay (read in batches via `LIMIT`/`OFFSET`); use it instead of `layer`
 #'   for a subset or join. With `query` and no `layer`, pass `grid` explicitly,
 #'   since the layer extent cannot be read from the file metadata.
+#' @param layer_y,query_y The `layer` / `query` equivalents for a file-path `y`.
 #' @param read_chunk Features per read/parse batch. `NULL` (default) sizes it
 #'   from available RAM. Smaller batches lower peak memory; larger ones do fewer
 #'   round trips.
 #'
-#' @return A `vectra_node` over the exploded overlay (one row per piece per
-#'   covering polygon), backed by temporary `.vtr` spills removed when the node
-#'   is garbage-collected, carrying the CRS of `x` for [collect_sf()].
+#' @return A `vectra_node` over the exploded overlay, backed by temporary `.vtr`
+#'   spills removed when the node is garbage-collected, carrying the CRS of `x`
+#'   for [collect_sf()]. For a self-union it is one row per piece per covering
+#'   polygon; for a two-layer overlay one row per piece per covering
+#'   `x`-record / `y`-record pair, with the columns of both layers.
 #'
 #' @seealso [slice_min()] / [slice_max()] to resolve each piece to one winner,
 #'   [collect_sf()] to materialize as `sf`.
@@ -2448,13 +3188,25 @@ st_write.vectra_node <- function(obj, dsn, layer = NULL, ..., geom = "geometry",
 #'   collect_sf()
 #' first
 #'
+#' # Two-layer overlay: intersect the squares with a zone layer, keeping both
+#' # sets of attributes on each overlapping piece.
+#' zones <- sf::st_sf(zone = c("A", "B"),
+#'                    geometry = sf::st_sfc(sq(0, 1.5), sq(1.5, 3)))
+#' inter <- spatial_overlay(polys, zones, how = "intersection") |> collect_sf()
+#' inter
+#'
 #' @export
-spatial_overlay <- function(x, vars = NULL, piece = "piece_id",
+spatial_overlay <- function(x, y = NULL, vars = NULL, vars_y = NULL,
+                            how = c("intersection", "union", "identity", "symdiff"),
+                            piece = "piece_id",
                             geom = "geometry", grid = NULL, precision = NULL,
                             dedup = TRUE, flush_rows = NULL,
                             mem_limit = NULL, threads = NULL, quiet = TRUE,
-                            layer = NULL, query = NULL, read_chunk = NULL) {
+                            layer = NULL, query = NULL,
+                            layer_y = NULL, query_y = NULL, read_chunk = NULL) {
   .check_sf()
+  how <- match.arg(how)
+  two <- !is.null(y)
 
   # Validate an explicit grid / precision up front; NULL means derive them.
   if (!is.null(grid)) {
@@ -2477,17 +3229,43 @@ spatial_overlay <- function(x, vars = NULL, piece = "piece_id",
   mem      <- mem_limit %||% getOption("vectra.overlay_mem_limit",
                                        .overlay_mem_default(nthreads))
 
-  # Read and parse the input: an in-memory sf object, or a file source (x a path
+  # Read and parse the input: an in-memory sf object, or a file source (a path
   # with layer= or query=) read in feature batches so the whole layer is never
   # materialized at once. Either way the geometry is repaired, made areal, snapped
   # to the grid, and returned as cleaned WKB plus bounding boxes; geometry stays
-  # compact (raw WKB) in R and never touches sf again on the compute boundary.
-  ing   <- .overlay_ingest(x, vars, piece, grid, nthreads,
+  # compact (raw WKB) in R and never touches sf again on the compute boundary. For
+  # a two-layer overlay both layers are ingested onto the same grid and stacked, so
+  # the downstream noding, components, dedup, and tiling treat them as one set; a
+  # per-input `side` tag (1 = x, 2 = y) drives the attribute fan-out at the end.
+  ingx  <- .overlay_ingest(x, vars, piece, grid, nthreads,
                            layer = layer, query = query, read_chunk = read_chunk)
-  attrs <- ing$attrs; crs <- ing$crs; n <- ing$n
-  cwkb  <- ing$cwkb;  bbox <- ing$bbox; grid <- ing$grid
-  ing   <- NULL
-  if (!any(!is.na(bbox[, 1L]))) stop("`x` has no parseable geometries to overlay")
+  crs   <- ingx$crs; grid <- ingx$grid
+  if (two) {
+    ingy <- .overlay_ingest(y, vars_y, piece, grid, nthreads,
+                            layer = layer_y, query = query_y, read_chunk = read_chunk)
+    if (!isTRUE(crs == ingy$crs))
+      stop("`x` and `y` must share a CRS; transform one first (e.g. sf::st_transform()).")
+    nx <- ingx$n; ny <- ingy$n; n <- nx + ny
+    cwkb <- c(ingx$cwkb, ingy$cwkb)
+    bbox <- rbind(ingx$bbox, ingy$bbox)
+    side_of  <- c(rep.int(1L, nx), rep.int(2L, ny))   # which layer each input is
+    local_of <- c(seq_len(nx), seq_len(ny))           # its row within that layer
+    # Disambiguate shared column names (dplyr-style .x / .y) and pre-rename the
+    # per-layer attribute frames so the fan-out can combine them without collision.
+    nm_x <- names(ingx$attrs); nm_y <- names(ingy$attrs)
+    ax <- ingx$attrs; if (length(ax)) names(ax) <- ifelse(nm_x %in% nm_y, paste0(nm_x, ".x"), nm_x)
+    ay <- ingy$attrs; if (length(ay)) names(ay) <- ifelse(nm_y %in% nm_x, paste0(nm_y, ".y"), nm_y)
+    out_template <- ax[0, , drop = FALSE]
+    for (nm in names(ay)) out_template[[nm]] <- ay[[nm]][0]
+    out_template[[piece]] <- integer(0)
+    out_template[[geom]]  <- character(0)
+    ingy <- NULL
+  } else {
+    attrs <- ingx$attrs; n <- ingx$n
+    cwkb  <- ingx$cwkb;  bbox <- ingx$bbox
+  }
+  ingx  <- NULL
+  if (!any(!is.na(bbox[, 1L]))) stop("the inputs have no parseable geometries to overlay")
 
   # Noding precision. Boundaries are noded at a fixed grid (snap rounding): this is
   # deterministic and avoids the floating noder's repair-and-retry on dense overlapping
@@ -2551,23 +3329,79 @@ spatial_overlay <- function(x, vars = NULL, piece = "piece_id",
 
   fr        <- flush_rows %||% getOption("vectra.spatial_flush", .SPATIAL_FLUSH)
   acc       <- .run_accumulator(fr)
+  # Seed the schema from the combined template so an empty two-layer result (e.g.
+  # an intersection with no overlaps) still finishes as a correctly typed node.
+  if (two) acc$push(.coerce_for_vtr(out_template))
   piece_off <- 0L
   cov_err   <- 0
   worst     <- NULL                                  # top offending inputs by coverage error
-  # A batch is overlaid with one thread per tile and load-balanced across the pool
-  # only within the batch, so each batch must hold many more tiles than threads, or
-  # a batch that gathers several large tiles leaves most threads idle on its tail.
-  # Batch by a fixed tile count, not input bytes: a feature spanning many tiles is
-  # shared in memory but its bytes recur in every tile, so a byte budget collapses
-  # to a handful of tiles wherever such features dominate. Peak working set stays
-  # bounded by tile_bytes times the running threads, independent of the batch size.
-  batch_tiles <- max(256L, 32L * nthreads)
-  pb <- if (!quiet) utils::txtProgressBar(0, length(jobs), style = 3) else NULL
+
+  # Turn one batch's arrangement (pieces x covering inputs) into output rows.
+  # Self-union: each piece-row is fanned to one output row per original record the
+  # covering distinct input stands for, carrying that record's attributes.
+  emit_single <- function(geoms, origin, fid, gi, poff) {
+    members <- mem_by_dk[gi[origin]]                 # original rows per piece-row
+    mult    <- lengths(members)
+    rep_row <- rep.int(seq_along(origin), mult)      # piece-row index per fanned row
+    pid     <- poff + fid
+    df  <- attrs[unlist(members, use.names = FALSE), , drop = FALSE]
+    df[[piece]] <- pid[rep_row]                      # rows of one face share a piece id
+    df[[geom]]  <- geoms[rep_row]
+    rownames(df) <- NULL
+    df
+  }
+
+  # Two-layer: group the covering inputs of each face by layer, then combine the
+  # x-records and y-records covering a face per `how`. A face's covering rows are
+  # the (x record) x (y record) pairs; faces touching only one layer fill the
+  # other side with NA. All output rows of a face share its piece id, and the
+  # face geometry is taken once (every covering row of a face holds the same one).
+  emit_two <- function(geoms, origin, fid, gi, poff) {
+    members  <- mem_by_dk[gi[origin]]
+    rows     <- unlist(members, use.names = FALSE)   # original rows covering each piece-row
+    face_rep <- rep.int(fid, lengths(members))       # face id (batch-local, 1-based) per row
+    sd       <- side_of[rows]; loc <- local_of[rows]
+    nf   <- max(fid)
+    fdup <- !duplicated(fid)
+    geom_by_face <- character(nf)
+    geom_by_face[fid[fdup]] <- geoms[fdup]           # one representative geometry per face
+
+    ix <- data.frame(face = face_rep[sd == 1L], loc = loc[sd == 1L])  # x coverage
+    iy <- data.frame(face = face_rep[sd == 2L], loc = loc[sd == 2L])  # y coverage
+
+    block <- function(face_vec, lx, ly) {
+      if (!length(face_vec)) return(NULL)
+      m  <- length(face_vec)
+      d  <- ax[if (is.null(lx)) rep(NA_integer_, m) else lx, , drop = FALSE]
+      dy <- ay[if (is.null(ly)) rep(NA_integer_, m) else ly, , drop = FALSE]
+      for (nm in names(dy)) d[[nm]] <- dy[[nm]]
+      d[[piece]] <- poff + face_vec
+      d[[geom]]  <- geom_by_face[face_vec]
+      rownames(d) <- NULL
+      d
+    }
+
+    out <- list()
+    if (how != "symdiff" && nrow(ix) && nrow(iy)) {  # pieces covered by both layers
+      mm <- merge(ix, iy, by = "face", suffixes = c(".x", ".y"))
+      if (nrow(mm)) out <- c(out, list(block(mm$face, mm$loc.x, mm$loc.y)))
+    }
+    fx <- unique(ix$face); fy <- unique(iy$face)
+    if (how %in% c("union", "identity", "symdiff")) {  # pieces with only x coverage
+      xof <- setdiff(fx, fy)
+      if (length(xof)) { s <- ix[ix$face %in% xof, ]; out <- c(out, list(block(s$face, s$loc, NULL))) }
+    }
+    if (how %in% c("union", "symdiff")) {              # pieces with only y coverage
+      yof <- setdiff(fy, fx)
+      if (length(yof)) { s <- iy[iy$face %in% yof, ]; out <- c(out, list(block(s$face, NULL, s$loc))) }
+    }
+    out <- out[!vapply(out, is.null, logical(1))]
+    if (!length(out)) out_template else do.call(rbind, out)
+  }
+
+  emit_fn <- if (two) emit_two else emit_single
 
   # Overlay one batch of tiles, map pieces back to global rows, stream to spill.
-  # `gi[origin]` is the distinct input covering a piece; each piece-row is fanned to
-  # one output row per original record that distinct input stands for, carrying that
-  # record's attributes and the shared piece id.
   run_batch <- function(batch) {
     job <- rep.int(seq_along(batch), vapply(batch, function(t) length(t$idx), integer(1)))
     gi  <- unlist(lapply(batch, `[[`, "idx"), use.names = FALSE)
@@ -2577,14 +3411,7 @@ spatial_overlay <- function(x, vars = NULL, piece = "piece_id",
     geoms <- res[[1L]]; origin <- res[[2L]]; parea <- res[[3L]]
     iarea <- res[[4L]]; fid <- res[[5L]]
     if (length(geoms)) {
-      members <- mem_by_dk[gi[origin]]                # original rows per piece-row
-      mult    <- lengths(members)
-      rep_row <- rep.int(seq_along(origin), mult)     # piece-row index per fanned row
-      pid     <- piece_off + fid
-      df  <- attrs[unlist(members, use.names = FALSE), , drop = FALSE]
-      df[[piece]] <- pid[rep_row]                     # rows of one face share a piece id
-      df[[geom]]  <- geoms[rep_row]
-      rownames(df) <- NULL
+      df <- emit_fn(geoms, origin, fid, gi, piece_off)
       acc$push(.coerce_for_vtr(df))
       piece_off <<- piece_off + max(fid)
       det <- .overlay_coverage_detail(origin, parea, iarea)
@@ -2597,6 +3424,15 @@ spatial_overlay <- function(x, vars = NULL, piece = "piece_id",
       }
     }
   }
+  # A batch is overlaid with one thread per tile and load-balanced across the pool
+  # only within the batch, so each batch must hold many more tiles than threads, or
+  # a batch that gathers several large tiles leaves most threads idle on its tail.
+  # Batch by a fixed tile count, not input bytes: a feature spanning many tiles is
+  # shared in memory but its bytes recur in every tile, so a byte budget collapses
+  # to a handful of tiles wherever such features dominate. Peak working set stays
+  # bounded by tile_bytes times the running threads, independent of the batch size.
+  batch_tiles <- max(256L, 32L * nthreads)
+  pb <- if (!quiet) utils::txtProgressBar(0, length(jobs), style = 3) else NULL
 
   njob <- length(jobs)
   for (start in seq.int(1L, njob, by = batch_tiles)) {

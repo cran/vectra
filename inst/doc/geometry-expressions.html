@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<meta name="author" content="Gilles Colling" />
+
+<meta name="date" content="2026-06-29" />
+
+<title>Geometry functions in expressions</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Geometry functions in expressions</h1>
+<h4 class="author">Gilles Colling</h4>
+<h4 class="date">2026-06-29</h4>
+
+
+
+<p>vectra carries geometry through the engine as hex-encoded WKB in an
+ordinary string column. The verbs in <a href="streaming-spatial.html">Streaming spatial operations</a> wrap
+whole sf operations around that column. This vignette covers the other
+half of the spatial surface: a family of <code>st_*</code> functions
+that work inside the expression verbs themselves, so a measure, a
+predicate, or a geometry transform is just another term in
+<code>mutate()</code>, <code>filter()</code>, or
+<code>summarise()</code>.</p>
+<p>These functions run on the GEOS C library straight off the WKB
+column, one row at a time, with no per-batch round-trip through sf.
+<code>filter(st_area(geometry) &gt; 1e6)</code> prunes the stream in C,
+and <code>mutate(here = st_centroid(geometry))</code> adds a new WKB
+geometry column that any later verb can read. The per-row decode is
+parallelised with OpenMP, so a measure over a large layer uses every
+core.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(sf)</span></code></pre></div>
+<div id="a-layer-to-work-on" class="section level2">
+<h2>A layer to work on</h2>
+<p>The examples use the North Carolina counties shipped with sf. Writing
+the layer to a <code>.vtr</code> is the usual first step: the geometry
+becomes a hex-WKB string column (named <code>geometry</code> by
+convention), and the attributes ride alongside it.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>nc <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">system.file</span>(<span class="st">&quot;shape/nc.shp&quot;</span>, <span class="at">package =</span> <span class="st">&quot;sf&quot;</span>), <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>  <span class="at">NAME     =</span> nc<span class="sc">$</span>NAME,</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>  <span class="at">BIR74    =</span> nc<span class="sc">$</span>BIR74,</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_geometry</span>(nc), <span class="at">hex =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>), f)</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a><span class="fu">tbl</span>(f)</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a><span class="co">#&gt; vectra query node</span></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="co">#&gt; Columns (3):</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co">#&gt;   NAME &lt;string&gt;</span></span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="co">#&gt;   BIR74 &lt;double&gt;</span></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a><span class="co">#&gt;   geometry &lt;string&gt;</span></span></code></pre></div>
+<p>The counties are stored in longitude and latitude, so every measure
+below is planar in those units, the same convention the streaming verbs
+follow. Project the layer first if you need metric areas or
+distances.</p>
+</div>
+<div id="measures" class="section level2">
+<h2>Measures</h2>
+<p>A measure reads a geometry and returns a number, so it drops into
+<code>mutate()</code> as an ordinary column.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area   =</span> <span class="fu">st_area</span>(geometry),</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>         <span class="at">perim  =</span> <span class="fu">st_perimeter</span>(geometry),</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>         <span class="at">nverts =</span> <span class="fu">st_npoints</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>  <span class="fu">select</span>(NAME, area, perim, nverts) <span class="sc">|&gt;</span></span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a><span class="co">#&gt;          NAME       area    perim nverts</span></span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a><span class="co">#&gt; 1        Ashe 0.11428350 1.442087     27</span></span>
+<span id="cb3-10"><a href="#cb3-10" tabindex="-1"></a><span class="co">#&gt; 2   Alleghany 0.06139976 1.231197     26</span></span>
+<span id="cb3-11"><a href="#cb3-11" tabindex="-1"></a><span class="co">#&gt; 3       Surry 0.14301628 1.630283     28</span></span>
+<span id="cb3-12"><a href="#cb3-12" tabindex="-1"></a><span class="co">#&gt; 4   Currituck 0.06977098 2.967975     38</span></span>
+<span id="cb3-13"><a href="#cb3-13" tabindex="-1"></a><span class="co">#&gt; 5 Northampton 0.15275930 2.206482     34</span></span>
+<span id="cb3-14"><a href="#cb3-14" tabindex="-1"></a><span class="co">#&gt; 6    Hertford 0.09715756 1.669527     22</span></span></code></pre></div>
+<p><code>st_length()</code> returns the boundary length of a polygon (an
+alias of <code>st_perimeter()</code>) and the line length of a
+linestring. <code>st_ngeometries()</code> counts the parts of a
+multi-geometry. <code>st_x()</code> and <code>st_y()</code> read the
+coordinate of a point and return <code>NA</code> for anything that is
+not a point, which makes them most useful on a centroid:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">centroid =</span> <span class="fu">st_centroid</span>(geometry),</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>         <span class="at">cx =</span> <span class="fu">st_x</span>(centroid),</span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>         <span class="at">cy =</span> <span class="fu">st_y</span>(centroid)) <span class="sc">|&gt;</span></span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a>  <span class="fu">select</span>(NAME, cx, cy) <span class="sc">|&gt;</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt;          NAME        cx       cy</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt; 1        Ashe -81.49826 36.43140</span></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt; 2   Alleghany -81.12515 36.49101</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; 3       Surry -80.68575 36.41252</span></span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt; 4   Currituck -76.02750 36.40728</span></span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt; 5 Northampton -77.41056 36.42228</span></span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; 6    Hertford -76.99478 36.36145</span></span></code></pre></div>
+<p>A geometry-valued function such as <code>st_centroid()</code>
+produces a new WKB column (<code>centroid</code> above), and the next
+term reads it like any other column. That is the whole mechanism:
+geometry in, geometry or a scalar out, all as columns.</p>
+</div>
+<div id="predicates" class="section level2">
+<h2>Predicates</h2>
+<p>A unary predicate tests one geometry: <code>st_is_valid()</code>,
+<code>st_is_empty()</code>, <code>st_is_simple()</code>. A binary
+predicate tests a topological relation against a second geometry:
+<code>st_intersects()</code>, <code>st_within()</code>,
+<code>st_contains()</code>, <code>st_overlaps()</code>,
+<code>st_touches()</code>, <code>st_crosses()</code>,
+<code>st_equals()</code>, <code>st_disjoint()</code>,
+<code>st_covers()</code>, <code>st_covered_by()</code>.</p>
+<p>In <code>filter()</code> a predicate keeps the rows where the
+relation holds, the geometry-expression form of select-by-location:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>aoi <span class="ot">&lt;-</span> <span class="fu">st_as_sfc</span>(<span class="fu">st_bbox</span>(<span class="fu">c</span>(<span class="at">xmin =</span> <span class="sc">-</span><span class="dv">80</span>, <span class="at">ymin =</span> <span class="dv">35</span>, <span class="at">xmax =</span> <span class="sc">-</span><span class="dv">78</span>, <span class="at">ymax =</span> <span class="fl">36.5</span>)),</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>                 <span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">st_intersects</span>(geometry, aoi)) <span class="sc">|&gt;</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>  <span class="fu">nrow</span>()</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt; [1] 30</span></span></code></pre></div>
+<p>The second geometry here is a constant <code>sf</code> object. It is
+parsed once and shared read-only across every row, so testing a whole
+stream against one area of interest stays cheap. A multi-feature object
+is unioned to a single geometry first.</p>
+<p>In <code>mutate()</code> the same call returns a logical column,
+ready for a later verb:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">near_raleigh =</span> <span class="fu">st_intersects</span>(geometry, aoi)) <span class="sc">|&gt;</span></span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">filter</span>(near_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>  <span class="fu">select</span>(NAME) <span class="sc">|&gt;</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co">#&gt;         NAME</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="co">#&gt; 1     Warren</span></span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a><span class="co">#&gt; 2    Caswell</span></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co">#&gt; 3 Rockingham</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="co">#&gt; 4  Granville</span></span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a><span class="co">#&gt; 5     Person</span></span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a><span class="co">#&gt; 6      Vance</span></span></code></pre></div>
+</div>
+<div id="distance" class="section level2">
+<h2>Distance</h2>
+<p><code>st_distance()</code> returns the shortest planar distance to a
+second geometry, again a constant or another column:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>raleigh <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">st_point</span>(<span class="fu">c</span>(<span class="sc">-</span><span class="fl">78.64</span>, <span class="fl">35.78</span>)), <span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">centroid   =</span> <span class="fu">st_centroid</span>(geometry),</span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>         <span class="at">d_raleigh  =</span> <span class="fu">st_distance</span>(centroid, raleigh)) <span class="sc">|&gt;</span></span>
+<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>  <span class="fu">select</span>(NAME, d_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb7-7"><a href="#cb7-7" tabindex="-1"></a>  <span class="fu">arrange</span>(d_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb7-8"><a href="#cb7-8" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb7-9"><a href="#cb7-9" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb7-10"><a href="#cb7-10" tabindex="-1"></a><span class="co">#&gt;        NAME  d_raleigh</span></span>
+<span id="cb7-11"><a href="#cb7-11" tabindex="-1"></a><span class="co">#&gt; 1      Wake 0.01352946</span></span>
+<span id="cb7-12"><a href="#cb7-12" tabindex="-1"></a><span class="co">#&gt; 2    Durham 0.34428008</span></span>
+<span id="cb7-13"><a href="#cb7-13" tabindex="-1"></a><span class="co">#&gt; 3  Johnston 0.38179328</span></span>
+<span id="cb7-14"><a href="#cb7-14" tabindex="-1"></a><span class="co">#&gt; 4  Franklin 0.46173171</span></span>
+<span id="cb7-15"><a href="#cb7-15" tabindex="-1"></a><span class="co">#&gt; 5   Harnett 0.47354352</span></span>
+<span id="cb7-16"><a href="#cb7-16" tabindex="-1"></a><span class="co">#&gt; 6 Granville 0.52039217</span></span></code></pre></div>
+<p>When the second argument is a geometry column instead of a constant,
+the distance is computed row by row between the two columns.</p>
+</div>
+<div id="aggregating-a-measure" class="section level2">
+<h2>Aggregating a measure</h2>
+<p>Because a measure is an ordinary numeric column, it aggregates like
+one. A grouped <code>summarise()</code> over a measure is a zonal total
+computed entirely in the stream:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area =</span> <span class="fu">st_area</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">total_area =</span> <span class="fu">sum</span>(area), <span class="at">counties =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a><span class="co">#&gt;   total_area counties</span></span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt; 1    12.6278      100</span></span></code></pre></div>
+</div>
+<div id="transforms" class="section level2">
+<h2>Transforms</h2>
+<p>A transform returns a geometry, so it builds a new WKB column.
+Materialise it with <code>collect_sf()</code>, which reads the WKB
+column back into an <code>sf</code> object (point it at the column with
+<code>geom =</code>, and pass the <code>crs</code> the layer was stored
+in).</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>hulls <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">geometry =</span> <span class="fu">st_convex_hull</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">select</span>(NAME, geometry) <span class="sc">|&gt;</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>  <span class="fu">collect_sf</span>(<span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>hulls</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 100 features and 1 field</span></span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: -84.32385 ymin: 33.88199 xmax: -75.45698 ymax: 36.58965</span></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; Geodetic CRS:  NAD27</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt; First 10 features:</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;           NAME                       geometry</span></span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt; 1         Ashe POLYGON ((-81.47276 36.2343...</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt; 2    Alleghany POLYGON ((-81.23989 36.3653...</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; 3        Surry POLYGON ((-80.87438 36.2338...</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt; 4    Currituck POLYGON ((-75.79885 36.0728...</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt; 5  Northampton POLYGON ((-77.30948 36.1627...</span></span>
+<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt; 6     Hertford POLYGON ((-76.98069 36.2302...</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt; 7       Camden POLYGON ((-75.98134 36.1697...</span></span>
+<span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a><span class="co">#&gt; 8        Gates POLYGON ((-76.68874 36.2945...</span></span>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt; 9       Warren POLYGON ((-78.00629 36.1959...</span></span>
+<span id="cb9-23"><a href="#cb9-23" tabindex="-1"></a><span class="co">#&gt; 10      Stokes POLYGON ((-80.02567 36.2502...</span></span></code></pre></div>
+<p>The transform set is <code>st_centroid()</code>,
+<code>st_point_on_surface()</code> (a point guaranteed to lie on the
+geometry), <code>st_boundary()</code>, <code>st_envelope()</code> (the
+bounding rectangle), <code>st_convex_hull()</code>,
+<code>st_make_valid()</code> (repair an invalid geometry), and two
+parameterised forms: <code>st_buffer(g, dist)</code> and
+<code>st_simplify(g, tol)</code>. Buffering each county and reading the
+areas back:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">geometry =</span> <span class="fu">st_buffer</span>(geometry, <span class="fl">0.1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>  <span class="fu">select</span>(NAME, geometry) <span class="sc">|&gt;</span></span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>  <span class="fu">collect_sf</span>(<span class="at">crs =</span> <span class="fu">st_crs</span>(nc)) <span class="sc">|&gt;</span></span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>  <span class="fu">st_area</span>() <span class="sc">|&gt;</span></span>
+<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a><span class="co">#&gt; Units: [m^2]</span></span>
+<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a><span class="co">#&gt; [1] 2843204836 2123154372 3334381567 3098502995 3953811907 2852194601</span></span></code></pre></div>
+<p><code>st_geometry_type()</code> returns the GEOS type name
+(<code>&quot;Point&quot;</code>, <code>&quot;Polygon&quot;</code>,
+<code>&quot;MultiPolygon&quot;</code>, and so on) as a string column.</p>
+</div>
+<div id="the-second-geometry-of-a-binary-op" class="section level2">
+<h2>The second geometry of a binary op</h2>
+<p>For <code>st_distance()</code> and the binary predicates, the second
+argument can be:</p>
+<ul>
+<li>another geometry column, compared row by row;</li>
+<li>a constant <code>sf</code> or <code>sfc</code> object, parsed once
+and reused across the stream (a multi-feature object is unioned to one
+geometry);</li>
+<li>a hex-WKB string.</li>
+</ul>
+</div>
+<div id="missing-geometry" class="section level2">
+<h2>Missing geometry</h2>
+<p>A missing (<code>NA</code>) or unparseable geometry, or an operation
+with no answer (the coordinate of a non-point, the distance to a missing
+geometry), yields <code>NA</code> for that row rather than stopping the
+query:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="at">id =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>,</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">c</span>(<span class="fu">st_as_binary</span>(<span class="fu">st_geometry</span>(nc)[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], <span class="at">hex =</span> <span class="cn">TRUE</span>), <span class="cn">NA</span>)</span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a>), g)</span>
+<span id="cb11-6"><a href="#cb11-6" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" tabindex="-1"></a><span class="fu">tbl</span>(g) <span class="sc">|&gt;</span></span>
+<span id="cb11-8"><a href="#cb11-8" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area =</span> <span class="fu">st_area</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb11-9"><a href="#cb11-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb11-10"><a href="#cb11-10" tabindex="-1"></a><span class="co">#&gt;   id</span></span>
+<span id="cb11-11"><a href="#cb11-11" tabindex="-1"></a><span class="co">#&gt; 1  1</span></span>
+<span id="cb11-12"><a href="#cb11-12" tabindex="-1"></a><span class="co">#&gt; 2  2</span></span>
+<span id="cb11-13"><a href="#cb11-13" tabindex="-1"></a><span class="co">#&gt; 3  3</span></span>
+<span id="cb11-14"><a href="#cb11-14" tabindex="-1"></a><span class="co">#&gt; 4  4</span></span>
+<span id="cb11-15"><a href="#cb11-15" tabindex="-1"></a><span class="co">#&gt;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       geometry</span></span>
+<span id="cb11-16"><a href="#cb11-16" tabindex="-1"></a><span class="co">#&gt; 1                                 0106000000010000000103000000010000001b000000000000a0415e54c000000060ff1d4240000000209d6254c000000080e122424000000080f76354c0000000200523424000000020846854c0000000a09b2b4240000000c06d6f54c00000000026324240000000a0b06c54c000000040633c4240000000a0fa6c54c0000000c07942424000000040e16a54c0000000a0794b424000000060195654c0000000a053494240000000203e5654c000000060da44424000000020c95454c000000040c0414240000000800d5454c000000080873d4240000000000a5154c000000060f637424000000060d25054c000000060d833424000000080674f54c0000000c090304240000000605a4f54c000000040c42e424000000060e95054c0000000e01b2d4240000000400e5554c000000040872e4240000000c0205754c000000060342d424000000080675754c000000000662b424000000020aa5654c0000000205d26424000000060845754c000000060ac23424000000040025a54c0000000a07c244240000000a0635a54c0000000a03622424000000020965b54c0000000405f21424000000020fc5c54c0000000c0aa1e4240000000a0415e54c000000060ff1d4240</span></span>
+<span id="cb11-17"><a href="#cb11-17" tabindex="-1"></a><span class="co">#&gt; 2                                                                 0106000000010000000103000000010000001a000000000000605a4f54c000000040c42e424000000080674f54c0000000c09030424000000060d25054c000000060d8334240000000000a5154c000000060f6374240000000800d5454c000000080873d424000000020c95454c000000040c0414240000000203e5654c000000060da44424000000060195654c0000000a05349424000000000d23954c0000000e05848424000000040bf3b54c0000000c0c83f424000000040cf3d54c0000000e0cd3b424000000060c73c54c0000000001635424000000080353d54c0000000a0af334240000000c0963e54c0000000a018324240000000e0e63e54c000000040982f4240000000802d4054c000000060ef2e4240000000c0934154c0000000e05c30424000000040bd4254c0000000e08534424000000060644554c0000000a007374240000000e04e4654c0000000003037424000000080404754c00000000020364240000000c0474854c0000000009236424000000080db4854c0000000c074354240000000c0d04954c0000000e05d364240000000a04e4b54c0000000402d354240000000605a4f54c000000040c42e4240</span></span>
+<span id="cb11-18"><a href="#cb11-18" tabindex="-1"></a><span class="co">#&gt; 3 0106000000010000000103000000010000001c000000000000c0341d54c0000000200c1f4240000000207d1e54c0000000e09a204240000000405c2254c0000000c0dc20424000000080e12254c0000000806923424000000040772354c0000000a0a323424000000060cc2554c0000000e056224240000000c0f42754c0000000e0f422424000000060b72a54c000000040801f424000000000962c54c0000000e029214240000000a0562e54c0000000a015214240000000e0ff2e54c0000000a0e3214240000000002a3054c0000000e00f214240000000000b3154c0000000e083214240000000c0173254c000000060d11f4240000000e0f53754c0000000e0ef1d424000000040bc3754c0000000408d29424000000020e43854c0000000e05d2d4240000000202c3b54c000000060b62f424000000080353d54c0000000a0af33424000000060c73c54c0000000001635424000000040cf3d54c0000000e0cd3b424000000040bf3b54c0000000c0c83f424000000000d23954c0000000e05848424000000060a43554c0000000c01e484240000000801b2754c0000000805547424000000020dc1b54c0000000a08846424000000020fe1c54c000000040e8204240000000c0341d54c0000000200c1f4240</span></span>
+<span id="cb11-19"><a href="#cb11-19" tabindex="-1"></a><span class="co">#&gt; 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         &lt;NA&gt;</span></span>
+<span id="cb11-20"><a href="#cb11-20" tabindex="-1"></a><span class="co">#&gt;         area</span></span>
+<span id="cb11-21"><a href="#cb11-21" tabindex="-1"></a><span class="co">#&gt; 1 0.11428350</span></span>
+<span id="cb11-22"><a href="#cb11-22" tabindex="-1"></a><span class="co">#&gt; 2 0.06139976</span></span>
+<span id="cb11-23"><a href="#cb11-23" tabindex="-1"></a><span class="co">#&gt; 3 0.14301628</span></span>
+<span id="cb11-24"><a href="#cb11-24" tabindex="-1"></a><span class="co">#&gt; 4         NA</span></span></code></pre></div>
+</div>
+<div id="where-this-fits" class="section level2">
+<h2>Where this fits</h2>
+<p>The <code>st_*</code> expressions are the scalar, per-row layer of
+vectra’s spatial surface. They cover measures, predicates, and the
+common single-geometry transforms at the price of a column term, with no
+sf object built per batch. For an arbitrary per-feature transform that
+has no <code>st_*</code> form, reach for <code>spatial_map()</code>,
+which runs any sf-in, sf-out function over each feature. For
+constructions that read a whole feature set at once (dissolves,
+overlays, hulls of a group, planar topology), the set-wise
+<code>spatial_*</code> verbs in <a href="streaming-spatial.html">Streaming spatial operations</a> and <a href="coverage-topology.html">Coverage and topology</a> are the
+tools.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

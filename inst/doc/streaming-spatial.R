@@ -53,6 +53,15 @@ areas <- tbl(f_poly) |>
               crs = crs_nc)
 head(collect(areas))
 
+## ----smooth-------------------------------------------------------------------
+zig <- st_linestring(rbind(c(0, 0), c(1, 1), c(2, 0), c(3, 1), c(4, 0)))
+f_zig <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = 1L, geometry = st_as_binary(st_sfc(zig), hex = TRUE)), f_zig)
+
+tbl(f_zig) |> spatial_smooth(iterations = 3) |> collect_sf()
+unlink(f_zig)
+
 ## ----sample-points------------------------------------------------------------
 set.seed(1)
 pts <- st_coordinates(st_sample(st_union(nc), 500))
@@ -91,6 +100,17 @@ nrow(c_sf)
 plot(st_geometry(nc), border = "grey85", col = NA,
      main = "Counties clipped to the region")
 plot(st_geometry(c_sf), border = "#2a9d5c", col = "#2a9d5c33", add = TRUE)
+
+## ----split--------------------------------------------------------------------
+square <- st_polygon(list(rbind(c(0, 0), c(4, 0), c(4, 4), c(0, 4), c(0, 0))))
+blade  <- st_sfc(st_linestring(rbind(c(2, -1), c(2, 5))))
+
+f_sq <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = 1L, geometry = st_as_binary(st_sfc(square), hex = TRUE)), f_sq)
+
+tbl(f_sq) |> spatial_split(blade) |> collect_sf()
+unlink(f_sq)
 
 ## ----join-tag-----------------------------------------------------------------
 tagged <- tbl(fp) |>
@@ -153,6 +173,20 @@ nrow(kept)
 ## ----cleanup-scale, include = FALSE-------------------------------------------
 unlink(fbig)
 
+## ----knn----------------------------------------------------------------------
+towns <- suppressWarnings(st_centroid(st_geometry(nc)))[1:5]
+towns <- st_sf(town = nc$NAME[1:5], geometry = towns)
+
+set.seed(1)
+pts <- suppressWarnings(st_coordinates(st_sample(nc, 100)))
+f_pts <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(id = seq_len(nrow(pts)), x = pts[, 1], y = pts[, 2]), f_pts)
+
+tbl(f_pts) |>
+  spatial_knn(towns, k = 2, coords = c("x", "y"), crs = crs_nc, y_id = "town") |>
+  collect() |> head()
+unlink(f_pts)
+
 ## ----dissolve-----------------------------------------------------------------
 nc$band <- ifelse(nc$SID74 > 5, "high", "low")
 fb <- tempfile(fileext = ".vtr")
@@ -188,6 +222,13 @@ first <- spatial_overlay(polys) |>
 nrow(first)
 
 plot(first["year"], main = "Overlay pieces, earliest year wins")
+
+## ----overlay-two--------------------------------------------------------------
+zones <- st_sf(zone = c("A", "B"),
+               geometry = st_sfc(sq(0, 1.5), sq(1.5, 3)))
+
+inter <- spatial_overlay(polys, zones, how = "intersection") |> collect_sf()
+inter
 
 ## ----roundtrip----------------------------------------------------------------
 out <- tempfile(fileext = ".vtr")
