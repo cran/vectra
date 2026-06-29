@@ -7,6 +7,7 @@
 #include "group_agg.h"
 #include "sort.h"
 #include "topn.h"
+#include "group_topn.h"
 #include "limit.h"
 #include "join.h"
 #include "fuzzy_join.h"
@@ -201,6 +202,37 @@ SEXP C_topn_node(SEXP node_xptr, SEXP col_names_sexp,
     return wrap_node((VecNode *)tn);
 }
 
+/* --- C_group_topn_node --- */
+
+SEXP C_group_topn_node(SEXP node_xptr, SEXP key_names_sexp,
+                       SEXP order_sexp, SEXP desc_sexp) {
+    VecNode *child = unwrap_node(node_xptr);
+    R_ClearExternalPtr(node_xptr);
+
+    const VecSchema *schema = &child->output_schema;
+    int n_keys = Rf_length(key_names_sexp);
+
+    int *key_idx = (int *)malloc((size_t)(n_keys > 0 ? n_keys : 1) * sizeof(int));
+    for (int k = 0; k < n_keys; k++) {
+        const char *nm = CHAR(STRING_ELT(key_names_sexp, k));
+        int idx = vec_schema_find_col(schema, nm);
+        if (idx < 0)
+            vectra_error("group_topn: group column not found: %s", nm);
+        key_idx[k] = idx;
+    }
+
+    const char *order_nm = CHAR(STRING_ELT(order_sexp, 0));
+    int order_idx = vec_schema_find_col(schema, order_nm);
+    if (order_idx < 0)
+        vectra_error("group_topn: order column not found: %s", order_nm);
+
+    int descending = LOGICAL(desc_sexp)[0];
+    GroupTopNNode *gn = group_topn_node_create(child, n_keys, key_idx,
+                                               order_idx, descending);
+    free(key_idx);
+    return wrap_node((VecNode *)gn);
+}
+
 /* --- C_join_node --- */
 
 SEXP C_join_node(SEXP left_xptr, SEXP right_xptr,
@@ -283,6 +315,7 @@ SEXP C_window_node(SEXP node_xptr, SEXP key_names_sexp, SEXP win_specs_sexp) {
         const char *col = list_get_string(spec, "col");
         SEXP offset_sexp = list_get(spec, "offset");
         SEXP default_sexp = list_get(spec, "default");
+        SEXP desc_sexp = list_get(spec, "desc");
 
         specs[w].output_name = (char *)malloc(strlen(name) + 1);
         strcpy(specs[w].output_name, name);
@@ -296,6 +329,8 @@ SEXP C_window_node(SEXP node_xptr, SEXP key_names_sexp, SEXP win_specs_sexp) {
             specs[w].default_val = Rf_asReal(default_sexp);
             specs[w].has_default = 1;
         }
+        specs[w].desc = (desc_sexp != R_NilValue && !Rf_isNull(desc_sexp))
+                        ? Rf_asLogical(desc_sexp) : 0;
     }
 
     WindowNode *wn = window_node_create(child, n_keys, key_names, n_wins, specs);

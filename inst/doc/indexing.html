@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-12" />
+<meta name="date" content="2026-06-28" />
 
 <title>Indexing and Query Optimization</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Indexing and Query Optimization</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-12</h4>
+<h4 class="date">2026-06-28</h4>
 
 
 
@@ -616,9 +616,9 @@ The effect is most pronounced when the predicate is highly selective
 <span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a>})</span>
 <span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a></span>
 <span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Without index:&quot;</span>, t_no_idx[<span class="st">&quot;elapsed&quot;</span>], <span class="st">&quot;s</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt; Without index: 0.17 s</span></span>
+<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt; Without index: 0.08 s</span></span>
 <span id="cb9-21"><a href="#cb9-21" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;With index:   &quot;</span>, t_idx[<span class="st">&quot;elapsed&quot;</span>], <span class="st">&quot;s</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt; With index:    0.64 s</span></span></code></pre></div>
+<span id="cb9-22"><a href="#cb9-22" tabindex="-1"></a><span class="co">#&gt; With index:    0.33 s</span></span></code></pre></div>
 <p>The magnitude of the speedup depends on how many row groups the index
 can eliminate. On this small dataset with only 10 row groups and
 uniformly distributed site names, the difference may be modest. On a
@@ -762,7 +762,7 @@ site, or sample ID.</p>
 <span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>})</span>
 <span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a></span>
 <span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;With index, %in% filter:&quot;</span>, t_in_no_idx[<span class="st">&quot;elapsed&quot;</span>], <span class="st">&quot;s</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; With index, %in% filter: 0.7 s</span></span></code></pre></div>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; With index, %in% filter: 0.36 s</span></span></code></pre></div>
 <p>Without an index, the same query reads all row groups and filters in
 memory. The difference grows with file size.</p>
 </div>
