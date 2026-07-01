@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>Joins</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Joins</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -673,9 +673,9 @@ unmatched portion of the right side.</p>
 </div>
 <div id="filtering-joins-semi-and-anti" class="section level2">
 <h2>Filtering joins: semi and anti</h2>
-<p>Filtering joins do not bring in columns from the right table. They
-use the right table purely as a lookup to decide which left rows to keep
-or discard.</p>
+<p>Filtering joins use the right table purely as a lookup, deciding
+which left rows to keep or discard without bringing in any of its
+columns.</p>
 <p><strong>Semi join.</strong> <code>semi_join()</code> answers: “which
 of my left rows have at least one match in the right table?” The output
 schema is identical to the left table.</p>

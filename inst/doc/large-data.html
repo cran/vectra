@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>Working with Large Data</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Working with Large Data</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -665,7 +665,7 @@ One approach is to add the missing column with a default value in a
 <div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a>new_data_node <span class="ot">&lt;-</span> <span class="fu">tbl_csv</span>(csv_2017) <span class="sc">|&gt;</span></span>
 <span id="cb15-2"><a href="#cb15-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">observer =</span> <span class="cn">NA_character_</span>)</span></code></pre></div>
 <p>This produces a node whose schema matches a hypothetical archive that
-includes an <code>observer</code> column. The key point: because
+includes an <code>observer</code> column. Because
 <code>append_vtr()</code> accepts nodes, we can chain any transformation
 needed to match the target schema.</p>
 </div>
@@ -768,12 +768,11 @@ truly new rows to an archive:</p>
 against yesterday’s, then append only the additions. Combined with
 <code>delete_vtr()</code> for removals, we can maintain an up-to-date
 archive without full rewrites.</p>
-<p>Note that <code>diff_vtr()</code> performs a set-level diff on the
-key column. If a row exists in both snapshots with the same key but
-different values in other columns, it will not appear in either
-<code>$deleted</code> or <code>$added</code>. To detect modifications,
-we would need to compare the full row content after identifying shared
-keys.</p>
+<p><code>diff_vtr()</code> performs a set-level diff on the key column.
+If a row exists in both snapshots with the same key but different values
+in other columns, it will not appear in either <code>$deleted</code> or
+<code>$added</code>. To detect modifications, we would need to compare
+the full row content after identifying shared keys.</p>
 </div>
 <div id="external-sort" class="section level2">
 <h2>External sort</h2>
@@ -1092,9 +1091,9 @@ pipelines that stay within our system’s limits. The central principle is
 “stream early, materialize late.” Every row that we can filter out
 before it reaches a materializing operation (a sort, a join build, a
 grouping hash table) is a row that never occupies memory. Pushing
-filters upstream is not just a performance optimization; for
-larger-than-RAM data, it can be the difference between a pipeline that
-completes and one that exhausts memory.</p>
+filters upstream speeds up the pipeline, and for larger-than-RAM data it
+can be the difference between a pipeline that completes and one that
+exhausts memory.</p>
 <p>Here is a breakdown by operation type.</p>
 <p><strong>Constant-memory (streaming) operations.</strong>
 <code>filter</code>, <code>select</code>, <code>mutate</code>,

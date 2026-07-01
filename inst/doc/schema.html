@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>Star Schemas and Lookup</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Star Schemas and Lookup</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -695,10 +695,10 @@ goes missing:</p>
 </div>
 <div id="reusing-the-schema" class="section level2">
 <h2>Reusing the schema</h2>
-<p>The schema object does not hold live data. It stores file paths and
-reopens fresh scan nodes each time <code>lookup()</code> is called. This
-means the same schema works across multiple analyses without
-invalidating previous results.</p>
+<p>The schema object holds only file paths, reopening fresh scan nodes
+each time <code>lookup()</code> is called. This means the same schema
+works across multiple analyses without invalidating previous
+results.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a><span class="co"># Analysis 1: species composition by habitat</span></span>
 <span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>a1 <span class="ot">&lt;-</span> <span class="fu">lookup</span>(s, sp<span class="sc">$</span>name, site<span class="sc">$</span>habitat, <span class="at">.report =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
 <span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a></span>
@@ -797,7 +797,7 @@ aggregate:</p>
 <span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; 3     &lt;NA&gt;     1     1</span></span></code></pre></div>
 <p>This pipeline scans the fact table, joins only the species dimension
 (to get <code>family</code>), groups on it, and computes the
-aggregation. The site dimension is never touched.</p>
+aggregation, leaving the site dimension untouched.</p>
 <div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" tabindex="-1"></a><span class="fu">lookup</span>(s, count, site<span class="sc">$</span>habitat, <span class="at">.report =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
 <span id="cb17-2"><a href="#cb17-2" tabindex="-1"></a>  <span class="fu">group_by</span>(habitat) <span class="sc">|&gt;</span></span>
 <span id="cb17-3"><a href="#cb17-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_count =</span> <span class="fu">mean</span>(count), <span class="at">max_count =</span> <span class="fu">max</span>(count)) <span class="sc">|&gt;</span></span>

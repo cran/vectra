@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>Streaming spatial operations</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Streaming spatial operations</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -829,7 +829,7 @@ feature rather than dissolved away. It answers questions like “which
 protected areas, designated in which years, cover this exact patch of
 sea”.</p>
 <p>Three overlapping squares designated in different years make the
-smallest honest example.</p>
+smallest meaningful example.</p>
 <div class="sourceCode" id="cb26"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" tabindex="-1"></a>sq <span class="ot">&lt;-</span> <span class="cf">function</span>(a, b) <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
 <span id="cb26-2"><a href="#cb26-2" tabindex="-1"></a>  <span class="fu">c</span>(a, <span class="dv">0</span>), <span class="fu">c</span>(b, <span class="dv">0</span>), <span class="fu">c</span>(b, <span class="dv">1</span>), <span class="fu">c</span>(a, <span class="dv">1</span>), <span class="fu">c</span>(a, <span class="dv">0</span>))))</span>
 <span id="cb26-3"><a href="#cb26-3" tabindex="-1"></a>polys <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(<span class="at">year =</span> <span class="fu">c</span>(<span class="dv">1990</span><span class="dt">L</span>, <span class="dv">2010</span><span class="dt">L</span>, <span class="dv">2000</span><span class="dt">L</span>),</span>
@@ -922,14 +922,13 @@ with <code>layer_y</code> / <code>query_y</code>, the same way
 <div id="materializing-and-round-tripping" class="section level2">
 <h2>Materializing and round-tripping</h2>
 <p>Three exits bring a streamed result out. <code>collect()</code>
-returns the data.frame with geometry still a WKB string, which is what
-you want when the next step is a non-spatial verb or another
-<code>.vtr</code> write. <code>collect_sf()</code> decodes the WKB and
-reattaches the node’s CRS, giving an <code>sf</code> object.
-<code>write_vtr()</code> on a node streams the result straight to a new
-<code>.vtr</code> file without ever holding it whole, so a multi-step
-spatial pipeline can land its output on disk under the same fixed memory
-budget it ran in.</p>
+returns the data.frame with geometry still a WKB string, useful when the
+next step is a non-spatial verb or another <code>.vtr</code> write.
+<code>collect_sf()</code> decodes the WKB and reattaches the node’s CRS,
+giving an <code>sf</code> object. <code>write_vtr()</code> on a node
+streams the result straight to a new <code>.vtr</code> file without ever
+holding it whole, so a multi-step spatial pipeline can land its output
+on disk under the same fixed memory budget it ran in.</p>
 <div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a>out <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
 <span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a><span class="fu">tbl</span>(fp) <span class="sc">|&gt;</span></span>
 <span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a>  <span class="fu">spatial_filter</span>(region, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">crs =</span> crs_nc) <span class="sc">|&gt;</span></span>
@@ -1002,15 +1001,15 @@ workloads vectra targets, the native path is the common case, which is
 why the examples project up front.</p>
 <p>Four options tune the machinery:</p>
 <ul>
-<li><code>vectra.spatial_flush</code> (default 500,000): rows buffered
-before a spill flush.</li>
-<li><code>vectra.partition_budget</code>: rows held while routing a
-dissolve or partitioned join before flushing shards.</li>
-<li><code>vectra.overlay_mem_limit</code> (default 2 GB): the overlay’s
-peak working-set budget.</li>
-<li><code>vectra.overlay_threads</code> and
+<li><p><code>vectra.spatial_flush</code> (default 500,000): rows
+buffered before a spill flush.</p></li>
+<li><p><code>vectra.partition_budget</code>: rows held while routing a
+dissolve or partitioned join before flushing shards.</p></li>
+<li><p><code>vectra.overlay_mem_limit</code> (default 2 GB): the
+overlay’s peak working-set budget.</p></li>
+<li><p><code>vectra.overlay_threads</code> and
 <code>vectra.spatial_threads</code>: worker counts for the overlay and
-the per-batch GEOS loops.</li>
+the per-batch GEOS loops.</p></li>
 </ul>
 </div>
 <div id="practical-guidance" class="section level2">

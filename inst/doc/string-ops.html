@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>String Operations and Fuzzy Matching</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">String Operations and Fuzzy Matching</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -592,13 +592,12 @@ regular expression. When <code>fixed = TRUE</code> (the default in
 vectra), the engine uses a direct substring search, which avoids the
 cost of compiling a regex automaton. For exact substring tests and
 simple replacements, this is the right choice.</p>
-<p>Note that vectra defaults to <code>fixed = TRUE</code>, which differs
-from base R where <code>fixed</code> defaults to <code>FALSE</code>. We
-chose this default because in our experience the majority of string
-filtering and replacement tasks in data cleaning involve literal
-substrings, not regex patterns. When you need actual regex, pass
-<code>fixed = FALSE</code> explicitly. This is covered in the next
-section.</p>
+<p>vectra defaults to <code>fixed = TRUE</code>, which differs from base
+R where <code>fixed</code> defaults to <code>FALSE</code>. We chose this
+default because in our experience the majority of string filtering and
+replacement tasks in data cleaning involve literal substrings, not regex
+patterns. When you need actual regex, pass <code>fixed = FALSE</code>
+explicitly. This is covered in the next section.</p>
 <div id="filtering-with-grepl" class="section level3">
 <h3>Filtering with grepl</h3>
 <p><code>grepl(pattern, x, fixed = TRUE)</code> returns a boolean column

@@ -32,7 +32,7 @@ window.VA = {
 body <- "
 var s=VA.setup('sm-cv'); if(!s)return; var x=s.ctx,W=s.w,H=s.h,C=VA.C;
 var PX=72,PY=58,PW=W-72-36,PH=H-58-66,RAM=0.74;
-var PERIOD=8.0;
+var PERIOD=10.0;
 function draw(tc){VA.bg(x,W,H);
   VA.glow(x,C.cyan,7);x.fillStyle=C.cyan;x.textAlign='left';x.font=VA.F(15,true);x.fillText('MEMORY  AS  ROWS  ARE  PROCESSED',16,28);VA.noglow(x);
   x.strokeStyle=C.mut;x.lineWidth=1;x.beginPath();x.moveTo(PX,PY);x.lineTo(PX,PY+PH);x.lineTo(PX+PW,PY+PH);x.stroke();
@@ -44,8 +44,9 @@ function draw(tc){VA.bg(x,W,H);
   for(var i=0;i<=le;i++){var v=(i/PW)*redMax;x.lineTo(PX+i,PY+PH*(1-Math.min(v,1.02)));}x.stroke();VA.noglow(x);
   var g=0.16;x.strokeStyle=C.green;x.lineWidth=2.5;VA.glow(x,C.green,6);x.beginPath();
   for(var i=0;i<=le;i++){x.lineTo(PX+i,PY+PH*(1-g-0.012*Math.sin(i/13)));}x.stroke();VA.noglow(x);
-  x.fillStyle=C.green;x.font=VA.F(12,true);x.textAlign='left';x.fillText('streaming',PX+Math.min(le,PW-96),PY+PH*(1-g)-9);
-  var redv=t*redMax,ly=PY+PH*(1-Math.min(redv,1.02));x.fillStyle=C.red;x.fillText('in memory',PX+Math.min(le,PW-96),Math.max(PY+13,ly-9));
+  var LX=PX+Math.min(le,PW-96),SY=PY+PH*(1-g)-9;
+  x.fillStyle=C.green;x.font=VA.F(12,true);x.textAlign='left';x.fillText('streaming',LX,SY);
+  var redv=t*redMax,ly=PY+PH*(1-Math.min(redv,1.02));x.fillStyle=C.red;x.fillText('in memory',LX,Math.min(Math.max(PY+13,ly-9),SY-20));
   x.fillStyle=C.mut;x.font=VA.F(11);x.textAlign='center';x.fillText('streaming keeps the footprint flat as the file grows',W/2,H-14);
   VA.scan(x,W,H);
 }
@@ -58,7 +59,7 @@ cat(paste0(
 ## ----ram-box-anim, echo = FALSE, results = "asis", eval = TRUE----------------
 body <- "
 var s=VA.setup('rb-cv'); if(!s)return; var x=s.ctx,W=s.w,H=s.h,C=VA.C;
-var BX=150,BW=W-150-40,RAM=0.7,ramX=BX+BW*RAM,BH=52,PERIOD=7.0;
+var BX=150,BW=W-150-40,RAM=0.7,ramX=BX+BW*RAM,BH=52,PERIOD=9.0;
 var rows=[
  {y:88,name:'in memory',over:true,segs:[['data',0.44,C.cyan],['working copy',0.34,C.amber],['R',0.15,C.purple]]},
  {y:176,name:'streaming',over:false,segs:[['batch',0.09,C.green],['R',0.15,C.purple]]}
@@ -71,9 +72,9 @@ function draw(tc){VA.bg(x,W,H);
     x.fillStyle=C.ink;x.font=VA.F(13,true);x.textAlign='right';x.fillText(rw.name,BX-14,rw.y+BH/2+5);
     for(var k=0;k<rw.segs.length;k++){var seg=rw.segs[k],w=seg[1]*BW*t;
       x.fillStyle=seg[2];x.globalAlpha=0.85;x.fillRect(X,rw.y,w,BH);x.globalAlpha=1;x.strokeStyle=C.bg;x.lineWidth=1.5;x.strokeRect(X,rw.y,w,BH);
-      if(w>40){x.fillStyle=C.bg;x.font=VA.F(11,true);x.textAlign='center';x.fillText(seg[0],X+w/2,rw.y+BH/2+4);}
+      x.font=VA.F(11,true);if(w>x.measureText(seg[0]).width+12){x.fillStyle=C.bg;x.textAlign='center';x.fillText(seg[0],X+w/2,rw.y+BH/2+4);}
       X+=w;}
-    if(rw.over&&X>ramX){VA.glow(x,C.red,8);x.fillStyle=C.red;x.font=VA.F(12,true);x.textAlign='left';x.fillText('overflow',ramX+8,rw.y+BH/2+5);VA.noglow(x);}
+    if(rw.over&&X>ramX){var ox=Math.max(ramX,BX);x.save();x.beginPath();x.rect(ox,rw.y,X-ox,BH);x.clip();x.strokeStyle='rgba(255,59,107,0.5)';x.lineWidth=1.5;for(var hx=ox-BH;hx<X;hx+=10){x.beginPath();x.moveTo(hx,rw.y+BH);x.lineTo(hx+BH,rw.y);x.stroke();}x.restore();VA.glow(x,C.red,8);x.strokeStyle=C.red;x.lineWidth=2;x.strokeRect(ox,rw.y,X-ox,BH);VA.noglow(x);x.lineWidth=1;}
     if(!rw.over){VA.glow(x,C.green,6);x.fillStyle=C.green;x.font=VA.F(12,true);x.textAlign='left';x.fillText('fits',X+12,rw.y+BH/2+5);VA.noglow(x);}}
   x.fillStyle=C.mut;x.font=VA.F(11);x.textAlign='center';x.fillText('streaming holds one batch and R at a time',W/2,H-14);
   VA.scan(x,W,H);

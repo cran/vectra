@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-29" />
+<meta name="date" content="2026-06-30" />
 
 <title>Out-of-core GIS with vectra</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Out-of-core GIS with vectra</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-29</h4>
+<h4 class="date">2026-06-30</h4>
 
 
 
@@ -402,7 +402,7 @@ var N=COLS*ROWS;
 var LX=GX+GW+70, LY=86, RH=15;
 var seed=20260625;function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
 var V=[];for(var i=0;i<N;i++){V.push(VA.clamp(0.18+0.62*((i%COLS)/(COLS-1))+0.18*(rnd()-0.5),0,1));}
-var PER=0.3, PERIOD=N*PER+1.8;
+var PER=0.42, PERIOD=N*PER+1.8;
 function cell(i){var c=i%COLS,r=Math.floor(i/COLS);return {c:c,r:r,cx:GX+c*TW+TW/2,cy:GY+r*TH+TH/2};}
 function draw(tc){VA.bg(x,W,H);
   VA.glow(x,C.cyan,7);x.fillStyle=C.cyan;x.textAlign='left';x.font=VA.F(15,true);x.fillText('RASTER  ->  ONE ROW PER CELL',16,30);VA.noglow(x);
@@ -455,7 +455,7 @@ locator with an sf predicate, keeping or dropping whole features.</p>
 (function(){
 
 var s=VA.setup('sbl-cv'); if(!s)return; var x=s.ctx,W=s.w,H=s.h,C=VA.C;
-var PER=6.0,HOLD=1.6,PERIOD=PER+HOLD;
+var PER=8.0,HOLD=1.6,PERIOD=PER+HOLD;
 var poly=[[330,128],[470,116],[548,214],[472,322],[332,332],[262,216]];
 var seed=77;function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
 var P=[];for(var i=0;i<56;i++){P.push([60+rnd()*(W-120),64+rnd()*(H-118)]);}
@@ -465,7 +465,7 @@ function drawPoly(){x.save();VA.glow(x,C.amber,8);x.strokeStyle=C.amber;x.lineWi
 function draw(tc){VA.bg(x,W,H);
   VA.glow(x,C.cyan,7);x.fillStyle=C.cyan;x.textAlign='left';x.font=VA.F(15,true);x.fillText('SELECT BY LOCATION',16,28);VA.noglow(x);
   drawPoly();
-  x.fillStyle=C.amber;x.font=VA.F(12,true);x.textAlign='left';x.fillText('study region',poly[5][0]-2,212);
+  x.fillStyle=C.amber;x.font=VA.F(12,true);x.textAlign='center';x.fillText('study region',405,222);
   var sweep=VA.clamp(tc/PER,0,1)*W;
   var kept=0,seen=0;
   for(var i=0;i<P.length;i++){var px=P[i][0],py=P[i][1];var reached=px<=sweep;var ins=inPoly(px,py);
@@ -518,7 +518,7 @@ pass.</p>
 
 var s=VA.setup('rz-cv'); if(!s)return; var x=s.ctx,W=s.w,H=s.h,C=VA.C;
 var GX=44,GW=W-88,COLS=16,ROWS=8,TW=GW/COLS,GY=150,TH=27,GH=ROWS*TH;
-var PERIOD=9.0;
+var PERIOD=12.0;
 var seed=531;function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
 var D=[];var cxC=10.5,cyC=4.5;
 for(var i=0;i<150;i++){var c=Math.round(VA.clamp(cxC+(rnd()-0.5)*9+(rnd()-0.5)*5,0,COLS-1));var r=Math.round(VA.clamp(cyC+(rnd()-0.5)*5+(rnd()-0.5)*3,0,ROWS-1));D.push([c,r,rnd()]);}
@@ -625,22 +625,21 @@ is a global shortest-path problem and stays resident:
 </div>
 <div id="the-cost-model" class="section level2">
 <h2>The cost model</h2>
-<p>Each operation states its memory tier, so the toolbox reads as a cost
-model rather than a grab-bag. The tier tells you what a run holds
-resident.</p>
+<p>Each operation states the memory it needs to run. The three tiers
+below group the spatial verbs by how much a run keeps resident.</p>
 <canvas id="ct-cv" width="860" height="400" style="max-width:100%">
 </canvas>
 <script>
 (function(){
 
 var s=VA.setup('ct-cv'); if(!s)return; var x=s.ctx,W=s.w,H=s.h,C=VA.C;
-var PERIOD=8.0;
+var PERIOD=10.0;
 var rows=[
  {name:'monoid fold',sub:'spatial_filter, rasterize, zonal',col:C.green,f:function(t){return 0.15+0.02*Math.sin(t*9);}},
  {name:'sort / partition',sub:'focal, terrain, warp, partitioned join',col:C.amber,f:function(t){return 0.16+0.2*(0.5-0.5*Math.cos(t*6.5));}},
  {name:'all-to-all',sub:'self-overlay, voronoi, neighbour graphs',col:C.red,f:function(t){return VA.clamp(t,0,1)*0.9+0.05;}}
 ];
-var PX=212,PW=W-212-92,BH=56,GAP=36,TOP=74;
+var PX=310,PW=W-310-92,BH=56,GAP=36,TOP=74;
 function draw(tc){VA.bg(x,W,H);
   VA.glow(x,C.cyan,7);x.fillStyle=C.cyan;x.textAlign='left';x.font=VA.F(15,true);x.fillText('COST-MODEL TIERS  ::  MEMORY OVER A RUN',16,28);VA.noglow(x);
   var t=tc/PERIOD;
@@ -653,7 +652,7 @@ function draw(tc){VA.bg(x,W,H);
     x.globalAlpha=1;
     if(t<1){var cx2=PX+steps;x.strokeStyle=C.cyan;VA.glow(x,C.cyan,5);x.beginPath();x.moveTo(cx2,y);x.lineTo(cx2,y+BH);x.stroke();VA.noglow(x);}
     x.fillStyle=rw.col;x.font=VA.F(14,true);x.textAlign='right';x.fillText(rw.name,PX-14,y+24);
-    x.fillStyle=C.mut;x.font=VA.F(10);x.fillText(rw.sub,PX-14,y+40);
+    x.fillStyle=C.mut;x.font=VA.F(9);x.fillText(rw.sub,PX-14,y+40);
     x.fillStyle=C.red;x.font=VA.F(10);x.textAlign='left';x.fillText('RAM',PX+PW+8,y-3);}
   x.fillStyle=C.mut;x.font=VA.F(11);x.textAlign='center';x.fillText('fold and partition stay under the RAM line; all-to-all reaches it',W/2,H-16);
   VA.scan(x,W,H);
@@ -675,27 +674,26 @@ tile-and-halo reads, <code>proximity()</code> over its transpose passes,
 <li><strong>All-to-all.</strong> Inherently resident:
 <code>spatial_overlay()</code> and operations such as Voronoi, Delaunay,
 convex hull, and global neighbour graphs. For these, collect the result
-and run sf or terra on it; vectra does not pretend to stream what is
-global by nature.</li>
+and run sf or terra on it.</li>
 </ul>
-<p>That boundary is the honest part. The streaming envelope covers the
-operations whose memory can be bounded, and names the ones it
-cannot.</p>
+<p>The streaming envelope covers every operation whose memory can be
+bounded. For the rest, vectra collects the result and hands it to sf or
+terra.</p>
 </div>
 <div id="where-to-go-next" class="section level2">
 <h2>Where to go next</h2>
 <ul>
-<li><a href="streaming-spatial.html">Streaming spatial operations</a>
+<li><p><a href="streaming-spatial.html">Streaming spatial operations</a>
 for the hands-on companion: every vector verb run end to end on a real
-layer, with runnable code and figures.</li>
-<li><a href="large-data.html">Larger-than-RAM strategy</a> for the spill
-and partition tiers in depth.</li>
-<li><a href="offload.html">Offloading</a> for the cost grades the
-spatial tiers reuse.</li>
-<li><a href="sdm.html">Species distribution modelling</a> for an
-end-to-end ecological workflow.</li>
-<li>The function reference for every spatial verb and its
-arguments.</li>
+layer, with runnable code and figures.</p></li>
+<li><p><a href="large-data.html">Larger-than-RAM strategy</a> for the
+spill and partition tiers in depth.</p></li>
+<li><p><a href="offload.html">Offloading</a> for the cost grades the
+spatial tiers reuse.</p></li>
+<li><p><a href="sdm.html">Species distribution modelling</a> for an
+end-to-end ecological workflow.</p></li>
+<li><p>The function reference for every spatial verb and its
+arguments.</p></li>
 </ul>
 </div>
 
