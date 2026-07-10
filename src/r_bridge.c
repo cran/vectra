@@ -421,11 +421,33 @@ SEXP C_scan_node(SEXP path) {
     return wrap_node((VecNode *)sn);
 }
 
+/* Scan over a temporary .vtr owned by the node: the file is unlinked when the
+   node is freed. Used by df_to_node() so a data.frame lifted into a lazy node
+   (tbl_xlsx, and the data.frame write_*() paths) owns its scratch file for the
+   node's whole lifetime instead of relying on the caller's stack frame. */
+SEXP C_scan_node_temp(SEXP path) {
+    const char *fpath = CHAR(STRING_ELT(path, 0));
+    ScanNode *sn = scan_node_create(fpath, NULL, 0);
+    sn->delete_on_free = 1;
+    return wrap_node((VecNode *)sn);
+}
+
 /* --- C_collect --- */
 
 SEXP C_collect(SEXP node_xptr) {
     VecNode *node = unwrap_node(node_xptr);
-    return vec_collect(node);
+    /* A vectra plan is consumed by exactly one terminal operation, the same
+       consume-once contract every verb enforces on its input (each verb clears
+       its child handle). collect() drains the pull cursor to end-of-stream, so
+       the node is spent afterwards; invalidate the handle here so a second
+       terminal op (another collect(), or a write_*()) on the same node raises
+       the clear "already collected" error instead of silently draining an
+       exhausted plan and returning wrong or empty data. */
+    R_ClearExternalPtr(node_xptr);
+    SEXP result = PROTECT(vec_collect(node));
+    node->free_node(node);
+    UNPROTECT(1);
+    return result;
 }
 
 /* --- C_node_optimize / C_node_next_batch ---

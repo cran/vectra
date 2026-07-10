@@ -15,6 +15,7 @@ spatial_overlay(
   grid = NULL,
   precision = NULL,
   dedup = TRUE,
+  exact = FALSE,
   flush_rows = NULL,
   mem_limit = NULL,
   threads = NULL,
@@ -78,17 +79,31 @@ Duplicates add no faces, so the result is identical; this only removes the
 redundant noding when many records are stacked over one site (common in
 WDPA-style data). \code{TRUE} by default; set \code{FALSE} to overlay every record.}
 
-\item{flush_rows}{Exploded rows buffered before a spill flush. Defaults to
-\code{getOption("vectra.spatial_flush", 5e5)}.}
+\item{exact}{How a piece is credited to the inputs that cover it. Each piece is
+a face of the arrangement of all input boundaries, so it lies wholly inside or
+outside every input up to snap-rounding slivers along the boundary. With
+\code{FALSE} (the default) the whole face is credited to each input whose interior
+contains the face's representative point, and the piece geometry is the face;
+per-input covered area is then exact up to about the noding precision times the
+face perimeter. With \code{TRUE} each face is intersected with every partially
+covering input and credited that intersection area, giving areas exact to the
+snapping grid at the cost of extra geometry work and thin boundary slivers as
+separate pieces.}
+
+\item{flush_rows}{Exploded rows buffered before a spill flush. \code{NULL}
+(the default) instead flushes once a spill buffer's size crosses the
+streaming memory budget (a fraction of \code{\link[=vectra_mem]{vectra_mem()}}, set with
+\code{options(vectra.memory = )}); an explicit value caps each buffer at that
+many rows.}
 
 \item{mem_limit}{Approximate peak working-set budget in bytes, bounding the
 per-tile size (\code{tile_bytes = mem_limit / (threads * 24)}). It is a throughput
 knob with an interior optimum, not "bigger is faster": too small replicates
 features across many tiles, too large nodes too much linework per tile (a
 superlinear cost), and a budget of tens of GB runs slower than the default on
-a dense layer. Lower it for tighter memory. Defaults via
-\code{getOption("vectra.overlay_mem_limit", ...)} to a value that scales with
-\code{threads} to hold the per-tile size near its measured optimum.}
+a dense layer. Lower it for tighter memory. \code{NULL} (the default) scales with
+\code{threads} to hold the per-tile size near its measured optimum, capped by the
+session budget \code{\link[=vectra_mem]{vectra_mem()}} (\code{options(vectra.memory = )}).}
 
 \item{threads}{Number of OpenMP threads for the per-component overlay within a
 chunk. \code{0} (the default, via \code{getOption("vectra.overlay_threads", 0)}) uses

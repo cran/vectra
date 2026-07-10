@@ -13,6 +13,12 @@ test_that("offload is the identity on values", {
   expect_equal(collect(spilled), full)
   expect_s3_class(spilled, "vectra_offload")
   expect_s3_class(spilled, "vectra_node")
+
+  # A replay cache is re-collectable: unlike a one-shot node, collecting it
+  # replays from the spill, so a second (and third) read reproduce the first.
+  expect_equal(collect(spilled), full)
+  expect_equal(collect(spilled), full)
+  expect_no_error(print(spilled))   # printing after a collect must still work
 })
 
 test_that("offload preserves string, factor, and Date columns", {
@@ -99,6 +105,15 @@ test_that("offload(by=) on a discrete key is a true partition (list-like)", {
   expect_equal(sort(rebuilt$x), sort(df$x))        # union reproduces input
   for (i in seq_along(p))
     expect_equal(length(unique(collect(p[[i]])$g)), 1L)
+
+  # A shard rebuilds a fresh node on each access, so a partition is
+  # re-collectable: iterating it a second time must reproduce the first pass,
+  # not error on an exhausted plan.
+  again <- do.call(rbind, lapply(p, collect))
+  expect_equal(sort(again$x), sort(df$x))
+  s <- p[["a"]]
+  expect_s3_class(s, "vectra_node")
+  expect_equal(collect(p[["a"]])$g, collect(p[["a"]])$g)  # re-index, re-collect
 })
 
 test_that("offload(by=) auto-range-partitions a continuous key", {
@@ -140,9 +155,7 @@ test_that("multi-flush routing (tiny budget) still reproduces the input", {
   write_vtr(df, f, batch_size = 25)
 
   # Force many flushes so shards become multi-run concats.
-  old <- options(vectra.partition_budget = 50)
-  on.exit(options(old), add = TRUE)
-  p <- offload(tbl(f), by = "g")
+  p <- offload(tbl(f), by = "g", flush_rows = 50)
   rebuilt <- do.call(rbind, lapply(p, collect))
   expect_equal(sort(rebuilt$x), sort(df$x))
   expect_equal(sum(attr(p, ".counts")), nrow(df))

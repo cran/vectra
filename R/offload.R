@@ -13,7 +13,6 @@
 #                            independent per-shard fits.
 # The external-sort instance is the existing arrange() (already disk-backed).
 
-.PARTITION_BUDGET <- 1e6        # rows buffered before a routing flush
 
 # -- cost grade ---------------------------------------------------------------
 
@@ -68,6 +67,23 @@ grade_of <- function(x) {
   node
 }
 
+# An offloaded node is a file-backed replay cache: reading it replays from the
+# spill rather than draining a one-shot pull node, so collect() (and a direct
+# collect_chunked()) open a fresh scan over the spill and can be called
+# repeatedly -- the "O(1) re-reads" the cache promises. (Piping the node through
+# further verbs consumes that derived pipeline as usual; the cache itself stays
+# reachable through the same handle.)
+#' @export
+collect.vectra_offload <- function(x, ...) collect(tbl(x$.path))
+
+#' @rdname collect_chunked
+#' @export
+collect_chunked.vectra_offload <- function(x, f, .init = NULL, combine = NULL,
+                                           commutative = FALSE) {
+  collect_chunked(tbl(x$.path), f, .init = .init, combine = combine,
+                  commutative = commutative)
+}
+
 #' Spill a query to disk and stream it back (the offload functor)
 #'
 #' Materializes a query once to disk and returns a stream that holds the same
@@ -105,6 +121,11 @@ grade_of <- function(x) {
 #'   the returned node is garbage-collected.
 #' @param compress Compression for spill files, passed to [write_vtr()]:
 #'   `"fast"` (default), `"small"`, or `"none"`.
+#' @param flush_rows Row cap on each shard buffer during partition routing.
+#'   `NULL` (the default) instead flushes once the buffered bytes cross the
+#'   streaming memory budget (a fraction of [vectra_mem()], set with
+#'   `options(vectra.memory = )`); an explicit value caps each buffer at that
+#'   many rows.
 #'
 #' @return A `vectra_node` (no `by`) or a `vectra_partition` (with `by`), each
 #'   carrying a cost grade shown by [print()] and [explain()].
@@ -131,7 +152,8 @@ grade_of <- function(x) {
 #' @export
 offload <- function(x, by = NULL, n = NULL,
                     method = c("auto", "level", "range", "hash"),
-                    path = NULL, compress = c("fast", "small", "none")) {
+                    path = NULL, compress = c("fast", "small", "none"),
+                    flush_rows = NULL) {
   if (!inherits(x, "vectra_node"))
     stop("`x` must be a vectra_node (build one with tbl(), tbl_csv(), ...)")
   method <- match.arg(method)
@@ -161,13 +183,10 @@ offload <- function(x, by = NULL, n = NULL,
   if (method %in% c("range", "hash") && is.null(n))
     n <- if (method == "range") 8L else 16L
 
-  budget <- getOption("vectra.partition_budget", .PARTITION_BUDGET)
   spec <- .partition_spec(spill, by, method, n)
-  res <- .partition_router(spill, spec$assign, budget)
+  res <- .partition_router(spill, spec$assign, flush_rows)
 
   labels <- spec$order(names(res$runs))
-  shards <- lapply(labels, function(lab) .concat_runs(res$runs[[lab]]))
-  names(shards) <- labels
   counts <- vapply(labels, function(lab) res$counts[[lab]], numeric(1))
 
   total <- res$n
@@ -181,6 +200,13 @@ offload <- function(x, by = NULL, n = NULL,
   reg.finalizer(reg, function(e) try(unlink(e$paths), silent = TRUE),
                 onexit = TRUE)
 
+  # A shard holds its run-file paths, not a pre-built node: each access rebuilds
+  # a fresh scan over the (persistent) run files, so a shard is re-collectable --
+  # a partition behaves like a list you can iterate more than once. `reg` rides
+  # along so an extracted shard keeps the run files alive.
+  shards <- lapply(labels, function(lab) .new_shard(res$runs[[lab]], reg))
+  names(shards) <- labels
+
   p <- shards
   attr(p, "by") <- by
   attr(p, ".counts") <- stats::setNames(counts, labels)
@@ -188,8 +214,10 @@ offload <- function(x, by = NULL, n = NULL,
   attr(p, ".grade") <- new_offload_grade(
     tier = sprintf("partition by '%s' (%s)", by, method),
     passes = "1 spill + 1 routing pass",
-    peak = sprintf("O(routing budget = %g rows), or O(one shard) when collected",
-                   budget),
+    peak = if (is.null(flush_rows))
+      "O(streaming memory budget), or O(one shard) when collected"
+    else sprintf("O(routing budget = %g rows), or O(one shard) when collected",
+                 flush_rows),
     io = "O(n)",
     note = "localizes coupling so each shard fits in RAM")
   class(p) <- c("vectra_partition", "list")
@@ -264,7 +292,11 @@ offload <- function(x, by = NULL, n = NULL,
 # One streaming pass: route each batch's rows to per-label buffers, flush to a
 # run-file when the buffered row count crosses the budget. Each label ends as a
 # set of run-files (a lazy concat downstream). Bounded by the budget.
-.partition_router <- function(spill, assign, budget) {
+.partition_router <- function(spill, assign, budget = NULL) {
+  # Default (budget NULL): flush all shard buffers once the buffered bytes cross
+  # the streaming memory budget. An explicit budget caps by total buffered rows.
+  by_rows <- !is.null(budget)
+  limit   <- if (by_rows) budget else .stream_bytes()
   st <- new.env(parent = emptyenv())
   st$buffers <- list(); st$runs <- list(); st$counts <- list()
   st$buffered <- 0; st$n <- 0
@@ -292,8 +324,9 @@ offload <- function(x, by = NULL, n = NULL,
     for (lab in names(idx))
       st$buffers[[lab]] <- c(st$buffers[[lab]],
                              list(chunk[idx[[lab]], , drop = FALSE]))
-    st$buffered <- st$buffered + nrow(chunk)
-    if (st$buffered >= budget) flush_all()
+    st$buffered <- st$buffered +
+      (if (by_rows) nrow(chunk) else as.numeric(utils::object.size(chunk)))
+    if (st$buffered >= limit) flush_all()
   }
   flush_all()
   list(runs = st$runs, counts = st$counts, n = st$n)
@@ -304,6 +337,45 @@ offload <- function(x, by = NULL, n = NULL,
 .concat_runs <- function(paths) {
   nodes <- lapply(paths, tbl)
   if (length(nodes) == 1) nodes[[1]] else do.call(bind_rows, nodes)
+}
+
+# -- shard: a re-collectable partition element --------------------------------
+
+# A shard is a lightweight handle on a set of run-file paths (plus the
+# partition's cleanup registry, so the files outlive the parent). It is not a
+# node: `.shard_node()` builds a fresh scan on demand, so a shard can be
+# collected -- or fed to any verb -- more than once, unlike a node, which a
+# terminal op consumes.
+.new_shard <- function(paths, reg)
+  structure(list(paths = paths, reg = reg), class = "vectra_shard")
+
+.shard_node <- function(s) .concat_runs(s$paths)
+
+#' @export
+collect.vectra_shard <- function(x, ...) collect(.shard_node(x))
+
+#' @rdname collect_chunked
+#' @export
+collect_chunked.vectra_shard <- function(x, f, .init = NULL, combine = NULL,
+                                         commutative = FALSE) {
+  collect_chunked(.shard_node(x), f, .init = .init, combine = combine,
+                  commutative = commutative)
+}
+
+#' @export
+print.vectra_shard <- function(x, ...) {
+  cat(sprintf("<vectra shard: %d run-file(s)>\n", length(x$paths)))
+  invisible(x)
+}
+
+# Indexing a partition yields a fresh node for the shard, so `p[["key"]]` can be
+# collected or piped into verbs repeatedly. Iterating with lapply()/Map() hits
+# the stored shard handles instead (S3 `[[` is bypassed there), which dispatch
+# to collect.vectra_shard -- both routes rebuild, so both re-run.
+#' @export
+`[[.vectra_partition` <- function(x, i) {
+  s <- .subset2(x, i)
+  if (inherits(s, "vectra_shard")) .shard_node(s) else s
 }
 
 #' @export

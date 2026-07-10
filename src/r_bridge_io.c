@@ -3,6 +3,8 @@
 #include "types.h"
 #include "csv_write.h"
 #include "csv_scan.h"
+#include "fasta_scan.h"
+#include "bed_scan.h"
 #include "sql_scan.h"
 #include "sql_write.h"
 #include "tiff_format.h"
@@ -102,16 +104,17 @@ static void vtr_writer(VecNode *node, const char *path, void *ctx) {
 
 /* ---- scan entry points ---- */
 
-static VecNode *csv_scan_adapter(const char *path, int64_t bs) {
-    return (VecNode *)csv_scan_node_create(path, bs);
-}
-
 static VecNode *tiff_scan_adapter(const char *path, int64_t bs) {
     return (VecNode *)tiff_scan_node_create(path, bs);
 }
 
-SEXP C_csv_scan_node(SEXP path_sexp, SEXP batch_size_sexp) {
-    return scan_node_create(path_sexp, batch_size_sexp, csv_scan_adapter);
+SEXP C_csv_scan_node(SEXP path_sexp, SEXP batch_size_sexp, SEXP delim_sexp) {
+    const char *fpath = CHAR(STRING_ELT(path_sexp, 0));
+    int64_t batch_size = (int64_t)Rf_asReal(batch_size_sexp);
+    const char *delim_str = CHAR(STRING_ELT(delim_sexp, 0));
+    char delim = delim_str[0] != '\0' ? delim_str[0] : ',';
+    CsvScanNode *sn = csv_scan_node_create(fpath, batch_size, delim);
+    return wrap_node((VecNode *)sn);
 }
 
 SEXP C_sql_scan_node(SEXP path_sexp, SEXP table_sexp, SEXP batch_size_sexp) {
@@ -124,6 +127,25 @@ SEXP C_sql_scan_node(SEXP path_sexp, SEXP table_sexp, SEXP batch_size_sexp) {
 
 SEXP C_tiff_scan_node(SEXP path_sexp, SEXP batch_size_sexp) {
     return scan_node_create(path_sexp, batch_size_sexp, tiff_scan_adapter);
+}
+
+SEXP C_fasta_scan_node(SEXP path_sexp, SEXP batch_size_sexp,
+                       SEXP is_fastq_sexp, SEXP quiet_sexp) {
+    const char *fpath = CHAR(STRING_ELT(path_sexp, 0));
+    int64_t batch_size = (int64_t)Rf_asReal(batch_size_sexp);
+    int is_fastq = Rf_asLogical(is_fastq_sexp) == TRUE;
+    int quiet = Rf_asLogical(quiet_sexp) == TRUE;
+    FastaScanNode *sn = fasta_scan_node_create(fpath, batch_size,
+                                               is_fastq, quiet);
+    return wrap_node((VecNode *)sn);
+}
+
+SEXP C_bed_scan_node(SEXP path_sexp, SEXP batch_size_sexp, SEXP quiet_sexp) {
+    const char *fpath = CHAR(STRING_ELT(path_sexp, 0));
+    int64_t batch_size = (int64_t)Rf_asReal(batch_size_sexp);
+    int quiet = Rf_asLogical(quiet_sexp) == TRUE;
+    BedScanNode *sn = bed_scan_node_create(fpath, batch_size, quiet);
+    return wrap_node((VecNode *)sn);
 }
 
 /* ---- write entry points ---- */

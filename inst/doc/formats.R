@@ -42,6 +42,15 @@ tbl_csv(csv) |>
   select(mpg, hp, wt) |>
   collect()
 
+## ----csv-delim----------------------------------------------------------------
+tsv <- tempfile(fileext = ".tsv")
+write.table(mtcars, tsv, sep = "\t", row.names = FALSE, quote = FALSE)
+
+tbl_csv(tsv, delim = "\t") |>
+  filter(cyl == 6) |>
+  select(mpg, cyl, hp) |>
+  collect()
+
 ## ----csv-write----------------------------------------------------------------
 f <- tempfile(fileext = ".vtr")
 write_vtr(mtcars, f)

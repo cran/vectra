@@ -1,165 +1,31 @@
 #include "group_agg.h"
 #include "hash.h"
+#include "key_arena.h"
 #include "array.h"
 #include "batch.h"
 #include "schema.h"
 #include "coerce.h"
 #include "builder.h"
 #include "sort.h"
+#include "key_snap.h"
 #include "error.h"
 #include "vec_omp.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-/* ================================================================== */
-/*  Key arena builder: stores one copy of each unique key combination */
-/* ================================================================== */
-
-typedef struct {
-    int        n_keys;
-    VecType   *key_types;
-    int64_t    capacity;
-    int64_t    length;
-    VecArray  *arenas;
-    char     **str_data;
-    int64_t   *str_data_len;
-    int64_t   *str_data_cap;
-} KeyArena;
-
-static void arena_init(KeyArena *ka, int n_keys, VecType *key_types) {
-    ka->n_keys = n_keys;
-    ka->key_types = (VecType *)malloc((size_t)n_keys * sizeof(VecType));
-    memcpy(ka->key_types, key_types, (size_t)n_keys * sizeof(VecType));
-    ka->capacity = 64;
-    ka->length = 0;
-    ka->arenas = (VecArray *)calloc((size_t)n_keys, sizeof(VecArray));
-    ka->str_data = (char **)calloc((size_t)n_keys, sizeof(char *));
-    ka->str_data_len = (int64_t *)calloc((size_t)n_keys, sizeof(int64_t));
-    ka->str_data_cap = (int64_t *)calloc((size_t)n_keys, sizeof(int64_t));
-
-    for (int k = 0; k < n_keys; k++) {
-        ka->arenas[k] = vec_array_alloc(key_types[k], ka->capacity);
-        if (key_types[k] == VEC_STRING)
-            ka->arenas[k].owns_data = 0;
-    }
-}
-
-static void arena_ensure(KeyArena *ka, int64_t n) {
-    if (n <= ka->capacity) return;
-    int64_t new_cap = ka->capacity;
-    while (new_cap < n) new_cap *= 2;
-
-    for (int k = 0; k < ka->n_keys; k++) {
-        VecArray old = ka->arenas[k];
-        VecArray new_arr = vec_array_alloc(ka->key_types[k], new_cap);
-        memcpy(new_arr.validity, old.validity, (size_t)vec_validity_bytes(old.length));
-        switch (ka->key_types[k]) {
-        case VEC_INT64:
-            memcpy(new_arr.buf.i64, old.buf.i64, (size_t)old.length * sizeof(int64_t));
-            break;
-        case VEC_INT32:
-            memcpy(new_arr.buf.i32, old.buf.i32, (size_t)old.length * sizeof(int32_t));
-            break;
-        case VEC_INT16:
-            memcpy(new_arr.buf.i16, old.buf.i16, (size_t)old.length * sizeof(int16_t));
-            break;
-        case VEC_INT8:
-            memcpy(new_arr.buf.i8, old.buf.i8, (size_t)old.length * sizeof(int8_t));
-            break;
-        case VEC_DOUBLE:
-            memcpy(new_arr.buf.dbl, old.buf.dbl, (size_t)old.length * sizeof(double));
-            break;
-        case VEC_BOOL:
-            memcpy(new_arr.buf.bln, old.buf.bln, (size_t)old.length);
-            break;
-        case VEC_STRING:
-            memcpy(new_arr.buf.str.offsets, old.buf.str.offsets,
-                   (size_t)(old.length + 1) * sizeof(int64_t));
-            free(new_arr.buf.str.data);
-            new_arr.buf.str.data = ka->str_data[k];
-            new_arr.buf.str.data_len = ka->str_data_len[k];
-            new_arr.owns_data = 0;
-            assert(!old.owns_data && "arena string array must be borrowed");
-            assert(ka->str_data_cap[k] >= ka->str_data_len[k]);
-            assert(ka->length == 0 || new_arr.buf.str.data != NULL);
-            break;
-        }
-        new_arr.length = old.length;
-        vec_array_free(&old);
-        ka->arenas[k] = new_arr;
-    }
-    ka->capacity = new_cap;
-}
-
-static void arena_append_row(KeyArena *ka, const VecArray *keys, int64_t row) {
-    int64_t pos = ka->length;
-    arena_ensure(ka, pos + 1);
-
-    for (int k = 0; k < ka->n_keys; k++) {
-        VecArray *a = &ka->arenas[k];
-        a->length = pos + 1;
-        if (vec_array_is_valid(&keys[k], row)) {
-            vec_array_set_valid(a, pos);
-            switch (ka->key_types[k]) {
-            case VEC_INT64:  a->buf.i64[pos] = keys[k].buf.i64[row]; break;
-            case VEC_INT32:  a->buf.i32[pos] = keys[k].buf.i32[row]; break;
-            case VEC_INT16:  a->buf.i16[pos] = keys[k].buf.i16[row]; break;
-            case VEC_INT8:   a->buf.i8[pos]  = keys[k].buf.i8[row];  break;
-            case VEC_DOUBLE: a->buf.dbl[pos] = keys[k].buf.dbl[row]; break;
-            case VEC_BOOL:   a->buf.bln[pos] = keys[k].buf.bln[row]; break;
-            case VEC_STRING: {
-                int64_t s = keys[k].buf.str.offsets[row];
-                int64_t e = keys[k].buf.str.offsets[row + 1];
-                int64_t slen = e - s;
-                int64_t needed = ka->str_data_len[k] + slen;
-                if (needed > ka->str_data_cap[k]) {
-                    int64_t nc = ka->str_data_cap[k] == 0 ? 256 : ka->str_data_cap[k];
-                    while (nc < needed) nc *= 2;
-                    ka->str_data[k] = (char *)realloc(ka->str_data[k], (size_t)nc);
-                    assert(ka->str_data[k] != NULL && "arena string realloc failed");
-                    ka->str_data_cap[k] = nc;
-                }
-                a->buf.str.offsets[pos] = ka->str_data_len[k];
-                if (slen > 0)
-                    memcpy(ka->str_data[k] + ka->str_data_len[k],
-                           keys[k].buf.str.data + s, (size_t)slen);
-                ka->str_data_len[k] += slen;
-                a->buf.str.offsets[pos + 1] = ka->str_data_len[k];
-                a->buf.str.data = ka->str_data[k];
-                a->buf.str.data_len = ka->str_data_len[k];
-                break;
-            }
-            }
-        } else {
-            vec_array_set_null(a, pos);
-            if (ka->key_types[k] == VEC_STRING) {
-                int64_t cur = ka->str_data_len[k];
-                a->buf.str.offsets[pos] = cur;
-                a->buf.str.offsets[pos + 1] = cur;
-                a->buf.str.data = ka->str_data[k];
-                a->buf.str.data_len = cur;
-            }
-        }
-    }
-    ka->length = pos + 1;
-}
-
-static void arena_free(KeyArena *ka) {
-    for (int k = 0; k < ka->n_keys; k++) {
-        vec_array_free(&ka->arenas[k]);
-        if (ka->key_types[k] == VEC_STRING) {
-            free(ka->str_data[k]);
-#ifndef NDEBUG
-            ka->str_data[k] = (char *)(uintptr_t)0xDEADBEEFDEADBEEFULL;
-#endif
-        }
-    }
-    free(ka->arenas);
-    free(ka->key_types);
-    free(ka->str_data);
-    free(ka->str_data_len);
-    free(ka->str_data_cap);
+/* Per-group spill budget for one holistic accumulator (median / n_distinct).
+   The node's mem_budget is split across the holistic aggregations so their
+   concurrent in-RAM buffers for a single group sum to <= mem_budget before any
+   spills. Scalar aggregations ignore the value (they hold O(1) state). */
+static int64_t agg_holistic_budget(const GroupAggNode *ga) {
+    int n_holistic = 0;
+    for (int a = 0; a < ga->n_aggs; a++)
+        if (ga->agg_specs[a].kind == AGG_MEDIAN ||
+            ga->agg_specs[a].kind == AGG_N_DISTINCT)
+            n_holistic++;
+    if (n_holistic < 1) n_holistic = 1;
+    return ga->mem_budget / n_holistic;
 }
 
 /* ================================================================== */
@@ -194,16 +60,18 @@ static VecBatch *hash_agg_next_batch(GroupAggNode *ga) {
         }
     }
 
+    int64_t store_mem = agg_holistic_budget(ga);
     AggAccum *accums = (AggAccum *)malloc((size_t)ga->n_aggs * sizeof(AggAccum));
     for (int a = 0; a < ga->n_aggs; a++) {
         accums[a] = agg_accum_init(ga->agg_specs[a].kind,
                                     agg_types[a],
-                                    ga->agg_specs[a].na_rm);
+                                    ga->agg_specs[a].na_rm,
+                                    store_mem, ga->temp_dir);
     }
 
     VecHashTable ht = vec_ht_create(64);
     KeyArena arena;
-    arena_init(&arena, ga->n_keys, key_types);
+    key_arena_init(&arena, ga->n_keys, key_types);
 
     VecBatch *batch;
     while ((batch = ga->child->next_batch(ga->child)) != NULL) {
@@ -248,7 +116,7 @@ static VecBatch *hash_agg_next_batch(GroupAggNode *ga) {
                 arena.arenas, arena.length, &was_new);
 
             if (was_new) {
-                arena_append_row(&arena, batch_keys, r);
+                key_arena_append_row(&arena, batch_keys, r);
                 for (int a = 0; a < ga->n_aggs; a++)
                     agg_accum_ensure(&accums[a], ht.n_groups);
             }
@@ -314,7 +182,7 @@ static VecBatch *hash_agg_next_batch(GroupAggNode *ga) {
     free(agg_col_indices);
     free(agg_types);
     vec_ht_free(&ht);
-    arena_free(&arena);
+    key_arena_free(&arena);
 
     return result;
 }
@@ -327,141 +195,16 @@ static VecBatch *hash_agg_next_batch(GroupAggNode *ga) {
 /*  same group.  Accumulators hold state for ONE group at a time.     */
 /* ================================================================== */
 
-/* Snapshot of the current group's key values for boundary detection */
-typedef struct {
-    int       n_keys;
-    VecType  *types;
-    int64_t  *i64;
-    double   *dbl;
-    uint8_t  *bln;
-    char     *str_data;
-    int64_t  *str_offs;    /* n_keys + 1 entries */
-    int64_t   str_cap;
-    uint8_t  *valid;
-    int       initialized;
-} KeySnap;
-
-static KeySnap snap_create(int n_keys, const VecType *types) {
-    KeySnap s;
-    memset(&s, 0, sizeof(s));
-    s.n_keys = n_keys;
-    s.types = (VecType *)malloc((size_t)n_keys * sizeof(VecType));
-    memcpy(s.types, types, (size_t)n_keys * sizeof(VecType));
-    s.i64  = (int64_t *)calloc((size_t)n_keys, sizeof(int64_t));
-    s.dbl  = (double  *)calloc((size_t)n_keys, sizeof(double));
-    s.bln  = (uint8_t *)calloc((size_t)n_keys, sizeof(uint8_t));
-    s.str_offs = (int64_t *)calloc((size_t)(n_keys + 1), sizeof(int64_t));
-    s.valid = (uint8_t *)calloc((size_t)n_keys, sizeof(uint8_t));
-    return s;
-}
-
-static void snap_free(KeySnap *s) {
-    free(s->types); free(s->i64); free(s->dbl); free(s->bln);
-    free(s->str_data); free(s->str_offs); free(s->valid);
-    memset(s, 0, sizeof(*s));
-}
-
-/* Check if row in batch matches the snapshot */
-static int snap_matches(const KeySnap *s, const VecBatch *batch,
-                        int64_t row, const int *key_indices) {
-    if (!s->initialized) return 0;
-    for (int k = 0; k < s->n_keys; k++) {
-        const VecArray *col = &batch->columns[key_indices[k]];
-        int cur_valid = vec_array_is_valid(col, row);
-        if (cur_valid != s->valid[k]) return 0;
-        if (!cur_valid) continue; /* both NA = equal */
-        switch (s->types[k]) {
-        case VEC_INT64:
-            if (col->buf.i64[row] != s->i64[k]) return 0;
-            break;
-        case VEC_INT32:
-            if ((int64_t)col->buf.i32[row] != s->i64[k]) return 0;
-            break;
-        case VEC_INT16:
-            if ((int64_t)col->buf.i16[row] != s->i64[k]) return 0;
-            break;
-        case VEC_INT8:
-            if ((int64_t)col->buf.i8[row] != s->i64[k]) return 0;
-            break;
-        case VEC_DOUBLE:
-            if (col->buf.dbl[row] != s->dbl[k]) return 0;
-            break;
-        case VEC_BOOL:
-            if (col->buf.bln[row] != s->bln[k]) return 0;
-            break;
-        case VEC_STRING: {
-            int64_t cs = col->buf.str.offsets[row];
-            int64_t ce = col->buf.str.offsets[row + 1];
-            int64_t clen = ce - cs;
-            int64_t slen = s->str_offs[k + 1] - s->str_offs[k];
-            if (clen != slen) return 0;
-            if (clen > 0 && s->str_data &&
-                memcmp(col->buf.str.data + cs,
-                       s->str_data + s->str_offs[k], (size_t)clen) != 0)
-                return 0;
-            break;
-        }
-        }
-    }
-    return 1;
-}
-
-/* Capture the current row's keys into the snapshot */
-static void snap_update(KeySnap *s, const VecBatch *batch,
-                        int64_t row, const int *key_indices) {
-    s->initialized = 1;
-
-    /* First pass: compute total string length */
-    int64_t str_total = 0;
-    for (int k = 0; k < s->n_keys; k++) {
-        const VecArray *col = &batch->columns[key_indices[k]];
-        s->valid[k] = (uint8_t)vec_array_is_valid(col, row);
-        if (!s->valid[k]) continue;
-        switch (s->types[k]) {
-        case VEC_INT64:  s->i64[k] = col->buf.i64[row]; break;
-        case VEC_INT32:  s->i64[k] = (int64_t)col->buf.i32[row]; break;
-        case VEC_INT16:  s->i64[k] = (int64_t)col->buf.i16[row]; break;
-        case VEC_INT8:   s->i64[k] = (int64_t)col->buf.i8[row]; break;
-        case VEC_DOUBLE: s->dbl[k] = col->buf.dbl[row]; break;
-        case VEC_BOOL:   s->bln[k] = col->buf.bln[row]; break;
-        case VEC_STRING: {
-            int64_t cs = col->buf.str.offsets[row];
-            int64_t ce = col->buf.str.offsets[row + 1];
-            str_total += ce - cs;
-            break;
-        }
-        }
-    }
-
-    /* Ensure string buffer capacity */
-    if (str_total > s->str_cap) {
-        s->str_cap = str_total > 256 ? str_total * 2 : 256;
-        s->str_data = (char *)realloc(s->str_data, (size_t)s->str_cap);
-    }
-
-    /* Second pass: copy string data */
-    int64_t off = 0;
-    for (int k = 0; k < s->n_keys; k++) {
-        s->str_offs[k] = off;
-        if (s->types[k] == VEC_STRING && s->valid[k]) {
-            const VecArray *col = &batch->columns[key_indices[k]];
-            int64_t cs = col->buf.str.offsets[row];
-            int64_t ce = col->buf.str.offsets[row + 1];
-            int64_t len = ce - cs;
-            if (len > 0)
-                memcpy(s->str_data + off, col->buf.str.data + cs, (size_t)len);
-            off += len;
-        }
-    }
-    s->str_offs[s->n_keys] = off;
-}
+/* KeySnap (group-boundary detection over a key-sorted stream) is shared with
+   group_topn; see key_snap.h. */
 
 /* Flush completed group: append key snapshot + agg results to builders */
 static void flush_group(const KeySnap *snap,
                         VecArrayBuilder *key_builders, int n_keys,
                         VecArrayBuilder *agg_builders, int n_aggs,
                         AggAccum *accums, const VecType *agg_types,
-                        const AggSpec *agg_specs) {
+                        const AggSpec *agg_specs,
+                        int64_t mem_budget, const char *temp_dir) {
     /* Append key values */
     for (int k = 0; k < n_keys; k++) {
         VecArrayBuilder *b = &key_builders[k];
@@ -511,9 +254,13 @@ static void flush_group(const KeySnap *snap,
         VecArray arr = agg_accum_finish(&accums[a]);
         vec_builder_append_one(&agg_builders[a], &arr, 0);
         vec_array_free(&arr);
-        /* Reinitialize for next group */
+        /* Free this group's accumulator (buffers, spill run files) before
+           reusing the slot for the next group -- otherwise every group but the
+           last leaks its state, which for median/n_distinct is the whole
+           group. Then reinitialize for the next group. */
+        agg_accum_free(&accums[a]);
         accums[a] = agg_accum_init(agg_specs[a].kind, agg_types[a],
-                                    agg_specs[a].na_rm);
+                                    agg_specs[a].na_rm, mem_budget, temp_dir);
         agg_accum_ensure(&accums[a], 1);
     }
 }
@@ -560,11 +307,13 @@ static VecBatch *sorted_agg_next_batch(GroupAggNode *ga) {
         agg_builders[a] = vec_builder_init(VEC_DOUBLE); /* all aggs -> double */
 
     /* Accumulators for current group (always group_id = 0) */
+    int64_t store_mem = agg_holistic_budget(ga);
     AggAccum *accums = (AggAccum *)malloc((size_t)ga->n_aggs * sizeof(AggAccum));
     for (int a = 0; a < ga->n_aggs; a++) {
         accums[a] = agg_accum_init(ga->agg_specs[a].kind,
                                     agg_types[a],
-                                    ga->agg_specs[a].na_rm);
+                                    ga->agg_specs[a].na_rm,
+                                    store_mem, ga->temp_dir);
         agg_accum_ensure(&accums[a], 1);
     }
 
@@ -581,7 +330,8 @@ static VecBatch *sorted_agg_next_batch(GroupAggNode *ga) {
                 if (snap.initialized) {
                     flush_group(&snap, key_builders, ga->n_keys,
                                 agg_builders, ga->n_aggs,
-                                accums, agg_types, ga->agg_specs);
+                                accums, agg_types, ga->agg_specs,
+                                store_mem, ga->temp_dir);
                 }
                 snap_update(&snap, batch, row, key_indices);
             }
@@ -604,7 +354,8 @@ static VecBatch *sorted_agg_next_batch(GroupAggNode *ga) {
     if (snap.initialized) {
         flush_group(&snap, key_builders, ga->n_keys,
                     agg_builders, ga->n_aggs,
-                    accums, agg_types, ga->agg_specs);
+                    accums, agg_types, ga->agg_specs,
+                    store_mem, ga->temp_dir);
     }
 
     /* Build result batch */
@@ -666,6 +417,7 @@ static void group_agg_free(VecNode *self) {
         free(ga->agg_specs[a].input_col);
     }
     free(ga->agg_specs);
+    free(ga->temp_dir);
     vec_schema_free(&ga->base.output_schema);
     free(ga);
 }
@@ -673,9 +425,19 @@ static void group_agg_free(VecNode *self) {
 GroupAggNode *group_agg_node_create(VecNode *child,
                                     int n_keys, char **key_names,
                                     int n_aggs, AggSpec *agg_specs,
-                                    const char *temp_dir) {
+                                    const char *temp_dir, int64_t mem_budget) {
     GroupAggNode *ga = (GroupAggNode *)calloc(1, sizeof(GroupAggNode));
     if (!ga) vectra_error("alloc failed for GroupAggNode");
+
+    ga->mem_budget = mem_budget;
+    if (temp_dir) {
+        ga->temp_dir = (char *)malloc(strlen(temp_dir) + 1);
+        strcpy(ga->temp_dir, temp_dir);
+    }
+
+    /* One budget for the whole node: the external sort's spill threshold and
+       the per-group holistic (median / n_distinct) spill both derive from it. */
+    int64_t sort_mem = mem_budget > 0 ? mem_budget : VECTRA_SORT_MEM_DEFAULT;
 
     /* If temp_dir provided, wrap child in a SortNode for spill-safe agg */
     if (temp_dir && n_keys > 0) {
@@ -688,7 +450,8 @@ GroupAggNode *group_agg_node_create(VecNode *child,
             sort_keys[k].col_index = idx;
             sort_keys[k].descending = 0;
         }
-        SortNode *sn = sort_node_create(child, n_keys, sort_keys, temp_dir);
+        SortNode *sn = sort_node_create(child, n_keys, sort_keys, temp_dir,
+                                        sort_mem);
         child = (VecNode *)sn;
         ga->use_sorted = 1;
     }

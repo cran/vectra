@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-30" />
+<meta name="date" content="2026-07-10" />
 
 <title>Working with Large Data</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Working with Large Data</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-30</h4>
+<h4 class="date">2026-07-10</h4>
 
 
 
@@ -760,10 +760,12 @@ truly new rows to an archive:</p>
 <div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>archive_diff <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
 <span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a><span class="fu">write_vtr</span>(obs[<span class="dv">1</span><span class="sc">:</span><span class="dv">100</span>, ], archive_diff)</span>
 <span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
-<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a>changes<span class="sc">$</span>added <span class="sc">|&gt;</span> <span class="fu">append_vtr</span>(archive_diff)</span>
-<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a></span>
-<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive_diff) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
-<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="co">#&gt; [1] 100</span></span></code></pre></div>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="co"># A node runs once, so re-derive the additions for this pass rather than</span></span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co"># reusing the node already collected above.</span></span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="fu">diff_vtr</span>(snap_v1, snap_v2, <span class="st">&quot;obs_id&quot;</span>)<span class="sc">$</span>added <span class="sc">|&gt;</span> <span class="fu">append_vtr</span>(archive_diff)</span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a><span class="fu">nrow</span>(<span class="fu">tbl</span>(archive_diff) <span class="sc">|&gt;</span> <span class="fu">collect</span>())</span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a><span class="co">#&gt; [1] 150</span></span></code></pre></div>
 <p>This is a common incremental-load pattern: diff today’s snapshot
 against yesterday’s, then append only the additions. Combined with
 <code>delete_vtr()</code> for removals, we can maintain an up-to-date

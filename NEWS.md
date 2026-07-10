@@ -1,3 +1,397 @@
+# vectra 0.11.1
+
+## Bug fixes
+
+* A query is now consumed by exactly one terminal operation. `collect()` and
+  `append_vtr()` join `write_*()` in invalidating the node once its pull cursor
+  is drained, so a second terminal op on the same node (for example
+  `collect()`-ing a pipeline to inspect it and then `write_vtr()`-ing the same
+  object) raises a clear "already consumed" error instead of re-driving an
+  exhausted plan. Previously the second pass returned empty or, on a
+  multi-spill plan, silently reinterpreted a string column's bytes as doubles
+  (#5).
+
+* `offload()` shards are re-collectable: a shard rebuilds a fresh scan on each
+  access, so a partition stays an iterable list of shards under the
+  consume-once rule.
+
+* `vec_builder_*` now errors on a type-mismatched or dictionary-deferred array
+  instead of reinterpreting raw bytes, matching the guard the writer already
+  applied at its own boundary.
+
+# vectra 0.11.0
+
+## Delimited-file reader gains a `delim` argument
+
+* `tbl_csv()` takes a `delim` argument (default `","`), so tab- and
+  semicolon-separated files read natively without a transcode step. `delim =
+  "\t"` streams a GBIF occurrence export (SIMPLE_CSV) straight through; `delim =
+  ";"` reads the semicolon exports common in European data. Quoting stays RFC
+  4180 for any delimiter, so a quoted field may still contain the delimiter,
+  newlines, and doubled quotes.
+
+## Feature-space nearest-neighbour tools
+
+* New `feature_knn()`: nearest-neighbour search in *predictor* space rather than
+  on coordinates. For each streamed query row it returns the mean distance to
+  the nearest `k` (or nearest `percentage`%) of a resident reference cloud, with
+  a Euclidean or Mahalanobis metric. The query side streams one batch at a time
+  so the projection side can exceed memory; the reference cloud is materialized
+  once, whitened for the chosen metric, and scanned in parallel (a bounded
+  max-heap keeps peak memory at O(k) per thread). This is the
+  environmental-novelty counterpart to the coordinate-based `spatial_knn()`.
+* New `rast_feature_distance()`: the same distance computed out-of-core over a
+  projection raster. The reference raster is read once and indexed; the
+  projection raster streams one tile-row strip at a time and the distance
+  surface is written aligned to its grid. This is the streaming distance surface
+  behind an environmental-novelty / transferability diagnostic such as MOP
+  (Owens et al. 2013); the strict non-analogous-conditions layers compose from a
+  per-band range reduce plus `rast_calc()`.
+* The Species Distribution Models vignette gains a transferability / novelty
+  section covering both.
+
+## Bounded memory across the remaining streaming paths
+
+* The streaming operations that still grew resident state with the input size
+  or with key skew are now bounded. Interval joins run as a serial sweep-merge
+  over externally sorted sides; k-mer counting streams through an external
+  sort-merge (`rec_spill`) instead of a hash table that grew with the input;
+  grouped top-1 (`slice_min`/`slice_max`, `n = 1`) keeps one champion per open
+  group via a `(key, row-id)` sort; fuzzy joins stream the probe side and spill
+  the build side when it overflows the budget; and ungrouped windows with mixed
+  orderings decompose into a chain of single-spec streaming nodes rather than
+  materializing the table. A shared `rec_spill` external merge and a shared
+  `key_snap` group-boundary detector back these paths, so there is one
+  implementation of each rather than several.
+
+# vectra 0.10.8
+
+## Bounded-memory joins under key skew
+
+* Hash joins now keep a bounded memory peak regardless of how skewed the join
+  keys are. When the materialized build side exceeds the memory budget
+  (`vectra_mem()`), both sides grace-hash spill into 64 run-file partitions and
+  join one partition at a time. A partition that is itself still over budget is
+  re-partitioned by its sub-join with a depth-salted hash (a murmur3 finalizer,
+  not a bare XOR, so colliding keys actually redistribute across levels rather
+  than landing in the same bucket again). A partition that a single dominant key
+  value makes un-splittable -- hashing cannot separate identical keys at any
+  depth -- drops at the third level to a block-nested-loop: the build side is
+  read in budget-sized blocks and the probe side is re-scanned once per block.
+  Peak memory is one build block plus one probe batch plus a one-bit-per-row
+  matched bitset, so no join retains an unbounded resident partition. Applies to
+  all five kinds (inner, left, right, full, semi, anti). Partition files are
+  opened lazily on first row, so a hot key no longer creates 63 empty spill
+  files per level.
+
+## Fixes
+
+* An empty build partition no longer corrupts the heap on a `full_join()`. The
+  hash-table constructor floors its slot allocation to one row; the true build
+  count is now recorded separately, so the finalize pass over a build-empty
+  partition reads zero rows instead of a nonexistent row 0. Surfaced by the
+  one-sided partitions the recursive spill routinely produces.
+* The sorted-input merge-join path is now consistent with the hash path in three
+  cases it previously disagreed on: a match group beginning at build row 0 no
+  longer spins forever (the group cursor used a positive-only sentinel that
+  conflated position 0 with "inactive"); an unmatched build row under
+  `full_join()` is emitted exactly once rather than doubled by the finalize
+  pass; and an `NA` key never matches (both-`NA` at an equal-compare point is
+  treated as unmatched, as in the hash path).
+
+# vectra 0.10.7
+
+## Fixes
+
+* The overlay engine again builds without OpenMP (e.g. the default macOS CRAN
+  toolchain). The serial fallback in `C_overlay_run` called `process_tile()`
+  with one argument short of its signature, so the no-OpenMP branch failed to
+  compile; it now passes the point-in-polygon flag like the parallel branch.
+* Encoding a string column of duplicate empty strings no longer triggers
+  undefined behavior. The DICT_1D dictionary encoder compared a hash-table
+  cache candidate with `memcmp(str, s, len)`; when every string is empty the
+  heap data pointer is `NULL` and `len` is 0, so `memcmp(NULL, NULL, 0)` tripped
+  the UBSan nonnull check on CRAN's ASAN/UBSAN runner. The comparison is now
+  short-circuited on `len == 0`, where the already-checked length equality
+  makes the strings equal. Output is unchanged. Fixed in vendored tdc
+  (`gcol33/tdc`).
+* An audit swept the rest of this undefined-behavior class (a `NULL` pointer
+  with length 0 passed to `memcmp`/`memcpy`) across the engine and vendored
+  tdc. Two more sites are fixed: a blocked `fuzzy_join()` whose probe block
+  column is all empty strings compared block keys with `memcmp(build, NULL, 0)`,
+  and tdc's string min/max stats copied a zero-length prefix from a `NULL`
+  all-empty-string heap. Both are now length-guarded; results are unchanged.
+
+# vectra 0.10.6
+
+## Bounded-memory top-N and fuzzy join
+
+* `slice_min()`/`slice_max(..., with_ties = FALSE)` no longer materialize their
+  input. The streaming top-N node keeps at most `k` rows in a size-`k` max-heap
+  (fixed-width values overwritten in place, strings held as per-slot owned copies
+  freed on eviction); a non-winning row costs one comparison and no copy, so peak
+  memory is `min(k, n)` rows rather than the whole child. NA in the order column
+  now always sorts last, independent of direction, matching dplyr and the
+  `with_ties = TRUE` path -- an earlier version treated NA as the maximum under
+  `slice_max()`.
+* `fuzzy_join()` now streams the probe side instead of materializing both inputs
+  and the whole cross-product of matches. The build side is materialized once and,
+  with a blocking column, indexed by exact block key; the probe side streams one
+  batch at a time, and each batch's matches are computed, ordered, and emitted in
+  chunks before the next batch is pulled. Peak memory is the build side plus one
+  probe batch plus that batch's matches, and the `(probe, distance)` output order
+  is preserved without a global sort. These were the last two operators that
+  buffered their whole input, so every verb is now bounded-memory.
+
+# vectra 0.10.5
+
+## Spill-safe window functions
+
+* Ordered ungrouped windows that need the whole table sorted (`rank()`,
+  `dense_rank()`, `percent_rank()`, `cume_dist()`, `row_number(col)`,
+  `roll_*()`, `lag()`, `lead()`, `ntile()`) now stream, closing the last window
+  case that materialized the whole table. A single spill-safe global sort is
+  inserted below the window, then one forward pass computes each spec from
+  bounded running state, so peak memory is one batch plus the sort's own spill
+  buffer rather than the whole table. Two ordering tricks keep the awkward cases
+  single-pass: `cume_dist()` sorts descending so `count(<= v)` is known when each
+  value group opens, and `lead()` is computed as `lag()` on the row-id-reversed
+  stream. When one `mutate()` mixes specs that need conflicting sort orders (for
+  example `rank(x)` and `rank(desc(x))` together), the node falls back to the
+  in-memory path; splitting them into separate `mutate()` calls keeps each
+  streaming.
+
+# vectra 0.10.4
+
+## Spill-safe window functions
+
+* Grouped window functions (`group_by()` followed by `mutate()` with
+  `row_number()`, `rank()`, `lag()`, `cumsum()`, `roll_sum()`, and the rest) no
+  longer materialize the whole table in memory. The window node now sorts on the
+  group keys (external, spill-safe), processes one group at a time, and restores
+  the original row order, so peak memory is a single group rather than the full
+  input -- the same bound `group_by() |> summarise()` already had. Results are
+  unchanged: rows come back in original order, and cumulative windows still run
+  in arrival order within each group.
+
+* Ungrouped cumulative windows (`mutate(cs = cumsum(x))` and the rest of the
+  `cumsum`/`cummean`/`cummin`/`cummax`/`row_number()` family, with no
+  `group_by()`) now stream one batch at a time with O(1) running state, so a
+  running aggregate over a larger-than-RAM table holds only one batch. Ordered
+  ungrouped windows that need the whole table sorted (`rank()`, `dense_rank()`,
+  `percent_rank()`, `cume_dist()`, `row_number(col)`, `roll_*()`, `lag()`,
+  `lead()`, `ntile()`) keep the in-memory path.
+
+# vectra 0.10.3
+
+## Bug fixes
+
+* The parallel `.vtr` reader no longer risks an intermittent crash when a read
+  fails mid-collect. Row groups are decoded on OpenMP worker threads; on an
+  I/O or decode failure (a truncated or removed file, a short read, a corrupt
+  block) the reader used to raise the error directly from a worker thread,
+  where the R error mechanism's longjmp corrupts the master thread's stack.
+  The reader now allocates every batch on the master thread and only fills them
+  from disk in parallel, capturing the first failure and re-raising it once the
+  parallel region joins, so a failed read is a clean, catchable R error.
+
+## BED streaming scan backend
+
+* `tbl_bed()` streams a BED (Browser Extensible Data) file of genomic features
+  as a lazy table, one feature per row, with the standard BED columns in order
+  (`chrom`, `start`, `end`, `name`, `score`, `strand`, `thickStart`,
+  `thickEnd`, `itemRgb`, `blockCount`, `blockSizes`, `blockStarts`; extra
+  fields past the twelfth as `V13`, `V14`, ...). The column count is fixed by
+  the first feature line and every later line must match. Fields are
+  whitespace-delimited (tab or space); blank, `#`, `track`, and `browser` lines
+  are skipped; gzip (`.bed.gz`) input is read transparently, and the scan
+  reports its feature count on completion (`quiet = TRUE` suppresses it).
+* Coordinates are read faithfully: `start` is 0-based and `end` half-open, both
+  returned exactly as stored. Paired with the existing `interval_join()`, this
+  makes vectra a streaming genome-interval overlap engine. For base-overlap
+  semantics matching bedtools and `GenomicRanges::findOverlaps()`, use
+  `interval_join(..., closed = FALSE)`, which requires a strictly positive
+  overlap and so does not pair abutting features. Recovery-tested against
+  `findOverlaps` and on explicit half-open boundary (off-by-one) cases.
+* A malformed feature line is a loud error, not a silent drop: an inconsistent
+  field count, a non-integer `start`/`end`, or fewer than three fields stops
+  the scan. Optional integer fields (`score`, `thickStart`, `thickEnd`,
+  `blockCount`) accept `.` or `NA` as missing.
+
+# vectra 0.10.2
+
+## `kmer()` k-mer spectrum node
+
+* `kmer(x, seq, k, by = , canonical = )` counts every k-mer of a nucleotide
+  column, grouped by zero or more key columns, returning one row per distinct
+  (group, k-mer) with a `kmer` string and an integer `count`. It is the
+  set-wise companion to the per-row `seq_*` family: a blocking step like
+  `summarise()`, but only the k-mer table is held, not the input, so a spectrum
+  over a larger-than-RAM read set stays bounded. Each k-mer is packed into 2
+  bits per base and counted in a native open-addressing hash (k in `1:32`); a
+  window containing any non-`ACGT` base is skipped, matching dedicated k-mer
+  counters. `canonical = TRUE` collapses a k-mer with its reverse complement.
+  Recovery-tested against a hand-rolled tabulation (ungrouped, by-group,
+  canonical, non-ACGT skipping, streaming invariance).
+
+* Internal: the group-key store (`KeyArena`) shared by `summarise()` and
+  `kmer()`, and the 2-bit base encoding shared by `seq_*` and `kmer()`, are now
+  single-sourced (`key_arena`, `seq_util`).
+
+## Fixes
+
+* Reading a `.vtr` no longer holds an OS file handle open for the scan node's
+  whole lifetime. The reader loads the row-group index into memory at open and
+  reopens the file per read (as the parallel reader already did), so an idle
+  scan node -- one created or already collected but not yet garbage-collected --
+  keeps no descriptor. A tight `tbl(f) |> collect()` loop previously leaked one
+  handle per iteration until the OS refused further opens and `vtr1_open_tdc`
+  failed (crashing when the failure landed mid-decode); it now runs unbounded.
+* A data.frame lifted into a lazy node (`tbl_xlsx()`, and the data.frame inputs
+  to `write_csv()` / `write_sqlite()` / `write_tiff()`) now owns its temporary
+  `.vtr` for the node's lifetime and unlinks it when the node is freed, instead
+  of deleting it when the creating call returned.
+
+# vectra 0.10.1
+
+## FASTA / FASTQ streaming scan backends
+
+* `tbl_fasta()` and `tbl_fastq()` stream a biological-sequence file as a lazy
+  table, one record per row: `id`, `desc`, `seq` for FASTA and an additional
+  `qual` for FASTQ. `id` is the first whitespace-delimited token of the header
+  and `desc` is the remainder (an empty string when absent). Records stream one
+  batch at a time, so a read set larger than RAM never fully materializes, and
+  the `seq_*` expression family works directly on the `seq` column. Gzip input
+  (`.fasta.gz`, `.fq.gz`, ...) is read transparently through the same vendored
+  miniz path CSV uses. A record cut short --- a header where a `>`/`@` is
+  expected, a FASTQ record missing a line, or a quality string whose length
+  does not match its sequence --- is a loud error rather than a silent drop,
+  and the scan reports how many records it read on completion (`quiet = TRUE`
+  suppresses it). Recovery-tested against `Biostrings` and `ShortRead`.
+
+* The byte reader that backs the streaming text scans (plain and gzip) is now a
+  shared `byte_reader` used by both the CSV and FASTA/FASTQ backends.
+
+# vectra 0.10.0
+
+## `seq_*` biological-sequence expressions
+
+* A family of `seq_*` functions now works directly inside `mutate()`,
+  `filter()`, and `summarise()` over a sequence held in an ordinary string
+  column, computed per row in C and parallelized across rows: `seq_length`,
+  `seq_gc`, `seq_revcomp`, `seq_complement`, `seq_reverse`, `seq_transcribe`
+  (DNA<->RNA), `seq_translate` (standard genetic code), `seq_subseq`, and
+  `seq_dist` (Levenshtein / Damerau-Levenshtein / Hamming edit distance to a
+  reference column or constant). A missing or unparseable cell yields `NA`, the
+  same contract as the `st_*` geometry and embedding-distance families.
+  Complement handles the IUPAC ambiguity codes. See `?seq_expressions`.
+
+# vectra 0.9.12
+
+## `compress = "small"` parallelizes the candidate sweep
+
+* The try-all-pick-smallest encoder now trial-encodes a column's candidate
+  specs across threads: each thread encodes a disjoint slice of candidates into
+  its own scratch buffer and the smallest record is reduced. Large row groups
+  (the ones where the sweep dominates encode time) compress markedly faster on
+  multi-core machines. The chosen spec is independent of thread count — ties
+  break to the lowest candidate index — so `"small"` files are byte-identical
+  regardless of how many cores encode them, and never larger than `"fast"`. The
+  sweep stays serial for small blocks and inside an existing parallel region.
+
+## All-null row groups are pruned during scan
+
+* A filter comparison against a column whose values are all `NA` in a row group
+  (`x > 5`, `x == "a"`, `x != 5`, ...) is `NA` for every row, which the filter
+  drops. The scan now recognizes this from the row group's null count and skips
+  the whole group without reading it, even for numeric columns that carry no
+  min/max (an all-`NA` column has none). Results are unchanged; the pruning only
+  avoids reading groups that could not have produced a row.
+
+# vectra 0.9.11
+
+## `compress = "small"` now does adaptive per-column encoding
+
+* `write_vtr(..., compress = "small")` previously behaved identically to
+  `"fast"`. It now performs try-all-pick-smallest: each column is trial-encoded
+  under a set of candidate tdc specs — alternative models (delta, second-order
+  and FCM/DFCM float predictors, numeric and string dictionaries, sparse-zero)
+  crossed with stronger entropy coders (optimal-parse LZ, split-stream LZ, FSE,
+  4-stream Huffman, per-lane) — and the smallest block record is kept. The
+  `"fast"` encoding is always a candidate, so `"small"` files are never larger
+  than `"fast"` (about 16-40% smaller on mixed data). Encode is slower in
+  proportion to the number of candidates; decode and the on-disk format are
+  unchanged.
+* `compress = "none"` now works on string columns (previously errored).
+
+## Faster `collect()` on dictionary-encoded string columns
+
+* `collect()` on a string column now interns each unique value once and fills
+  the result by index, instead of hashing every row. The direct-read path
+  decodes the on-disk dictionary block into (unique values + per-row indices)
+  via the new `tdc_decode_block_dict` primitive and carries it through a
+  `VecArray` dictionary side-channel to the fill. On 5M rows of wide, heavily-
+  duplicated strings the collect drops from ~0.34s to ~0.03s. Results are
+  unchanged; NA, empty, and UTF-8 values round-trip identically.
+
+## Fixes
+
+* Fixed two correctness bugs in the tdc codec that surfaced through the new
+  `"small"` encoder: sparse-zero blocks and single-element all-zero columns
+  could fail to decode. Both are covered by new regression tests.
+
+# vectra 0.9.10
+
+## One memory knob for the whole engine
+
+* A single ceiling, `options(vectra.memory = "8GB")`, now governs every part of
+  the engine that buffers before spilling. It is resolved by the new exported
+  `vectra_mem()` (accepts a byte count or a `"512MB"` / `"8GB"` string). The
+  auto-detected default is half of system RAM, floored at 1 GB; an explicit
+  value is honored as given. Row-group size (`batch_size`) is a separate
+  cache-locality control and is unaffected.
+* The external sort's spill threshold, the self-overlay working-set cap, and the
+  streaming spatial flush / partition-routing buffers all derive their budget
+  from `vectra_mem()` instead of separate constants. The per-subsystem options
+  `vectra.spatial_flush`, `vectra.partition_budget`, `vectra.overlay_mem_limit`,
+  and `vectra.overlay_parse_chunk` are removed; per-call `flush_rows` (an
+  explicit row cap) remains the override on the streaming spatial verbs and
+  `offload()`.
+
+## Joins spill to disk instead of running out of memory
+
+* When a join's build (right) side outgrows `vectra_mem()`, the engine switches
+  to a grace-hash join: both sides are hash-partitioned by key into run-files
+  and joined one partition at a time, so peak memory stays bounded. The result
+  is identical to the in-memory join for every kind (inner, left, right, full,
+  semi, anti), including composite keys and many-to-many matches.
+
+# vectra 0.9.9
+
+## Faster `spatial_overlay()`
+
+* Each distinct input geometry is decoded from its stored WKB once per overlay
+  batch and shared, read-only, across every tile it falls in. A feature that
+  spans many tiles was previously decoded again in each of them; on a dense
+  world protected-area union a single large feature can recur in thousands of
+  tiles, which made WKB decoding the largest single cost of the overlay. The
+  per-tile clipping, noding, and attribution are unchanged, so the result is
+  identical.
+* A piece is a face of the arrangement of all input boundaries, so it lies
+  wholly inside or outside every input up to snap-rounding slivers along the
+  boundary. `spatial_overlay()` now credits each whole face to the inputs whose
+  interior contains the face's representative point, and the piece geometry is
+  that face. This replaces intersecting every face with each partially covering
+  input, the largest remaining cost once decoding is shared; per-input covered
+  area stays within about the noding precision times the face perimeter of the
+  exact value (well inside the 1e-4 coverage tolerance), and thin boundary
+  slivers no longer appear as separate pieces. Pass `exact = TRUE` to restore
+  the previous behaviour, where each face is intersected with every covering
+  input and credited that exact area.
+* Together these take the end-to-end ~470k-feature world protected-area union
+  from about 15 minutes to about 5, with the coverage invariant still holding
+  exactly (0 offenders), on a 32-thread desktop.
+
 # vectra 0.9.8
 
 ## New features

@@ -19,6 +19,7 @@ SEXP C_block_fuzzy_lookup(SEXP block_xptr, SEXP match_col, SEXP keys,
 /* tdc encode/decode bridge round-trip test entries (vtr_codec_tdc.c). */
 SEXP C_tdc_encode_column(SEXP x_sexp, SEXP comp_level_sexp);
 SEXP C_tdc_decode_column(SEXP raw_sexp, SEXP n_sexp, SEXP r_type_sexp);
+SEXP C_tdc_dict_roundtrip(SEXP x_sexp);
 
 /* tdc-backed row-group container entries (vtr1_tdc.c). */
 SEXP C_write_vtr_tdc(SEXP path_sexp, SEXP df_sexp,
@@ -101,7 +102,11 @@ SEXP C_geos_version(void);
 SEXP C_overlay_parse(SEXP wkb_list, SEXP grid_sexp, SEXP nthreads_sexp);
 SEXP C_overlay_components(SEXP bbox_sexp);
 SEXP C_overlay_group(SEXP wkb_list);
-SEXP C_overlay_run(SEXP wkb_chunk, SEXP job_chunk, SEXP rects_sexp, SEXP nthreads_sexp, SEXP prec_sexp);
+SEXP C_overlay_run(SEXP wkb_chunk, SEXP job_chunk, SEXP rects_sexp, SEXP nthreads_sexp, SEXP prec_sexp, SEXP pip_sexp);
+
+/* Feature-space kNN over a resident reference cloud (feature_knn.c). */
+SEXP C_feature_knn_build(SEXP ref_sexp, SEXP transform_sexp);
+SEXP C_feature_knn_query(SEXP idx_ptr, SEXP query_sexp, SEXP keff_sexp, SEXP nthreads_sexp);
 
 /* GEOS-native streaming spatial verbs (vtr_spatial.c). */
 SEXP C_geos_locator_build(SEXP wkb_list);
@@ -116,6 +121,7 @@ SEXP C_geos_points_to_hex(SEXP x_sexp, SEXP y_sexp);
 static const R_CallMethodDef CallEntries[] = {
     {"C_write_vtr",    (DL_FUNC) &C_write_vtr,    7},
     {"C_scan_node",    (DL_FUNC) &C_scan_node,     1},
+    {"C_scan_node_temp", (DL_FUNC) &C_scan_node_temp, 1},
     {"C_collect",      (DL_FUNC) &C_collect,       1},
     {"C_node_optimize",   (DL_FUNC) &C_node_optimize,   1},
     {"C_node_next_batch", (DL_FUNC) &C_node_next_batch, 1},
@@ -123,19 +129,22 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_node_plan",    (DL_FUNC) &C_node_plan,     1},
     {"C_filter_node",  (DL_FUNC) &C_filter_node,   2},
     {"C_project_node",   (DL_FUNC) &C_project_node,  3},
-    {"C_group_agg_node", (DL_FUNC) &C_group_agg_node, 3},
-    {"C_sort_node",      (DL_FUNC) &C_sort_node,       3},
+    {"C_group_agg_node", (DL_FUNC) &C_group_agg_node, 4},
+    {"C_kmer_node",      (DL_FUNC) &C_kmer_node,       6},
+    {"C_sort_node",      (DL_FUNC) &C_sort_node,       4},
     {"C_limit_node",     (DL_FUNC) &C_limit_node,      2},
     {"C_topn_node",      (DL_FUNC) &C_topn_node,       4},
-    {"C_group_topn_node",(DL_FUNC) &C_group_topn_node, 4},
-    {"C_join_node",      (DL_FUNC) &C_join_node,       7},
+    {"C_group_topn_node",(DL_FUNC) &C_group_topn_node, 5},
+    {"C_join_node",      (DL_FUNC) &C_join_node,       8},
     {"C_window_node",    (DL_FUNC) &C_window_node,     3},
     {"C_concat_node",   (DL_FUNC) &C_concat_node,    1},
     {"C_write_csv",     (DL_FUNC) &C_write_csv,      2},
-    {"C_csv_scan_node", (DL_FUNC) &C_csv_scan_node,  2},
+    {"C_csv_scan_node", (DL_FUNC) &C_csv_scan_node,  3},
     {"C_sql_scan_node", (DL_FUNC) &C_sql_scan_node,  3},
     {"C_write_sqlite",  (DL_FUNC) &C_write_sqlite,   3},
     {"C_tiff_scan_node", (DL_FUNC) &C_tiff_scan_node, 2},
+    {"C_fasta_scan_node", (DL_FUNC) &C_fasta_scan_node, 4},
+    {"C_bed_scan_node", (DL_FUNC) &C_bed_scan_node, 3},
     {"C_tiff_scan_meta",         (DL_FUNC) &C_tiff_scan_meta,         1},
     {"C_tiff_extract_points",    (DL_FUNC) &C_tiff_extract_points,    3},
     {"C_write_tiff",             (DL_FUNC) &C_write_tiff,             3},
@@ -146,8 +155,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_append_vtr",     (DL_FUNC) &C_append_vtr,     2},
     {"C_delete_vtr",     (DL_FUNC) &C_delete_vtr,      2},
     {"C_diff_vtr",       (DL_FUNC) &C_diff_vtr,        3},
-    {"C_fuzzy_join_node", (DL_FUNC) &C_fuzzy_join_node, 10},
-    {"C_interval_join_node", (DL_FUNC) &C_interval_join_node, 12},
+    {"C_fuzzy_join_node", (DL_FUNC) &C_fuzzy_join_node, 11},
+    {"C_interval_join_node", (DL_FUNC) &C_interval_join_node, 13},
     {"C_block_materialize", (DL_FUNC) &C_block_materialize, 1},
     {"C_block_lookup",        (DL_FUNC) &C_block_lookup,        4},
     {"C_block_fuzzy_lookup",  (DL_FUNC) &C_block_fuzzy_lookup,  8},
@@ -155,6 +164,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_has_index",         (DL_FUNC) &C_has_index,         2},
     {"C_tdc_encode_column",   (DL_FUNC) &C_tdc_encode_column,   2},
     {"C_tdc_decode_column",   (DL_FUNC) &C_tdc_decode_column,   3},
+    {"C_tdc_dict_roundtrip",  (DL_FUNC) &C_tdc_dict_roundtrip,  1},
     {"C_write_vtr_tdc",            (DL_FUNC) &C_write_vtr_tdc,            5},
     {"C_read_vtr_tdc",             (DL_FUNC) &C_read_vtr_tdc,             1},
     {"C_read_vtr_tdc_annotations", (DL_FUNC) &C_read_vtr_tdc_annotations, 1},
@@ -187,7 +197,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_overlay_parse",            (DL_FUNC) &C_overlay_parse,            3},
     {"C_overlay_components",       (DL_FUNC) &C_overlay_components,       1},
     {"C_overlay_group",            (DL_FUNC) &C_overlay_group,            1},
-    {"C_overlay_run",              (DL_FUNC) &C_overlay_run,              5},
+    {"C_overlay_run",              (DL_FUNC) &C_overlay_run,              6},
     {"C_geos_locator_build",       (DL_FUNC) &C_geos_locator_build,       1},
     {"C_geos_filter",              (DL_FUNC) &C_geos_filter,              6},
     {"C_geos_join",                (DL_FUNC) &C_geos_join,                5},
@@ -196,6 +206,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_geos_union_hex",           (DL_FUNC) &C_geos_union_hex,           1},
     {"C_geos_locate_xy",           (DL_FUNC) &C_geos_locate_xy,           7},
     {"C_geos_points_to_hex",       (DL_FUNC) &C_geos_points_to_hex,       2},
+    {"C_feature_knn_build",        (DL_FUNC) &C_feature_knn_build,        2},
+    {"C_feature_knn_query",        (DL_FUNC) &C_feature_knn_query,        4},
     {"C_vecr_writer_open",         (DL_FUNC) &C_vecr_writer_open,         9},
     {"C_vecr_writer_write_strip",  (DL_FUNC) &C_vecr_writer_write_strip,  4},
     {"C_vecr_writer_finish",       (DL_FUNC) &C_vecr_writer_finish,       1},

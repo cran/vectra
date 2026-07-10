@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-30" />
+<meta name="date" content="2026-07-10" />
 
 <title>Offloading: streaming, monoids, and out-of-core fits</title>
 
@@ -342,7 +342,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">Offloading: streaming, monoids, and
 out-of-core fits</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-30</h4>
+<h4 class="date">2026-07-10</h4>
 
 
 
@@ -514,7 +514,7 @@ checked.</p>
 <span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="co">#&gt;   c                  2000 rows</span></span>
 <span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: partition by &#39;g&#39; (level)&gt;</span></span>
 <span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 spill + 1 routing pass</span></span>
-<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(routing budget = 1e+06 rows), or O(one shard) when collected</span></span>
+<span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(streaming memory budget), or O(one shard) when collected</span></span>
 <span id="cb8-10"><a href="#cb8-10" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n)</span></span>
 <span id="cb8-11"><a href="#cb8-11" tabindex="-1"></a><span class="co">#&gt;   note             : localizes coupling so each shard fits in RAM</span></span></code></pre></div>
 <p>Each shard is an ordinary node that fits in memory on its own, so a

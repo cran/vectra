@@ -5,6 +5,7 @@
 #include "filter.h"
 #include "project.h"
 #include "group_agg.h"
+#include "kmer.h"
 #include "sort.h"
 #include "topn.h"
 #include "group_topn.h"
@@ -106,7 +107,8 @@ static AggKind parse_agg_kind(const char *s) {
     return AGG_COUNT; /* unreachable */
 }
 
-SEXP C_group_agg_node(SEXP node_xptr, SEXP key_names_sexp, SEXP agg_specs_sexp) {
+SEXP C_group_agg_node(SEXP node_xptr, SEXP key_names_sexp, SEXP agg_specs_sexp,
+                      SEXP mem_sexp) {
     VecNode *child = unwrap_node(node_xptr);
     R_ClearExternalPtr(node_xptr);
 
@@ -139,14 +141,44 @@ SEXP C_group_agg_node(SEXP node_xptr, SEXP key_names_sexp, SEXP agg_specs_sexp) 
         specs[a].na_rm = (na_rm_sexp != R_NilValue) ? Rf_asLogical(na_rm_sexp) : 0;
     }
 
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
     GroupAggNode *ga = group_agg_node_create(child, n_keys, key_names,
-                                              n_aggs, specs, get_r_tempdir());
+                                              n_aggs, specs, get_r_tempdir(),
+                                              mem_budget);
     return wrap_node((VecNode *)ga);
+}
+
+/* --- C_kmer_node --- */
+
+SEXP C_kmer_node(SEXP node_xptr, SEXP seq_col_sexp, SEXP k_sexp,
+                 SEXP canonical_sexp, SEXP key_names_sexp, SEXP mem_sexp) {
+    VecNode *child = unwrap_node(node_xptr);
+    R_ClearExternalPtr(node_xptr);
+
+    const char *seq_col = CHAR(STRING_ELT(seq_col_sexp, 0));
+    int k = Rf_asInteger(k_sexp);
+    int canonical = Rf_asLogical(canonical_sexp) == TRUE;
+
+    int n_keys = Rf_length(key_names_sexp);
+    char **key_names = (char **)malloc((size_t)(n_keys > 0 ? n_keys : 1)
+                                       * sizeof(char *));
+    for (int i = 0; i < n_keys; i++) {
+        const char *nm = CHAR(STRING_ELT(key_names_sexp, i));
+        key_names[i] = (char *)malloc(strlen(nm) + 1);
+        strcpy(key_names[i], nm);
+    }
+
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
+    KmerNode *kn = kmer_node_create(child, seq_col, k, canonical,
+                                    n_keys, key_names,
+                                    mem_budget, get_r_tempdir());
+    return wrap_node((VecNode *)kn);
 }
 
 /* --- C_sort_node --- */
 
-SEXP C_sort_node(SEXP node_xptr, SEXP col_names_sexp, SEXP desc_sexp) {
+SEXP C_sort_node(SEXP node_xptr, SEXP col_names_sexp, SEXP desc_sexp,
+                 SEXP mem_sexp) {
     VecNode *child = unwrap_node(node_xptr);
     R_ClearExternalPtr(node_xptr);
 
@@ -163,7 +195,9 @@ SEXP C_sort_node(SEXP node_xptr, SEXP col_names_sexp, SEXP desc_sexp) {
         keys[k].descending = LOGICAL(desc_sexp)[k];
     }
 
-    SortNode *sn = sort_node_create(child, n_keys, keys, get_r_tempdir());
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
+    SortNode *sn = sort_node_create(child, n_keys, keys, get_r_tempdir(),
+                                    mem_budget);
     return wrap_node((VecNode *)sn);
 }
 
@@ -206,7 +240,7 @@ SEXP C_topn_node(SEXP node_xptr, SEXP col_names_sexp,
 /* --- C_group_topn_node --- */
 
 SEXP C_group_topn_node(SEXP node_xptr, SEXP key_names_sexp,
-                       SEXP order_sexp, SEXP desc_sexp) {
+                       SEXP order_sexp, SEXP desc_sexp, SEXP mem_sexp) {
     VecNode *child = unwrap_node(node_xptr);
     R_ClearExternalPtr(node_xptr);
 
@@ -228,8 +262,10 @@ SEXP C_group_topn_node(SEXP node_xptr, SEXP key_names_sexp,
         vectra_error("group_topn: order column not found: %s", order_nm);
 
     int descending = LOGICAL(desc_sexp)[0];
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
     GroupTopNNode *gn = group_topn_node_create(child, n_keys, key_idx,
-                                               order_idx, descending);
+                                               order_idx, descending,
+                                               mem_budget, get_r_tempdir());
     free(key_idx);
     return wrap_node((VecNode *)gn);
 }
@@ -238,7 +274,7 @@ SEXP C_group_topn_node(SEXP node_xptr, SEXP key_names_sexp,
 
 SEXP C_join_node(SEXP left_xptr, SEXP right_xptr,
                  SEXP kind_sexp, SEXP left_keys_sexp, SEXP right_keys_sexp,
-                 SEXP suffix_x_sexp, SEXP suffix_y_sexp) {
+                 SEXP suffix_x_sexp, SEXP suffix_y_sexp, SEXP mem_sexp) {
     VecNode *left = unwrap_node(left_xptr);
     R_ClearExternalPtr(left_xptr);
     VecNode *right = unwrap_node(right_xptr);
@@ -272,7 +308,9 @@ SEXP C_join_node(SEXP left_xptr, SEXP right_xptr,
     const char *sx = CHAR(STRING_ELT(suffix_x_sexp, 0));
     const char *sy = CHAR(STRING_ELT(suffix_y_sexp, 0));
 
-    JoinNode *jn = join_node_create(left, right, kind, n_keys, keys, sx, sy);
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
+    JoinNode *jn = join_node_create(left, right, kind, n_keys, keys, sx, sy,
+                                    mem_budget, get_r_tempdir());
     return wrap_node((VecNode *)jn);
 }
 
@@ -347,8 +385,9 @@ SEXP C_window_node(SEXP node_xptr, SEXP key_names_sexp, SEXP win_specs_sexp) {
                         ? Rf_asLogical(desc_sexp) : 0;
     }
 
-    WindowNode *wn = window_node_create(child, n_keys, key_names, n_wins, specs);
-    return wrap_node((VecNode *)wn);
+    VecNode *top = window_node_create(child, n_keys, key_names, n_wins, specs,
+                                      get_r_tempdir());
+    return wrap_node(top);
 }
 
 /* --- C_concat_node --- */
@@ -371,7 +410,8 @@ SEXP C_fuzzy_join_node(SEXP probe_xptr, SEXP build_xptr,
                        SEXP by_probe_sexp, SEXP by_build_sexp,
                        SEXP block_probe_sexp, SEXP block_build_sexp,
                        SEXP method_sexp, SEXP max_dist_sexp,
-                       SEXP n_threads_sexp, SEXP suffix_y_sexp) {
+                       SEXP n_threads_sexp, SEXP suffix_y_sexp,
+                       SEXP mem_sexp) {
     VecNode *probe = unwrap_node(probe_xptr);
     R_ClearExternalPtr(probe_xptr);
     VecNode *build = unwrap_node(build_xptr);
@@ -414,13 +454,14 @@ SEXP C_fuzzy_join_node(SEXP probe_xptr, SEXP build_xptr,
     double max_dist = REAL(max_dist_sexp)[0];
     int n_threads = INTEGER(n_threads_sexp)[0];
     const char *suffix_y = CHAR(STRING_ELT(suffix_y_sexp, 0));
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
 
     FuzzyJoinNode *fj = fuzzy_join_node_create(
         probe, build,
         probe_key, build_key,
         probe_block, build_block,
         method, max_dist, n_threads,
-        suffix_y
+        suffix_y, mem_budget, get_r_tempdir()
     );
     return wrap_node((VecNode *)fj);
 }
@@ -432,7 +473,8 @@ SEXP C_interval_join_node(SEXP probe_xptr, SEXP build_xptr,
                           SEXP start_build_sexp, SEXP end_build_sexp,
                           SEXP block_probe_sexp, SEXP block_build_sexp,
                           SEXP kind_sexp, SEXP closed_sexp,
-                          SEXP n_threads_sexp, SEXP suffix_y_sexp) {
+                          SEXP n_threads_sexp, SEXP suffix_y_sexp,
+                          SEXP mem_sexp) {
     VecNode *probe = unwrap_node(probe_xptr);
     R_ClearExternalPtr(probe_xptr);
     VecNode *build = unwrap_node(build_xptr);
@@ -485,12 +527,14 @@ SEXP C_interval_join_node(SEXP probe_xptr, SEXP build_xptr,
     int closed = Rf_asLogical(closed_sexp) == TRUE ? 1 : 0;
     int n_threads = INTEGER(n_threads_sexp)[0];
     const char *suffix_y = CHAR(STRING_ELT(suffix_y_sexp, 0));
+    int64_t mem_budget = (int64_t)Rf_asReal(mem_sexp);
 
     IntervalJoinNode *ij = interval_join_node_create(
         probe, build,
         p_start, p_end, b_start, b_end,
         probe_block, build_block,
-        kind, closed, n_threads, suffix_y
+        kind, closed, n_threads, suffix_y,
+        mem_budget, get_r_tempdir()
     );
     return wrap_node((VecNode *)ij);
 }

@@ -27,10 +27,14 @@ typedef struct {
 
 /* State machine */
 typedef enum {
-    FSTATE_MATERIALIZE,
-    FSTATE_EMIT,
+    FSTATE_BUILD,   /* materialize + block-index the build side (once) */
+    FSTATE_STREAM,  /* pull probe batches, emit their matches in chunks */
     FSTATE_DONE
 } FuzzyState;
+
+/* Build-side block index: block key -> list of build rows. Private to the
+   implementation; NULL when no blocking column is used. */
+struct BlockIndex;
 
 typedef struct {
     VecNode    base;
@@ -50,28 +54,49 @@ typedef struct {
     double      max_dist;
     int         n_threads;
 
-    /* Materialized probe side */
+    /* Probe side is streamed, not materialized; only its column count is kept. */
     int         p_ncols;
-    VecArray   *p_cols;
-    int64_t     p_nrows;
 
-    /* Materialized build side */
+    /* Materialized build side (resident: every probe row compares against it).
+       When it fits mem_budget this holds the whole build side; when it overflows
+       it is spilled to build_spill_path instead and b_cols stays NULL. */
     int         b_ncols;
     VecArray   *b_cols;
     int64_t     b_nrows;
 
-    /* Partitions (one per unique block key value) */
-    JoinPartition *probe_parts;
-    JoinPartition *build_parts;
-    int64_t        n_parts;
+    /* Build-side block index (NULL when no blocking) */
+    struct BlockIndex *bidx;
 
-    /* Match results (merged from all threads) */
-    FuzzyMatch *matches;
-    int64_t     n_matches;
+    /* Bounded-memory spill of the build side. When the build side exceeds
+       mem_budget it is written to a .vtr run file in budget-sized rowgroups;
+       each probe batch is then matched against one rowgroup chunk at a time
+       (loaded into chunk_cols with a per-chunk block index), so peak build
+       state is one rowgroup, not the whole side. */
+    int64_t     mem_budget;
+    char       *temp_dir;         /* owned run-file dir */
+    int         spilled;          /* 1 = build side lives in build_file */
+    char       *build_spill_path; /* owned run-file path */
+    void       *build_file;       /* Vtr1TdcFile* reader (opaque) */
+    uint32_t    build_n_rgs;      /* rowgroups in the spill file */
+    uint32_t    chunk_rg;         /* next rowgroup for the current probe batch */
+    VecBatch   *chunk_batch;      /* one resident build rowgroup (owned) */
+    VecArray   *chunk_cols;       /* alias of chunk_batch->columns */
+    int64_t     chunk_nrows;
+    struct BlockIndex *chunk_bidx;/* block index over the current chunk */
+
+    /* Build columns the current matches emit from: b_cols (resident) or
+       chunk_cols (spilled). */
+    const VecArray *emit_bcols;
+
+    /* Streaming state: the probe batch being emitted and its matches. The
+       match buffer is bounded to one probe batch, never the whole cross set. */
+    VecBatch   *cur_batch;       /* current probe batch (owned until drained) */
+    FuzzyMatch *cur_matches;     /* matches for cur_batch (probe_idx = local row) */
+    int64_t     cur_n;           /* number of matches in cur_matches */
+    int64_t     emit_pos;        /* cursor into cur_matches */
 
     /* Output state */
     FuzzyState  state;
-    int64_t     emit_pos;        /* cursor into matches array */
 
     /* Output schema column mapping */
     int         out_ncols;       /* total output columns */
@@ -89,7 +114,9 @@ FuzzyJoinNode *fuzzy_join_node_create(
     FuzzyMethod  method,
     double       max_dist,
     int          n_threads,
-    const char  *suffix_y
+    const char  *suffix_y,
+    int64_t      mem_budget,        /* build-side spill threshold; <=0 => default */
+    const char  *temp_dir           /* run-file dir (copied) */
 );
 
 #endif /* VECTRA_FUZZY_JOIN_H */

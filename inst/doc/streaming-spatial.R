@@ -72,12 +72,12 @@ write_vtr(data.frame(id = seq_len(nrow(pts)), x = pts[, 1], y = pts[, 2]), fp)
 region <- nc[nc$NAME %in% c("Ashe", "Alleghany", "Surry", "Wilkes", "Watauga"),
              "NAME"]
 
-inside <- tbl(fp) |>
-  spatial_filter(region, coords = c("x", "y"), crs = crs_nc)
-nrow(collect(inside))
+keep_xy <- tbl(fp) |>
+  spatial_filter(region, coords = c("x", "y"), crs = crs_nc) |>
+  collect()
+nrow(keep_xy)
 
 ## ----filter-plot--------------------------------------------------------------
-keep_xy <- collect(inside)
 plot(st_geometry(nc), border = "grey85", col = NA, main = "Select by location")
 plot(st_geometry(region), border = "#cc3344", col = "#cc334411", add = TRUE)
 points(pts, pch = 16, cex = 0.5, col = "grey70")

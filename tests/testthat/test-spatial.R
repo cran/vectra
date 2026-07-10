@@ -71,11 +71,9 @@ test_that("spatial_join survives multi-batch streaming and many spill flushes", 
   f <- tempfile(fileext = ".vtr"); on.exit(unlink(f))
   write_vtr(pts, f, batch_size = 1000L)   # 5 row groups -> 5 read batches
 
-  old <- options(vectra.spatial_flush = 1500)  # force multiple run-file flushes
-  on.exit(options(old), add = TRUE)
-
   res <- tbl(f) |>
-    spatial_join(polys["pid"], coords = c("x", "y"), crs = NA) |>
+    spatial_join(polys["pid"], coords = c("x", "y"), crs = NA,
+                 flush_rows = 1500) |>
     collect()
 
   expect_equal(nrow(res), n)
@@ -151,8 +149,8 @@ test_that("spatial_join composes with offload() partitioning (both-sides-huge)",
   # Partition the stream by the grid key, join each shard independently,
   # then recombine. The union must reproduce the single-pass result.
   part <- offload(tbl(f), by = "cell")
-  shard_res <- lapply(unclass(part), function(nd)
-    nd |> spatial_join(polys["pid"], coords = c("x", "y"), crs = NA) |> collect())
+  shard_res <- lapply(seq_along(part), function(i)
+    part[[i]] |> spatial_join(polys["pid"], coords = c("x", "y"), crs = NA) |> collect())
   got <- do.call(rbind, shard_res)
   got <- got[order(got$id), ]
 

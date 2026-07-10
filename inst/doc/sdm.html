@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-06-30" />
+<meta name="date" content="2026-07-10" />
 
 <title>Species Distribution Models</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Species Distribution Models</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-06-30</h4>
+<h4 class="date">2026-07-10</h4>
 
 
 
@@ -362,13 +362,18 @@ small fraction of the file. And it consumes a query one batch at a time,
 so a model matrix that exceeds memory can still be fitted:
 <code>chunk_feeder()</code> streams the data through
 <code>biglm::bigglm()</code> one chunk per iteration.</p>
-<p>Two operations sit outside vectra’s scope, and the rest of this
-article assumes they are handled before extraction:</p>
+<p>The rest of this article assumes two things are handled before
+extraction:</p>
 <ul>
-<li><strong>Vector geometry.</strong> vectra has no polygons, lines, or
-spatial joins. Buffer a study region, intersect with a range map, or
-rasterize a shapefile using <code>sf</code> or <code>terra</code>
-first.</li>
+<li><strong>Vector geometry.</strong> vectra streams the vector verbs
+(<code>spatial_join()</code>, <code>spatial_filter()</code>,
+<code>spatial_clip()</code>, <code>spatial_overlay()</code>,
+<code>rasterize()</code>, …) around <code>sf</code>, one batch at a time
+– see <a href="streaming-spatial.html">Streaming spatial operations</a>.
+It carries no geometry type of its own, so the topology comes from
+<code>sf</code> and GEOS. This article stays on the raster-sampling path
+and assumes any range-map intersection or study-region buffer is
+prepared before extraction.</li>
 <li><strong>Reprojection.</strong> vectra reads the coordinate reference
 system of a <code>GeoTIFF</code> with <code>tiff_crs()</code> but does
 not transform coordinates. Occurrence points must already be in the
@@ -536,6 +541,57 @@ appears in the stream. The formula then names prepared columns and each
 batch yields the same transform.</p>
 </div>
 </div>
+<div id="transferability-is-a-projection-environment-novel" class="section level2">
+<h2>Transferability: is a projection environment novel?</h2>
+<p>A model calibrated in one region and projected to another (a
+different area, or the same area under a future climate) is only
+trustworthy where the projection environment resembles the calibration
+environment. Mobility-oriented parity (MOP; Owens et al. 2013) measures
+that resemblance directly. For each projection site it reports the mean
+distance, in predictor space, to the nearest fraction of the calibration
+cloud: small where the site sits inside the training conditions, larger
+where it is environmentally novel and the model would be
+extrapolating.</p>
+<p><code>feature_knn()</code> computes that distance while streaming the
+projection side, so a continental projection grid never has to be held
+in memory. The calibration cloud is the resident reference; each
+projection batch is scored against it. The predictors here are already
+standardized, so a plain Euclidean distance is meaningful;
+<code>metric = &quot;mahalanobis&quot;</code> whitens by the calibration
+covariance when the predictors are correlated.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>calib <span class="ot">&lt;-</span> occ[, <span class="fu">c</span>(<span class="st">&quot;bio1&quot;</span>, <span class="st">&quot;bio12&quot;</span>)]          <span class="co"># the standardized training cloud</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a><span class="co"># Two sites inside the training conditions and one well outside them.</span></span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>proj <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(</span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>  <span class="at">bio1  =</span> <span class="fu">c</span>(<span class="fl">0.0</span>, <span class="fl">0.5</span>, <span class="fl">4.0</span>),</span>
+<span id="cb9-6"><a href="#cb9-6" tabindex="-1"></a>  <span class="at">bio12 =</span> <span class="fu">c</span>(<span class="fl">0.0</span>, <span class="sc">-</span><span class="fl">0.5</span>, <span class="sc">-</span><span class="fl">4.0</span>)</span>
+<span id="cb9-7"><a href="#cb9-7" tabindex="-1"></a>)</span>
+<span id="cb9-8"><a href="#cb9-8" tabindex="-1"></a>pv <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb9-9"><a href="#cb9-9" tabindex="-1"></a><span class="fu">write_vtr</span>(proj, pv)</span>
+<span id="cb9-10"><a href="#cb9-10" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="fu">tbl</span>(pv) <span class="sc">|&gt;</span></span>
+<span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a>  <span class="fu">feature_knn</span>(calib, <span class="at">percentage =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   bio1 bio12 knn_distance</span></span>
+<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt; 1  0.0   0.0    0.1105930</span></span>
+<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; 2  0.5  -0.5    0.1318012</span></span>
+<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt; 3  4.0  -4.0    3.0039278</span></span>
+<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="fu">unlink</span>(pv)</span></code></pre></div>
+<p>The third site, far from any training condition, is scored with a
+much larger distance than the two that sit within the cloud.</p>
+<p>When the projection is itself a stack of environmental rasters,
+<code>rast_feature_distance()</code> folds the same distance over the
+projection grid, reading the reference raster once and walking the
+projection one tile-row strip at a time, so the surface is written
+aligned to the grid and computed out-of-core. The strict-extrapolation
+half of a novelty diagnostic such as MOP, the count of predictors whose
+value falls outside the range each takes over the calibration cloud, is
+already native: it is a per-band <code>min</code>/<code>max</code>
+reduce over the calibration raster followed by a
+<code>rast_calc()</code> expression on the projection raster, so the
+distance surface and the extrapolation count compose without a dedicated
+verb.</p>
+</div>
 <div id="choosing-a-path" class="section level2">
 <h2>Choosing a path</h2>
 <p>Extract with <code>tiff_extract_points()</code> in every case. After
@@ -547,8 +603,12 @@ function. This is the common case.</li>
 <li>If a single-pass summary is all you need (class balance, sufficient
 statistics, an online mean), use <code>collect_chunked()</code>.</li>
 <li>If the table itself exceeds memory and you need a full GLM, feed it
-to <code>biglm::bigglm()</code> through <code>chunk_feeder()</code>.
-```</li>
+to <code>biglm::bigglm()</code> through
+<code>chunk_feeder()</code>.</li>
+<li>To judge whether a projection is within the calibrated conditions,
+score it with <code>feature_knn()</code>, or
+<code>rast_feature_distance()</code> for a streaming raster novelty
+surface. ```</li>
 </ul>
 </div>
 

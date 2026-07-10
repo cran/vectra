@@ -93,3 +93,19 @@ round(coef(fit_stream), 3)
 ## ----cleanup, include = FALSE-------------------------------------------------
 unlink(c(tif, vtr))
 
+## ----feature-knn--------------------------------------------------------------
+calib <- occ[, c("bio1", "bio12")]          # the standardized training cloud
+
+# Two sites inside the training conditions and one well outside them.
+proj <- data.frame(
+  bio1  = c(0.0, 0.5, 4.0),
+  bio12 = c(0.0, -0.5, -4.0)
+)
+pv <- tempfile(fileext = ".vtr")
+write_vtr(proj, pv)
+
+tbl(pv) |>
+  feature_knn(calib, percentage = 5) |>
+  collect()
+unlink(pv)
+
