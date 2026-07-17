@@ -1,3 +1,60 @@
+# vectra 0.11.3
+
+## Bug fixes
+
+* `collect_chunked()` and `chunk_feeder()` now consume their input node, matching
+  every other terminal (`collect()`, `write_vtr()`). The streaming batch cursor
+  previously drained the plan without invalidating the handle, so collecting the
+  same node again re-drove an already-drained spill plan and returned wrong or
+  empty data instead of raising the documented "already consumed" error.
+
+* The holistic aggregates (`median()`, `n_distinct()`) and `kmer()` now bound the
+  fan-in of their external record merge. The shared record sort-merge opened
+  every spilled run at once, so a genuinely larger-than-RAM aggregate could grow
+  its resident read buffers with the run count and exhaust the process file-handle
+  table. It now reduces the runs to a bounded fan-in over multiple passes first,
+  as the row sort behind `arrange()`/grouped `summarise()` already did, keeping
+  peak memory and open handles bounded regardless of input size.
+
+* `propagate()` no longer stops at a fixed 20 levels of hierarchy. A parent-child
+  chain deeper than 20 within a batch left the deepest rows `NA`; propagation now
+  runs to convergence, so an arbitrarily deep hierarchy resolves fully.
+
+* `resolve()` and `propagate()` coerce their foreign-key and primary-key columns
+  to a common type before matching. A key pair stored in different numeric types
+  (for example a `double` foreign key against an integer primary key) could
+  silently fail to match; they are now compared like with like.
+
+* `lookup(.report = TRUE)`, the default, no longer materializes the whole fact
+  table. It collected the entire fact table into memory purely to count its rows
+  for a diagnostic message; the count and the unmatched-key preview now stream in
+  bounded memory.
+
+# vectra 0.11.2
+
+## Bug fixes
+
+* The gzip (`.gz`) reader now streams. It previously read the whole compressed
+  file into memory and inflated it whole into a second buffer, so the readable
+  size was capped at available RAM, and its size query used a 32-bit `ftell`, so
+  a `.gz` past 2 GB compressed failed to open at all on Windows. It now feeds the
+  raw deflate stream through miniz's `tinfl` coroutine into a 32 KB wrapping
+  window (which doubles as the LZ dictionary) and serves bytes from that window,
+  with 64-bit file offsets throughout; peak memory is the window plus one input
+  block, independent of file size. A `.gz` whose inflated size exceeds RAM (and a
+  compressed size past 2 GB) now reads fine. Enables `tbl_csv()` on multi-GB
+  compressed streams.
+
+* The gzip reader now follows concatenated gzip members, so a multi-member `.gz`
+  (as produced by `bgzip` and `cat a.gz b.gz`) reads whole instead of stopping
+  at the first member. The header is parsed field by field with no fixed size
+  cap. This affects `tbl_csv()`, `tbl_fasta()`, `tbl_fastq()`, and `tbl_bed()`
+  on any `.gz` input.
+
+* A truncated or corrupt `.gz` now fails loudly. The scanners distinguish a
+  hard decode error from a clean end of stream, so a partial compressed file
+  raises an error instead of silently returning a short read.
+
 # vectra 0.11.1
 
 ## Bug fixes
