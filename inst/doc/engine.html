@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-07-17" />
+<meta name="date" content="2026-07-30" />
 
 <title>vectra Engine Reference</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">vectra Engine Reference</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-07-17</h4>
+<h4 class="date">2026-07-30</h4>
 
 
 
@@ -1384,51 +1384,59 @@ between versions.</p>
 <h2>Hash indexes (.vtri)</h2>
 <p>vectra supports persistent on-disk hash indexes stored as
 <code>.vtri</code> sidecar files alongside <code>.vtr</code> data files.
-These indexes enable O(1) row group pruning for equality predicates,
-turning full-table scans into targeted reads.</p>
+An index names the row groups that may hold a key, so an equality
+predicate reads those groups and skips the rest.</p>
 <div id="creating-indexes" class="section level3">
 <h3>Creating indexes</h3>
+<p>Both functions take the path of the <code>.vtr</code> file:</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Single-column index</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>)</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span>
 <span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
 <span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Case-insensitive index</span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>, <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>, <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a></span>
 <span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co"># Composite (multi-column) index</span></span>
-<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">create_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="fu">c</span>(<span class="st">&quot;country&quot;</span>, <span class="st">&quot;year&quot;</span>))</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;country&quot;</span>, <span class="st">&quot;year&quot;</span>))</span>
 <span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co"># Check if an index exists</span></span>
-<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="fu">has_index</span>(<span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>), <span class="st">&quot;species&quot;</span>)</span></code></pre></div>
-<p><code>create_index()</code> reads the <code>.vtr</code> file, hashes
-every value in the indexed column(s) per row group, and writes a
-<code>.vtri</code> file. The file name encodes the indexed columns:
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co"># Check whether a usable index exists</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="fu">has_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span></code></pre></div>
+<p><code>create_index()</code> reads the indexed column(s) of the
+<code>.vtr</code> file one row group at a time and writes a
+<code>.vtri</code> file holding one entry per distinct key per row
+group. The file name encodes the indexed columns:
 <code>data.species.vtri</code> for a single-column index,
-<code>data.country_year.vtri</code> for a composite.</p>
+<code>data.country_year.vtri</code> for a composite. Composite columns
+are canonicalized to schema order, so they may be named in any
+order.</p>
 </div>
 <div id="index-format" class="section level3">
 <h3>Index format</h3>
 <p>The <code>.vtri</code> format is a chained hash table mapping key
-hashes to row group indices:</p>
-<ul>
-<li><strong>v1</strong> (single-column): stores one column index, a
-case-insensitive flag, hash entries, row group entries, a slot heads
-array, and a next-pointer chain. Hashing uses FNV-1a on the raw column
-bytes. For case-insensitive indexes, the hash folds ASCII uppercase to
-lowercase before hashing.</li>
-<li><strong>v2</strong> (composite): stores multiple column indices. The
-composite hash combines per-column FNV-1a hashes via XOR and
-multiplication with the FNV prime, producing a single 64-bit hash per
-row group entry.</li>
-</ul>
+hashes to row group indices. One layout covers both cases: a header with
+the indexed column indices, a case-insensitive flag, and the row and
+row-group counts of the store at build time, followed by the hash
+entries, their row group entries, a bucket heads array, and a
+next-pointer chain.</p>
+<p>Hashing uses FNV-1a on the raw column bytes; a case-insensitive index
+folds ASCII uppercase to lowercase before hashing. A composite key
+combines the per-column FNV-1a hashes by XOR and multiplication with the
+FNV prime, giving one 64-bit hash per entry.</p>
+<p>The stored row and row-group counts are what make an index safe to
+leave on disk. <code>vtri_open()</code> compares them with the store
+being queried and reports no index when they disagree, so an index that
+no longer describes its store is ignored rather than used to prune row
+groups that have moved. Formats written before 0.11.8 lack the counts
+and read as absent; <code>create_index()</code> rebuilds them.</p>
 </div>
 <div id="how-the-scan-uses-indexes" class="section level3">
 <h3>How the scan uses indexes</h3>
-<p>When a <code>ScanNode</code> opens a <code>.vtr</code> file, it
-checks for <code>.vtri</code> sidecar files matching the columns
-referenced in the pushed-down predicate. For single-column indexes, it
-matches <code>==</code> predicates and <code>%in%</code> predicates. For
-composite indexes, it matches AND-combined equality predicates where
-every indexed column has an <code>== literal</code> clause.</p>
+<p>On its first batch, a <code>ScanNode</code> looks at its pushed-down
+predicate, picks the column an equality or <code>%in%</code> clause
+offers, and opens that column’s <code>.vtri</code> if there is one. For
+composite indexes it collects the AND-combined equality clauses and
+opens the sidecar covering exactly those columns. Opening is deferred to
+this point, so a query reads an index only for the column it filters
+on.</p>
 <p>On match, the scan probes the index to produce a row-group bitmap.
 For <code>%in%</code> predicates, the scan probes once per set element
 and ORs the bitmaps together. Row groups with a 0 bit in the bitmap are
@@ -1437,13 +1445,15 @@ binary search and zone-map checks.</p>
 </div>
 <div id="performance-characteristics" class="section level3">
 <h3>Performance characteristics</h3>
-<p>Index probing is O(k) where k is the number of query keys (1 for
-<code>==</code>, n for <code>%in%</code>). Each probe is a hash
-computation plus a chain walk in the slot array. The index file is
-memory-mapped at open time, so repeated probes pay no I/O cost. For
-tables with many row groups and selective equality predicates, index
-pushdown can reduce I/O by orders of magnitude compared to zone-map
-pruning alone.</p>
+<p>A probe is a hash computation plus one chain walk, repeated per query
+key (once for <code>==</code>, n times for <code>%in%</code>). Opening
+the index reads the whole sidecar into memory once per
+<code>tbl()</code>, and that read is what the entry-per-distinct-key
+layout keeps small: an index over a column of few distinct values stays
+the same size as the store grows, so the cost of a lookup does not
+follow the size of the store. For tables with many row groups and
+selective equality predicates, index pushdown can reduce I/O by orders
+of magnitude compared to zone-map pruning alone.</p>
 </div>
 </div>
 <div id="materialized-blocks" class="section level2">

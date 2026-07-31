@@ -14,6 +14,7 @@ SEXP C_node_take(SEXP node_xptr);
 SEXP C_node_optimize(SEXP node_xptr);
 SEXP C_node_next_batch(SEXP node_xptr);
 SEXP C_node_schema(SEXP node_xptr);
+SEXP C_node_static_rows(SEXP node_xptr);
 SEXP C_node_plan(SEXP node_xptr);
 SEXP C_filter_node(SEXP node_xptr, SEXP expr_list);
 SEXP C_project_node(SEXP node_xptr, SEXP names, SEXP expr_lists);
@@ -27,11 +28,12 @@ SEXP C_group_topn_node(SEXP node_xptr, SEXP key_names, SEXP order_col, SEXP desc
                        SEXP mem);
 SEXP C_join_node(SEXP left_xptr, SEXP right_xptr,
                  SEXP kind, SEXP left_keys, SEXP right_keys,
-                 SEXP suffix_x, SEXP suffix_y, SEXP mem);
+                 SEXP suffix_x, SEXP suffix_y, SEXP mem, SEXP na_matches);
 SEXP C_window_node(SEXP node_xptr, SEXP key_names, SEXP win_specs);
 SEXP C_concat_node(SEXP node_xptrs);
 SEXP C_write_csv(SEXP node_xptr, SEXP path);
-SEXP C_csv_scan_node(SEXP path, SEXP batch_size, SEXP delim);
+SEXP C_csv_scan_node(SEXP path, SEXP batch_size, SEXP delim, SEXP guess_max,
+                     SEXP ct_names, SEXP ct_types);
 SEXP C_sql_scan_node(SEXP path, SEXP table, SEXP batch_size);
 SEXP C_write_sqlite(SEXP node_xptr, SEXP path, SEXP table_name);
 SEXP C_tiff_scan_node(SEXP path, SEXP batch_size);
@@ -67,5 +69,6 @@ SEXP C_interval_join_node(SEXP probe_xptr, SEXP build_xptr,
 /* Hash index */
 SEXP C_create_index(SEXP path, SEXP col_name, SEXP ci);
 SEXP C_has_index(SEXP path, SEXP col_name);
+SEXP C_index_spec(SEXP path, SEXP vtri_path);
 
 #endif /* VECTRA_R_BRIDGE_H */

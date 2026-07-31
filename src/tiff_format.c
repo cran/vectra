@@ -6,6 +6,15 @@
 #include <math.h>
 #include "miniz/miniz.h"
 
+/* 64-bit file seek. A plain fseek(..., (long)offset, ...) truncates to 32 bits
+   on LLP64 (Windows), so a strip/tile/IFD offset past 2 GB in a BigTIFF would
+   seek to the wrong place -- exactly the large-file case this reader supports. */
+#if defined(_WIN32)
+#  define TIFF_FSEEK64(fp, off) _fseeki64((fp), (int64_t)(off), SEEK_SET)
+#else
+#  define TIFF_FSEEK64(fp, off) fseeko((fp), (off_t)(off), SEEK_SET)
+#endif
+
 /* ================================================================== */
 /*  TIFF tag IDs and constants                                         */
 /* ================================================================== */
@@ -109,7 +118,7 @@ static double tio_readf64(TiffIO *io, const uint8_t *p) {
 }
 
 static int tio_read_at(TiffIO *io, int64_t offset, void *buf, size_t n) {
-    if (fseek(io->fp, (long)offset, SEEK_SET) != 0) return -1;
+    if (TIFF_FSEEK64(io->fp, offset) != 0) return -1;
     if (fread(buf, 1, n, io->fp) != n) return -1;
     return 0;
 }
@@ -129,9 +138,15 @@ static int tiff_type_size(int dtype) {
     }
 }
 
+/* A tag element count past this is certainly a corrupt/hostile file: it also
+   caps count*item_size and count*8 well inside int64/size_t, so neither the
+   byte total nor the output malloc can overflow. */
+#define TIFF_MAX_TAG_COUNT ((int64_t)1 << 28)
+
 static int64_t *read_tag_ints(TiffIO *io, int dtype, int64_t count,
                                const uint8_t *value_or_offset,
                                int entry_val_bytes) {
+    if (count < 0 || count > TIFF_MAX_TAG_COUNT) return NULL;
     int item_size = tiff_type_size(dtype);
     int64_t total = count * item_size;
     int64_t *out = (int64_t *)malloc((size_t)count * sizeof(int64_t));
@@ -185,6 +200,7 @@ static int64_t *read_tag_ints(TiffIO *io, int dtype, int64_t count,
 static double *read_tag_doubles(TiffIO *io, int dtype, int64_t count,
                                  const uint8_t *value_or_offset,
                                  int entry_val_bytes) {
+    if (count < 0 || count > TIFF_MAX_TAG_COUNT) return NULL;
     int item_size = tiff_type_size(dtype);
     int64_t total = count * item_size;
     double *out = (double *)malloc((size_t)count * sizeof(double));
@@ -235,6 +251,7 @@ static double *read_tag_doubles(TiffIO *io, int dtype, int64_t count,
 static char *read_tag_ascii(TiffIO *io, int64_t count,
                              const uint8_t *value_or_offset,
                              int entry_val_bytes) {
+    if (count < 0 || count > TIFF_MAX_TAG_COUNT) return NULL;
     char *out = (char *)malloc((size_t)(count + 1));
     if (!out) return NULL;
 
@@ -269,6 +286,7 @@ struct TiffReader {
     int     sample_format;     /* SAMPLE_UINT, SAMPLE_INT, SAMPLE_FLOAT */
     int     compression;
     int     planar_config;     /* 1=chunky, 2=planar */
+    int     predictor;         /* 1=none, 2=horizontal differencing, 3=float */
 
     /* Unified block layout: a "block" is one strip OR one tile.
        For strips, block_width == width and n_blocks_x == 1, so block_idx
@@ -313,7 +331,10 @@ static void parse_geokeys(TiffReader *r,
                           const char *ascii_params, int64_t ascii_count) {
     if (!dir || dir_count < 4) return;
     int64_t n_keys = dir[3];
-    if (n_keys < 0 || dir_count < 4 + n_keys * 4) return;
+    /* n_keys is file-controlled; bound it WITHOUT computing n_keys * 4, which
+       overflows int64 for a crafted n_keys (~2^61) and would let the guard pass
+       before the loop reads dir[4 + i*4] far past the allocation. */
+    if (n_keys < 0 || n_keys > (dir_count - 4) / 4) return;
 
     int32_t epsg_pcs = 0, epsg_geog = 0;
     int64_t cit_pcs_off  = -1, cit_pcs_count  = 0;
@@ -354,8 +375,12 @@ static void parse_geokeys(TiffReader *r,
         cit_off = cit_geog_off; cit_count = cit_geog_count;
     }
 
+    /* cit_off / cit_count are file-controlled; check each side against
+       ascii_count without summing (cit_off + cit_count overflows to negative
+       for crafted values, which would pass a naive sum <= ascii_count check and
+       let the memcpy below read from ascii_params + cit_off out of bounds). */
     if (cit_off >= 0 && cit_count > 0 && ascii_params &&
-        cit_off + cit_count <= ascii_count) {
+        cit_off <= ascii_count && cit_count <= ascii_count - cit_off) {
         /* GeoAsciiParams strings are pipe-terminated; trim if present. */
         int64_t actual = cit_count;
         if (actual > 0 && ascii_params[cit_off + actual - 1] == '|') actual--;
@@ -400,6 +425,14 @@ static int parse_ifd(TiffReader *r) {
         n_entries = (int64_t)tio_read64(io, cnt_buf);
     else
         n_entries = tio_read16(io, cnt_buf);
+    /* A classic-TIFF count is a 16-bit field; BigTIFF widens it to 64 bits with
+       no practical upper bound, so a crafted file can declare ~2^63 entries and
+       spin the loop below. A real IFD holds at most a few hundred tags; cap
+       well above that so we reject the DoS without rejecting any valid file. */
+    if (n_entries < 0 || n_entries > (1 << 20)) {
+        snprintf(r->errmsg, 256, "implausible IFD entry count");
+        return -1;
+    }
 
     int entry_size = io->bigtiff ? 20 : 12;
     int entry_val_bytes = io->bigtiff ? 8 : 4;
@@ -411,6 +444,7 @@ static int parse_ifd(TiffReader *r) {
     r->bits_per_sample = 8;
     r->sample_format = SAMPLE_UINT;
     r->compression = COMPRESS_NONE;
+    r->predictor = 1;
 
     /* Captured GeoKey directory + ascii params; resolved after the IFD loop
        so tag order doesn't matter. */
@@ -433,7 +467,8 @@ static int parse_ifd(TiffReader *r) {
         uint8_t entry[20];
         if (tio_read_at(io, entries_offset + i * entry_size,
                          entry, (size_t)entry_size) != 0)
-            continue;
+            break;  /* entries are sequential: if entry i is unreadable, so are
+                       all i+1.. -- stop rather than spin to n_entries. */
 
         uint16_t tag = tio_read16(io, entry);
         uint16_t dtype = tio_read16(io, entry + 2);
@@ -520,6 +555,11 @@ static int parse_ifd(TiffReader *r) {
         case TAG_PLANAR_CONFIG: {
             int64_t *v = read_tag_ints(io, dtype, 1, valp, entry_val_bytes);
             if (v) { r->planar_config = (int)v[0]; free(v); }
+            break;
+        }
+        case TAG_PREDICTOR: {
+            int64_t *v = read_tag_ints(io, dtype, 1, valp, entry_val_bytes);
+            if (v) { r->predictor = (int)v[0]; free(v); }
             break;
         }
         case TAG_SAMPLE_FORMAT: {
@@ -696,6 +736,25 @@ static int64_t block_expected_bytes(TiffReader *r, int64_t block_idx) {
     return rows * r->block_width * bps;
 }
 
+static void tiff_predictor2_undo(uint8_t *buf, int64_t nrows, int64_t W,
+                                 int nb, int bytes_per_sample);
+
+/* Undo the storage predictor (tag 317) on a freshly decoded block, in place.
+   Predictor 2 (horizontal differencing) is the inverse of the writer's per-row
+   difference. Predictor 3 (floating-point) uses a byte-plane reshuffle we do not
+   implement; rather than return silently wrong pixels we signal failure. */
+static int apply_read_predictor(TiffReader *r, int64_t block_idx, uint8_t *buf) {
+    if (r->predictor <= 1) return 0;
+    int bps = r->bits_per_sample / 8;
+    int nb = (r->planar_config == 1) ? r->n_bands : 1;
+    int64_t nrows = block_stored_rows(r, block_idx);
+    if (r->predictor == 2 && (bps == 1 || bps == 2 || bps == 4)) {
+        tiff_predictor2_undo(buf, nrows, r->block_width, nb, bps);
+        return 0;
+    }
+    return -1; /* predictor 3, or an unsupported sample width under predictor 2 */
+}
+
 static uint8_t *read_block(TiffReader *r, int64_t block_idx,
                            int64_t *out_len) {
     int64_t offset = r->block_offsets[block_idx];
@@ -703,12 +762,17 @@ static uint8_t *read_block(TiffReader *r, int64_t block_idx,
     int64_t expected_bytes = block_expected_bytes(r, block_idx);
 
     if (r->compression == COMPRESS_NONE) {
+        /* A corrupt/hostile file can record a byte count smaller than the block's
+           pixel geometry; reject it so extract_pixel cannot read past the buffer. */
+        if (compressed_len < expected_bytes)
+            return NULL;
         uint8_t *buf = (uint8_t *)malloc((size_t)compressed_len);
         if (!buf) return NULL;
         if (tio_read_at(&r->io, offset, buf, (size_t)compressed_len) != 0) {
             free(buf);
             return NULL;
         }
+        if (apply_read_predictor(r, block_idx, buf) != 0) { free(buf); return NULL; }
         *out_len = compressed_len;
         return buf;
     }
@@ -732,6 +796,13 @@ static uint8_t *read_block(TiffReader *r, int64_t block_idx,
         free(decomp);
         return NULL;
     }
+    /* A truncated-but-valid DEFLATE stream can decode to fewer bytes than the
+       block geometry; the tail would then be uninitialized heap. Reject it. */
+    if ((int64_t)dest_len < expected_bytes) {
+        free(decomp);
+        return NULL;
+    }
+    if (apply_read_predictor(r, block_idx, decomp) != 0) { free(decomp); return NULL; }
 
     *out_len = (int64_t)dest_len;
     return decomp;
@@ -1332,6 +1403,52 @@ static void tiff_predictor2_apply(uint8_t *buf, int64_t nrows, int64_t W,
         case 2: tiff_predictor2_apply_row_u16(row, W, nb); break;
         case 4: tiff_predictor2_apply_row_u32(row, W, nb); break;
         default: /* unsupported sample width — leave untouched */ break;
+        }
+    }
+}
+
+/* --- Reader side: undo Predictor 2 (horizontal differencing). Each row is a
+ * left-to-right cumulative sum, inverting the writer's per-row difference. */
+static void tiff_predictor2_undo_row_u8(uint8_t *row, int64_t W, int nb) {
+    for (int64_t col = 1; col < W; col++)
+        for (int b = 0; b < nb; b++)
+            row[col * nb + b] = (uint8_t)(row[col * nb + b] + row[(col - 1) * nb + b]);
+}
+
+static void tiff_predictor2_undo_row_u16(uint8_t *row, int64_t W, int nb) {
+    int stride = nb * 2;
+    for (int64_t col = 1; col < W; col++)
+        for (int b = 0; b < nb; b++) {
+            uint16_t a, c;
+            memcpy(&a, row + (col - 1) * stride + b * 2, 2);
+            memcpy(&c, row + col       * stride + b * 2, 2);
+            uint16_t d = (uint16_t)(c + a);
+            memcpy(row + col * stride + b * 2, &d, 2);
+        }
+}
+
+static void tiff_predictor2_undo_row_u32(uint8_t *row, int64_t W, int nb) {
+    int stride = nb * 4;
+    for (int64_t col = 1; col < W; col++)
+        for (int b = 0; b < nb; b++) {
+            uint32_t a, c;
+            memcpy(&a, row + (col - 1) * stride + b * 4, 4);
+            memcpy(&c, row + col       * stride + b * 4, 4);
+            uint32_t d = c + a;
+            memcpy(row + col * stride + b * 4, &d, 4);
+        }
+}
+
+static void tiff_predictor2_undo(uint8_t *buf, int64_t nrows, int64_t W,
+                                 int nb, int bytes_per_sample) {
+    int64_t row_bytes = W * nb * bytes_per_sample;
+    for (int64_t r = 0; r < nrows; r++) {
+        uint8_t *row = buf + r * row_bytes;
+        switch (bytes_per_sample) {
+        case 1: tiff_predictor2_undo_row_u8(row, W, nb); break;
+        case 2: tiff_predictor2_undo_row_u16(row, W, nb); break;
+        case 4: tiff_predictor2_undo_row_u32(row, W, nb); break;
+        default: break;
         }
     }
 }

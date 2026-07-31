@@ -222,8 +222,20 @@ tbl(f_by_site) |>
 ## ----index-rebuild------------------------------------------------------------
 append_vtr(eco[1:100, ], f)
 
-# Old index is now stale -- recreate it
-create_index(f, "site")
+# The index covers the appended rows too
+has_index(f, "site")
+tbl(f) |>
+  filter(site == "site_042") |>
+  explain()
+
+## ----index-invalidated--------------------------------------------------------
+g <- tempfile(fileext = ".vtr")
+write_vtr(eco, g, batch_size = 5000)
+create_index(g, "site")
+
+write_vtr(eco[1:2000, ], g, batch_size = 5000)   # overwrite under the index
+has_index(g, "site")                             # FALSE: rebuild needed
+nrow(collect(filter(tbl(g), site == "site_042")))  # still correct
 
 ## ----compose-all--------------------------------------------------------------
 tbl(f) |>

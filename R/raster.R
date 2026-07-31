@@ -110,6 +110,14 @@ vec_write_raster <- function(x, path,
                       balanced = 1L,
                       max      = 2L)
 
+  ## Integer dtypes have no NaN: when the data actually contains NA, choose a
+  ## nodata sentinel so those pixels round-trip as NA instead of collapsing to
+  ## 0. Only when NA is present, so data that legitimately uses the sentinel
+  ## value (e.g. 255 in a full-range u8 raster) is untouched. Float dtypes keep
+  ## NaN and need no sentinel.
+  if (is.na(nodata) && !startsWith(as.character(dtype), "f") && anyNA(x))
+    nodata <- .dtype_nodata(dtype)
+
   .Call(C_vec_write_raster,
         path,
         data_vec,
@@ -224,6 +232,11 @@ vec_extract_points <- function(r, x, y) {
 #' file. Each level is computed by 2x downsampling the previous level
 #' with the chosen kernel. Reading via `vec_read_window(level = L)`
 #' picks tiles at level L; the file's `n_levels` is updated in place.
+#'
+#' Unlike the streamed raster verbs, this decodes every band of the base
+#' raster into memory at once to build the pyramid, so peak memory is on the
+#' order of the full base raster (all bands). Build overviews before a raster
+#' grows past what fits in RAM, or on a per-band basis for very large stacks.
 #'
 #' @param path Path to a `.vec` raster file. The file is modified in place.
 #' @param levels Total levels including level 0 (so `levels = 5` adds

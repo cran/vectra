@@ -96,6 +96,8 @@ struct VecExpr {
 
     /* EXPR_IN */
     int64_t  n_set;
+    VecType  set_type;   /* comparison type: VEC_DOUBLE, VEC_INT64, or VEC_STRING */
+    int      set_has_na; /* 1 = the set contained NA (so NA %in% set is TRUE) */
     double  *set_dbl;
     int64_t *set_i64;
     char   **set_str;
@@ -103,6 +105,12 @@ struct VecExpr {
 
     /* EXPR_DATE_PART */
     char date_part;  /* 'Y'=year, 'M'=month, 'D'=day, 'h'=hour, 'm'=minute, 's'=second */
+
+    /* EXPR_DATE_PART / EXPR_FLOOR_TIME: scale of the operand's epoch value,
+       resolved from the source column's schema annotation at parse time.
+       'D' = Date (days since epoch), 'T' = POSIXct (seconds since epoch),
+       0 = unknown (operand is a computed expression) -> magnitude heuristic. */
+    char date_scale;
 
     /* EXPR_FLOOR_TIME reuses date_part for the unit ('s' second, 'n' minute,
        'h' hour, 'd' day, 'w' week, 'M' month, 'q' quarter, 'y' year) and
@@ -125,6 +133,9 @@ struct VecExpr {
 
     /* EXPR_GREPL / EXPR_GSUB / EXPR_SUB: 1 = fixed match (default), 0 = regex */
     int fixed;
+
+    /* EXPR_GREPL / EXPR_GSUB / EXPR_SUB: 1 = case-insensitive match */
+    int ignore_case;
 
     /* EXPR_GEOM: which libgeos op (see expr_geom.c). The geometry argument is
        `operand`; a binary op's second geometry or a parameterized transform's

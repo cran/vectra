@@ -4,7 +4,13 @@
 \alias{tbl_csv}
 \title{Create a lazy table reference from a delimited text file}
 \usage{
-tbl_csv(path, batch_size = .DEFAULT_BATCH_SIZE, delim = ",")
+tbl_csv(
+  path,
+  batch_size = .DEFAULT_BATCH_SIZE,
+  delim = ",",
+  guess_max = 1000,
+  col_types = NULL
+)
 }
 \arguments{
 \item{path}{Path to a delimited text file, optionally gzip-compressed.}
@@ -13,6 +19,18 @@ tbl_csv(path, batch_size = .DEFAULT_BATCH_SIZE, delim = ",")
 
 \item{delim}{Single-character field separator (default \code{","}). Use \code{"\\t"}
 for tab-separated and \code{";"} for semicolon-separated files.}
+
+\item{guess_max}{Number of rows scanned to infer column types (default
+1000). A value that only reveals a column's true type later in the file
+(for example an integer column that turns out to hold a decimal past row
+1000) is otherwise read as \code{NA}; pass a larger value, or \code{Inf} to scan the
+whole file, at the cost of an extra read pass.}
+
+\item{col_types}{Optional named character vector forcing the type of specific
+columns, overriding inference. Names are column names; values are one of
+\code{"character"}, \code{"double"}, \code{"integer"}, or \code{"logical"}. Use this to keep a
+zero-padded identifier column (ZIP codes, accession IDs) as text instead of
+letting it be read as a number, e.g. \code{col_types = c(zip = "character")}.}
 }
 \value{
 A \code{vectra_node} object representing a lazy scan of the file.
@@ -20,7 +38,8 @@ A \code{vectra_node} object representing a lazy scan of the file.
 \description{
 Opens a delimited text file (CSV, TSV, or any single-character separator)
 for lazy, streaming query execution. Column types are inferred from the
-first 1000 rows. No data is read until \code{\link[=collect]{collect()}} is called.
+first \code{guess_max} rows (default 1000). No data is read until \code{\link[=collect]{collect()}} is
+called.
 Gzip-compressed files (\code{.csv.gz}, \code{.tsv.gz}) are supported transparently.
 }
 \details{

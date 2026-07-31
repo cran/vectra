@@ -1,3 +1,425 @@
+# vectra 0.11.8
+
+## Bug fixes
+
+* A `.vtri` index left behind by `append_vtr(along = "rows")` no longer drops
+  rows from a filter on the indexed column. A row append rewrites every row
+  group, so the index mapped its keys to row groups that had moved; probing it
+  pruned groups that held matching rows, and the query returned a subset with no
+  error or warning. On a five-row store, `filter(id == "a")` returned one of two
+  matching rows and a key added by the append returned none.
+
+  A row append now rebuilds each index the store carries. Independently of that,
+  an index records the row and row-group counts it was built against, and a query
+  that finds them disagreeing reads the store rather than trusting the index --
+  so an index invalidated some other way costs the acceleration, never the rows.
+  `has_index()` reports `FALSE` for such an index, having previously reported on
+  no more than the sidecar file existing.
+
+* `create_index()` now makes `filter(col == value)` faster rather than slower
+  (#9). The index held one entry per row, which made it larger than the store it
+  indexed -- 131 MB against a 49 MB store of 3.2M rows -- and `tbl()` read all of
+  it eagerly. Lookup cost therefore tracked the size of the store, which is what
+  an index is for avoiding, and an indexed store was slower than the same store
+  without one.
+
+  An index now holds one entry per distinct key per row group. Over 8,000 keys in
+  3.2M rows the sidecar is 0.29 MB rather than 131 MB, and fetching one key's 400
+  rows takes 5 ms rather than 427 ms -- flat in the size of the store (5.2 ms at
+  3.2M rows against 4.7 ms at 200k, previously a 10-15x rise), and 20x faster
+  than the same query with no index. Building an index is also no longer bounded
+  by holding one entry per row in memory.
+
+* A query filtering on the second indexed column of a store now reaches that
+  column's index. A scan loaded the first index it found in schema order and
+  could probe no other, so any further index was read on every `tbl()` and never
+  used. Indexes are now opened for the column a predicate actually filters on,
+  which also means a query reads no index it has no use for.
+
+* `create_index()` accepts the columns of a composite index in any order. Naming
+  them in other than schema order wrote a sidecar under a name the scan does not
+  look for, leaving the index unused while `has_index()` reported it present.
+
+* A composite index over a narrow integer column is now probed rather than
+  skipped.
+
+* A store carrying both a composite index and a single-column index on one of
+  its columns now uses the composite for a predicate the composite covers. The
+  single-column index was probed first and stopped the composite being
+  consulted, so the more selective index went unused on exactly the queries it
+  was built for.
+
+* The `indexing` and `engine` vignettes described the index internals
+  incorrectly: open addressing with a stored row-group bitmap per value and a
+  70% load factor, where the format is a chained table at 50%, and a claim that
+  the sidecar is memory-mapped, which it is not. `create_index()` was also shown
+  being passed `tbl(path)` rather than a path, which cannot work.
+
+* A filter reaches a value that is computed rather than held in a variable:
+  `filter(x, id == keys[i])`, `filter(x, day > range$hi)`, and the like. A bare
+  name was resolved in the calling environment, but any larger expression that
+  named no column was rejected as an unsupported function. An expression that
+  does name a column still reports an unsupported operation as one.
+
+* A failed index write no longer replaces a working index with a truncated file;
+  the index is written to a temporary path and moved into place.
+
+## New features
+
+* `explain()` reports the index a scan will probe, as `hash index (id)` or
+  `hash index (a + b)` for a composite. It answers by opening the index the scan
+  would open, so it distinguishes an index that will be used from a sidecar file
+  that merely exists.
+
+## Breaking changes
+
+* The `.vtri` index format has changed, and indexes written by 0.11.7 and earlier
+  read as absent: queries and `has_index()` behave as though the store has no
+  index. Call `create_index()` again to rebuild -- the new index is much smaller
+  and is what makes an indexed lookup faster than an unindexed one. The `.vtr`
+  format itself is unchanged.
+
+# vectra 0.11.7
+
+## New features
+
+* `nrow()`, `ncol()`, and `dim()` work on a lazy query, via a `dim()` method
+  for `vectra_node`. Both counts come from plan metadata, so the query is
+  neither run nor consumed: a `.vtr` table reports the row count held in its
+  row-group index (less any rows `delete_vtr()` has tombstoned), and the
+  row-preserving verbs carry it through -- `select()`, `mutate()`, `rename()`,
+  `arrange()`, `relocate()`, window functions, `head()`, `slice_head()`,
+  `slice_min()`/`slice_max()`, and `bind_rows()` over counted inputs.
+
+  Verbs whose output length depends on the data -- `filter()`, the joins,
+  `summarise()`, `distinct()` -- report `NA` rows, as do CSV, SQLite, and TIFF
+  sources, which carry no stored row count. Counting those means a full pass
+  over data that may be larger than RAM, so `nrow()` reports what it knows
+  rather than starting one; `count() |> collect()` gives the exact number.
+
+  Previously `nrow()` fell through to `base::nrow()`, which returned `NULL`
+  because a node had no `dim()`. A `NULL` row count passed to `sprintf()`
+  produces `character(0)`, which `cat()` prints as nothing at all, so a loop
+  reporting row counts printed blank lines instead of failing.
+
+* `append_vtr(x, path, along = "cols")` attaches whole new columns to the rows
+  already in a `.vtr` store. The existing columns are never read or rewritten:
+  the new columns are encoded and attached on their own, so the cost tracks
+  what is being added rather than the size of the store.
+
+  This is what lets a table too wide to hold in memory be built a block of
+  columns at a time -- write the first block with `write_vtr()`, then append
+  each later block as it is produced, with a peak of one block instead of the
+  whole table. `x` must have exactly as many rows as the store holds, and
+  column names that do not collide with the existing ones; its rows are
+  matched to the store's rows by position.
+
+  Existing row-group boundaries and column data are untouched, so a `.vtri`
+  index built with `create_index()` over the original columns stays valid
+  across a column append. Unlike a row append, a column append writes
+  everything past the end of the existing data and patches the file header
+  last, so an interruption -- or a rejected append, such as a row-count
+  mismatch -- leaves the store readable exactly as it was.
+
+  `along = "rows"` remains the default and is unchanged (#8).
+
+## Bug fixes
+
+* `glimpse()` names each column's type again. It mapped the schema's type
+  codes through a numeric lookup table, but the schema bridge reports type
+  names, so every column printed as `<NA>`. It also prints the row count in
+  its header when the count is known, in place of the former `?`.
+
+## Internals
+
+* Plan nodes gained an optional `static_rows` hook: the exact number of rows
+  the node will emit, read off metadata without pulling a batch. It is what
+  `dim()` reads. A node kind that does not implement it reports "unknown", so
+  a node added later is over-cautious rather than wrong, and a scan opts out
+  whenever pruning, a pushed-down predicate, or a narrowed row-group range
+  means the stored row count is only an upper bound.
+
+* The vendored tdc container gained a widening encoder
+  (`tdc_stream_encoder_open_widen`), which is what makes the above possible.
+  Block records were already located solely by the trailing index, so new
+  blocks can be appended anywhere in the file; the schema section, pinned
+  immediately before the first block, could not grow in place, so a widened
+  container relocates its schema to the tail and is stamped with a new
+  container version. `.vtr` files that are never widened are byte-identical
+  to before, and remain readable by any reader that could read them.
+
+  A widened container is random-access only, which is how vectra reads every
+  `.vtr` anyway.
+
+# vectra 0.11.6
+
+## New features
+
+* `diff_vtr()` now streams both files through the external sort and merges them
+  in a single bounded pass, instead of holding every distinct key of the old
+  file resident. Peak memory follows the sort's spill budget (`vectra_mem()`),
+  so a diff whose key cardinality exceeds RAM no longer blows up.
+
+* `first()` / `last()` work on string columns (previously numeric-only).
+
+* `lag()` / `lead()` preserve a string column (previously silently returned a
+  column of zeros); integer / double columns are unchanged.
+
+* `rank(ties.method = "average")` computes base R's average rank. Bare `rank()`
+  keeps its established min-rank behaviour (dplyr `min_rank()`).
+
+* `n()` works inside `mutate()`, returning the partition (or group) size
+  repeated per row, in addition to its existing use as a `summarise()`
+  aggregate.
+
+* `summarise()` accepts expressions over aggregates
+  (`summarise(rate = sum(hits) / sum(at_bats))`) and evaluates its arguments
+  sequentially, so a later output can reference an earlier one
+  (`summarise(m = mean(x), z = x_dev / m)`), matching dplyr.
+
+## Bug fixes (audit pass)
+
+### Crashes / memory safety
+
+* A namespace-qualified function head (`pkg::fn(...)` / `pkg:::fn(...)`) no
+  longer crashes the expression serializer with "the condition has length > 1"
+  under R >= 4.2. `serialize_expr` (the shared `mutate` / `filter` / post-`summarise`
+  serializer) unwraps `::` / `:::` to the bare name, and a namespace-qualified
+  top-level `summarise()` call now routes to the aggregation parser, so an
+  unknown one reports `unknown aggregation function: <name>` instead of the
+  cryptic length error.
+
+* Hash join no longer duplicates rows or loops forever on a many-to-many key
+  whose build-chain length lines up with the internal 65536-row emit cap: the
+  resumable probe conflated "chain exhausted" with the "not resuming" sentinel
+  at the cap boundary. Both the hash and block-nested-loop probe paths are
+  fixed.
+
+* Reading a crafted GeoTIFF no longer corrupts the heap: `read_tag_ascii` now
+  bounds the tag element count like its sibling tag readers (a negative BigTIFF
+  count reached a `memcpy` with a huge size).
+
+* Opening a crafted SQLite database no longer reads past a page buffer: the
+  header `page_size` is validated (power of two in [512, 65536]), the reserved
+  region is bounded, and a page's declared cell count must fit the page.
+
+* `pmin()` / `pmax()`, the date/time helpers, and the unary math functions
+  (`round`, `abs`, `sqrt`, `floor`, ...) no longer read past a `logical`
+  operand's buffer (the operand was type-punned through the double buffer unless
+  it was already `int64`).
+
+* Reading a crafted GeoTIFF's GeoKey directory no longer over-reads the heap:
+  the key count and citation offset/length are bounded without an intermediate
+  multiply/add that overflowed `int64`, and a BigTIFF IFD with an implausible
+  entry count is rejected instead of spinning.
+
+* Opening a crafted `.vecr` raster no longer overflows the index allocation: the
+  declared tile count is bounded against the file size before allocating.
+
+* `substr()` with a huge negative `start` no longer triggers signed-overflow UB.
+
+* The parallel column copy in `collect()` no longer risks a `longjmp` out of an
+  OpenMP region: the builder input validation is hoisted to the serial master
+  before the parallel append.
+
+### Larger-than-RAM bounds
+
+* GeoTIFF export (`vec_to_tiff()`) streams the raster in row strips instead of
+  materializing every band as doubles in RAM.
+
+* A grouped `summarise()` / `count()` on a high-cardinality key streams its
+  output in bounded batches instead of one batch sized to the number of groups.
+
+* A very large TIFF (> 2 GB, BigTIFF) now seeks with a 64-bit offset on Windows.
+
+### Correctness
+
+* `arrange(desc(x))` places `NA` last (dplyr `na.last = TRUE`) consistently on
+  both the in-memory and the spilled path; sort NA placement is now a per-key
+  option so window value sorts (`cume_dist`, rank) keep treating `NA` as the
+  largest value.
+
+* `as.character()` / `paste()` of a `double` keep full precision (15 significant
+  digits) instead of truncating to 6.
+
+* `paste()` / `paste0()` stringify `NA` to `"NA"` (base R) instead of returning
+  `NA`.
+
+* `as.character()` / `paste()` of a computed `NaN` / `Inf` / `-Inf` format as R
+  does (`"NaN"` / `"Inf"` / `"-Inf"`), not the platform's lowercase `%g` output.
+
+* `as.integer()` / `as.numeric()` / `as.logical()` support the `double`, string,
+  and logical source types base R does (e.g. `as.integer(2.7)` is `2`).
+
+* Grouped `first()` / `last()` return the literal first / last element of the
+  group instead of `NA` when the group contains any `NA`.
+
+* Overview `bilinear` / `gauss` resampling no longer shifts pixels half a cell to
+  the north-west.
+
+### dplyr compatibility
+
+* `.by` (and `.keep`) are honored in `mutate()`, `filter()`, and `summarise()`
+  instead of being turned into a stray column / predicate.
+
+* `arrange(-x)`, `if_any()` / `if_all()`, `across()` with anonymous lambdas
+  (`\(x) ...`) and `{.fn}` in `.names`, the `.data[[var]]` pronoun, and
+  `bind_rows()` list splicing with a character `.id` now work.
+
+* `select()` and `across()` resolve tidyselect helpers that reference an
+  external variable (`all_of(v)`, `any_of(cols)`) in the caller's environment.
+
+* `if_any()` / `if_all()` accept an anonymous `\(x) ...` lambda, not only a
+  `~ .x` formula.
+
+* `arrange()` sorts by an expression (`arrange(x + y)`, `arrange(desc(x * 2))`),
+  and a window function may reference a column created earlier in the same
+  `mutate()` (evaluation now follows dplyr's left-to-right order).
+
+* `median()` / `n_distinct()` accept an expression or the `.data[[var]]` pronoun
+  (materialized like `mean()` / `sum()` already were).
+
+* `across()` errors on a duplicate output name instead of silently dropping a
+  result; `summarise()` rejects `.keep` / `.preserve`.
+
+### Robustness
+
+* A GEOS constant-geometry expression (`st_distance(geom, const)`) warms the
+  shared geometry's envelope before the parallel loop, removing a data race.
+
+* `spatial_overlay()` warns when a component of mutually-overlapping features
+  cannot be tiled within the memory budget, instead of silently exceeding it.
+
+* Reading a CSV warns (once, naming the column) when a value past the
+  type-inference window does not match the inferred type and is read as `NA`.
+
+# vectra 0.11.5
+
+## Bug fixes
+
+* Windowed rolling `roll_min()` / `roll_max()` no longer corrupt the heap on a
+  long partition with a short time window (the monotonic-deque index could run
+  past its buffer).
+
+* `mutate()` with a unary math function (`sqrt()`, `abs()`, `log()`,
+  `round()`, ...) on a `double` column no longer leaks memory on every batch,
+  which could exhaust memory during a large streamed `collect()`.
+
+* Row-group pruning is more accurate: a `filter()` with a fractional threshold
+  on a sorted integer column (`filter(x < 2.9)`), an interior all-`NaN` row
+  group, and a quantized column no longer drop rows that actually match.
+
+* Date/time: `year()`, `month()`, `floor_time()`, and friends now use the
+  column's stored `Date` / `POSIXct` class to decide days-vs-seconds instead of
+  guessing by magnitude (a near-epoch `POSIXct` was misread), and compute
+  calendar fields with portable arithmetic that is correct for pre-1970 dates
+  on Windows. `as.Date()` returns `NA` for an invalid date (`"2021-02-30"`)
+  instead of a normalized one.
+
+* GeoTIFF reading now inverts the horizontal predictor (tag 317), so
+  DEFLATE-compressed files written with `PREDICTOR=2` (a GDAL/terra default)
+  decode correctly instead of as differenced garbage.
+
+* Window functions match dplyr: `ntile()` front-loads the remainder,
+  `row_number(desc(x))` keeps ties in first-arrival order, and a logical column
+  feeds `cumsum()` / rank windows correctly.
+
+* `min()` / `max()` propagate `NaN` regardless of position; `any()` / `all()`
+  treat `NaN` as `NA`; `NaN` join keys match each other; `x %in% set` always
+  returns a logical (an `NA` operand is `FALSE`, or `TRUE` if the set contains
+  `NA`).
+
+* Hash joins now emit many-to-many output in bounded chunks: a hot key matched
+  by a large probe batch no longer materializes the whole cross product in one
+  resident batch (the probe resumes mid-chain across batches, on both the
+  in-memory and spilled block-nested-loop paths).
+
+* `fuzzy_join()` errors on a non-string key/blocking column instead of
+  crashing; a join on more than 16 key columns is rejected rather than
+  overrunning internal buffers.
+
+* `right_join()` suffixes a non-key column present on both sides (`.x` / `.y`)
+  instead of emitting two columns with the same name.
+
+* A column with no declared type in a SQLite table (BLOB affinity) reads its
+  numeric cells as text instead of dropping the whole column to `NA`; the reader
+  bounds-checks on-disk offsets so a corrupt database cannot over-read. The
+  GeoTIFF and SQLite readers reject crafted files with overflowing sizes.
+
+* `int64` values above 2^53 warn about precision loss on the common
+  `collect()` path (previously only a rarer path warned).
+
+## New features
+
+* `tbl_csv()` gains a `col_types` argument to force specific column types
+  (`c(zip = "character")`), so a zero-padded identifier column is not
+  numericized by type inference.
+
+# vectra 0.11.4
+
+## Behaviour changes
+
+* `left_join()` / `inner_join()` / `right_join()` / `full_join()` /
+  `semi_join()` / `anti_join()` gain an explicit `na_matches` argument
+  (`"na"`, the default, matches `NA` to `NA` as in dplyr; `"never"` uses SQL
+  NULL semantics).
+
+* `grepl()`, `gsub()`, and `sub()` now treat the pattern as a regular
+  expression by default (`fixed = FALSE`), matching base R. Pass `fixed = TRUE`
+  for literal matching. They also honour `ignore.case = TRUE`; `perl = TRUE` is
+  rejected with a clear error (the engine uses POSIX extended regexps).
+
+* `round()` now rounds halves to even (`round(2.5)` is `2`), matching base R.
+
+## Bug fixes
+
+* SQLite: reading a `BLOB` column, or a `TEXT` value larger than 64 KB, no
+  longer reads past the reader's buffer (a crash on ordinary input); a non-text
+  value in a text column reads as `NA`. Writing a row larger than a page (for
+  example a long text value) no longer overflows the page buffer -- the writer
+  now emits SQLite overflow pages, so large cells round-trip. Database files
+  larger than 2 GB are seeked with 64-bit offsets on Windows. A text/blob value
+  in a numeric column reads as `NA` rather than a fake `0`.
+
+* CSV: a leading UTF-8 byte-order mark is stripped from the header, so the first
+  column name is no longer corrupted (common in "CSV UTF-8" exports). A value
+  that disagrees with the inferred column type past the inference window becomes
+  `NA` rather than silently `FALSE` for logical columns. New `guess_max`
+  argument to `tbl_csv()` (default 1000; `Inf` scans the whole file) for columns
+  whose type only becomes apparent later in the file.
+
+* `mutate()` and `transmute()` evaluate expressions left to right, so an
+  expression may reference a column created earlier in the same call
+  (`mutate(a = x + 1, b = a * 2)`). `transmute()` also keeps the grouping
+  columns.
+
+* Integer-dtype raster output (`focal()`, `terrain()`, `warp()`, `mask()`,
+  `proximity()`, `vec_write_raster()`, ...) round-trips `NA` instead of writing
+  it as a valid `0`, by recording a per-dtype nodata sentinel when the data
+  contains `NA`.
+
+* `across()` accepts purrr-style formula lambdas (`~ .x + 1`,
+  `~ mean(.x, na.rm = TRUE)`).
+
+* Window functions accept `min_rank()` and a compound argument
+  (`cumsum(x + y)`, `rank(desc(a * b))`).
+
+* `count()` groups by the existing `group_by()` keys plus the counted columns,
+  and `count(wt = )` / `tally(wt = )` sum weights with `na.rm = TRUE`, matching
+  dplyr.
+
+* `slice_head()`, `slice_tail()`, and `slice()` are group-aware on grouped
+  input.
+
+* Corrupt or truncated `.vtr` / `.vtri` files are rejected cleanly instead of
+  over-reading, over-writing, or looping: the `.vtri` reader validates its entry
+  and slot counts against the file size and bounds its probe chains, and the
+  bundled tdc decoder bounds its LZ sequence cursor and back-references and
+  computes the dictionary offset-table size in 64-bit.
+
+* `focal()` reports a clean error instead of a null-pointer dereference if a
+  per-thread scratch allocation fails.
+
 # vectra 0.11.3
 
 ## Bug fixes

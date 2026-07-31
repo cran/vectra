@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-07-17" />
+<meta name="date" content="2026-07-30" />
 
 <title>Joins</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Joins</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-07-17</h4>
+<h4 class="date">2026-07-30</h4>
 
 
 
@@ -1015,7 +1015,7 @@ any other row, including another <code>NA</code>.</p>
 <span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a><span class="fu">left_join</span>(<span class="fu">tbl</span>(na_left), <span class="fu">tbl</span>(na_right), <span class="at">by =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
 <span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt;   id  x   y</span></span>
 <span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; 1  1 10 100</span></span>
-<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; 2 NA 20  NA</span></span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; 2 NA 20 200</span></span>
 <span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="co">#&gt; 3  3 30  NA</span></span></code></pre></div>
 <p>Row 2 on the left has <code>id = NA</code>. Even though row 2 on the
 right also has <code>id = NA</code>, they do not match. The left row is

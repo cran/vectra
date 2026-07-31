@@ -16,6 +16,7 @@
 
 #include "r_bridge.h"
 #include "r_bridge_internal.h"
+#include <stdarg.h>
 #include "types.h"
 #include "array.h"
 #include "batch.h"
@@ -151,15 +152,7 @@ SEXP C_write_vtr(SEXP df, SEXP path, SEXP batch_size, SEXP compress_sexp,
     const char *fpath = CHAR(STRING_ELT(path, 0));
     int bs = Rf_asInteger(batch_size);
 
-    int comp_level = 1; /* default: fast */
-    if (compress_sexp != R_NilValue && TYPEOF(compress_sexp) == STRSXP &&
-        Rf_length(compress_sexp) > 0) {
-        const char *cstr = CHAR(STRING_ELT(compress_sexp, 0));
-        if (strcmp(cstr, "fast") == 0) comp_level = 1;
-        else if (strcmp(cstr, "small") == 0) comp_level = 2;
-        else if (strcmp(cstr, "none") == 0) comp_level = 0;
-        else vectra_error("unknown compress level '%s' (expected \"fast\", \"small\", or \"none\")", cstr);
-    }
+    int comp_level = parse_compress_level(compress_sexp);
 
     int n_cols = Rf_length(df);
     SEXP first_col = VECTOR_ELT(df, 0);
@@ -482,6 +475,19 @@ SEXP C_node_next_batch(SEXP node_xptr) {
     return vec_collect_next(node);
 }
 
+/* --- C_node_static_rows ---
+   Row count of a plan's output when it can be read off metadata, NA when the
+   query would have to run to know it. Backs dim()/nrow(). Purely a metadata
+   read: it never pulls a batch and never optimizes the tree, so unlike every
+   terminal operation it leaves the plan intact and reusable. Returned as a
+   double so a count past the reach of an R integer stays exact. */
+
+SEXP C_node_static_rows(SEXP node_xptr) {
+    VecNode *node = unwrap_node(node_xptr);
+    int64_t n = vec_node_static_rows(node);
+    return Rf_ScalarReal(n < 0 ? NA_REAL : (double)n);
+}
+
 /* --- C_node_schema --- */
 
 SEXP C_node_schema(SEXP node_xptr) {
@@ -572,6 +578,24 @@ static void node_get_children(VecNode *node, VecNode **children, int *n_children
     }
 }
 
+/* Append to a fixed-size annotation buffer. snprintf reports the length it would
+   have written, which can exceed the space left, so the position is clamped:
+   without that, a long annotation makes the next call write past the end of the
+   buffer with a negative size cast to size_t. A crowded annotation is truncated
+   instead. */
+static int annot_append(char *buf, int bufsize, int pos, const char *fmt, ...) {
+    if (bufsize <= 0) return 0;
+    if (pos < 0) pos = 0;
+    if (pos >= bufsize - 1) return bufsize - 1;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf + pos, (size_t)(bufsize - pos), fmt, ap);
+    va_end(ap);
+    if (n < 0) return pos;
+    pos += n;
+    return pos > bufsize - 1 ? bufsize - 1 : pos;
+}
+
 /* Build annotation string for a node (writes to buf, returns length written) */
 static int node_annotation(VecNode *node, char *buf, int bufsize) {
     const char *kind = node->kind ? node->kind : "Unknown";
@@ -582,15 +606,16 @@ static int node_annotation(VecNode *node, char *buf, int bufsize) {
         int read_cols = sn->base.output_schema.n_cols;
         int pos = 0;
         if (read_cols < file_cols)
-            pos += snprintf(buf + pos, (size_t)(bufsize - pos),
-                            "streaming, %d/%d cols (pruned)", read_cols, file_cols);
+            pos = annot_append(buf, bufsize, pos,
+                               "streaming, %d/%d cols (pruned)", read_cols, file_cols);
         else
-            pos += snprintf(buf + pos, (size_t)(bufsize - pos),
-                            "streaming, %d cols", read_cols);
+            pos = annot_append(buf, bufsize, pos, "streaming, %d cols", read_cols);
         if (sn->predicate)
-            pos += snprintf(buf + pos, (size_t)(bufsize - pos),
-                            ", predicate pushdown");
-        pos += snprintf(buf + pos, (size_t)(bufsize - pos), ", tdc stats");
+            pos = annot_append(buf, bufsize, pos, ", predicate pushdown");
+        pos = annot_append(buf, bufsize, pos, ", tdc stats");
+        char ixcols[96];
+        if (scan_node_index_desc(node, ixcols, (int)sizeof(ixcols)))
+            pos = annot_append(buf, bufsize, pos, ", hash index (%s)", ixcols);
         return pos;
     }
     if (strcmp(kind, "CsvScanNode") == 0) {

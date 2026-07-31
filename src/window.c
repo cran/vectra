@@ -17,6 +17,16 @@
 /* Forward declaration */
 static int vec_compare_values(const VecArray *arr, int64_t a, int64_t b);
 
+/* Output column type for a window spec given its input column type. lag/lead
+   preserve a string input so string columns shift correctly; every other spec,
+   and non-string lag/lead, produces a double (vectra's numeric-as-double
+   convention: an integer lag round-trips through int64 to the same double). */
+static VecType win_out_type(WinKind kind, VecType in_type) {
+    if ((kind == WIN_LAG || kind == WIN_LEAD) && in_type == VEC_STRING)
+        return VEC_STRING;
+    return VEC_DOUBLE;
+}
+
 /* Read any numeric column value as double */
 static inline double win_get_double(const VecArray *arr, int64_t i) {
     switch (arr->type) {
@@ -25,6 +35,7 @@ static inline double win_get_double(const VecArray *arr, int64_t i) {
     case VEC_INT32:  return (double)arr->buf.i32[i];
     case VEC_INT16:  return (double)arr->buf.i16[i];
     case VEC_INT8:   return (double)arr->buf.i8[i];
+    case VEC_BOOL:   return arr->buf.bln[i] ? 1.0 : 0.0;
     default:         return 0.0;
     }
 }
@@ -157,6 +168,10 @@ static int vec_compare_values(const VecArray *arr, int64_t a, int64_t b) {
         double va = arr->buf.dbl[a], vb = arr->buf.dbl[b];
         return (va < vb) ? -1 : (va > vb) ? 1 : 0;
     }
+    case VEC_BOOL: {
+        int va = arr->buf.bln[a] ? 1 : 0, vb = arr->buf.bln[b] ? 1 : 0;
+        return (va < vb) ? -1 : (va > vb) ? 1 : 0;
+    }
     case VEC_STRING: {
         int64_t sa = arr->buf.str.offsets[a], ea = arr->buf.str.offsets[a + 1];
         int64_t sb = arr->buf.str.offsets[b], eb = arr->buf.str.offsets[b + 1];
@@ -169,6 +184,38 @@ static int vec_compare_values(const VecArray *arr, int64_t a, int64_t b) {
     }
     default:
         return 0;
+    }
+}
+
+/* dplyr's ntile front-loads the remainder: the first (N %% k) buckets hold
+   ceil(N/k) rows, the rest floor(N/k). pos0 is the 0-based rank in [0, N). */
+static int64_t win_ntile_bucket(int64_t pos0, int64_t N, int64_t k) {
+    if (k <= 0 || N <= 0) return 1;
+    int64_t nl = N % k;               /* number of larger buckets */
+    int64_t large = (N + k - 1) / k;  /* ceil(N/k) */
+    int64_t small = N / k;            /* floor(N/k) */
+    int64_t thr = nl * large;         /* rows covered by the larger buckets */
+    if (pos0 < thr) return pos0 / large + 1;
+    if (small == 0) return nl;        /* N < k: only nl one-row buckets are used */
+    return nl + (pos0 - thr) / small + 1;
+}
+
+/* Assign row_number(desc(x)) = rank(desc, ties = "first") into result over the
+   ascending-sorted index array idx[0..n-1]: largest value gets 1, and within a
+   tie group the earlier-arriving row (lower original index) gets the smaller
+   number, so ties are not reversed. */
+static void win_row_number_desc(VecArray *result, const int64_t *idx,
+                                int64_t n, const VecArray *cmp_arr) {
+    int64_t i = 0;
+    while (i < n) {
+        int64_t j = i;
+        while (j + 1 < n && vec_compare_values(cmp_arr, idx[j + 1], idx[i]) == 0) j++;
+        int64_t base = n - j;  /* (# strictly greater) + 1 */
+        for (int64_t p = i; p <= j; p++) {
+            vec_array_set_valid(result, idx[p]);
+            result->buf.dbl[idx[p]] = (double)(base + (p - i));
+        }
+        i = j + 1;
     }
 }
 
@@ -226,11 +273,49 @@ static void win_grp_cume_dist(const VecArray *in_arr, const int64_t *rows,
     free(sorted);
 }
 
+/* String lag/lead over a contiguous segment [start, end). Two-pass positional
+   build (compute total bytes, then fill offsets + data). Out-of-range rows are
+   NA (a string column has no numeric default). offsets are indexed by absolute
+   row, so callers pass start == 0 (win_eval_segment always does). */
+static void win_eval_shift_str(const VecArray *input, int64_t start, int64_t end,
+                               int direction, int offset, VecArray *result) {
+    int64_t total = 0;
+    for (int64_t i = start; i < end; i++) {
+        int64_t src = i + (int64_t)direction * offset;
+        if (src >= start && src < end && vec_array_is_valid(input, src))
+            total += input->buf.str.offsets[src + 1] - input->buf.str.offsets[src];
+    }
+    free(result->buf.str.data);
+    result->buf.str.data = (char *)malloc((size_t)(total > 0 ? total : 1));
+    if (!result->buf.str.data) vectra_error("window: alloc failed (string lag)");
+    result->buf.str.data_len = total;
+    int64_t off = 0;
+    for (int64_t i = start; i < end; i++) {
+        result->buf.str.offsets[i] = off;
+        int64_t src = i + (int64_t)direction * offset;
+        if (src >= start && src < end && vec_array_is_valid(input, src)) {
+            int64_t s   = input->buf.str.offsets[src];
+            int64_t len = input->buf.str.offsets[src + 1] - s;
+            if (len > 0) memcpy(result->buf.str.data + off,
+                                input->buf.str.data + s, (size_t)len);
+            off += len;
+            vec_array_set_valid(result, i);
+        } else {
+            vec_array_set_null(result, i);
+        }
+    }
+    result->buf.str.offsets[end] = off;
+}
+
 /* Evaluate lag/lead for a contiguous segment.
    direction: -1 for lag (look back), +1 for lead (look forward). */
 static void win_eval_shift(const VecArray *input, int64_t start, int64_t end,
                            int direction, int offset, double default_val,
                            int has_default, VecArray *result) {
+    if (result->type == VEC_STRING) {
+        win_eval_shift_str(input, start, end, direction, offset, result);
+        return;
+    }
     /* Build validity bitmap (sequential — bitmap bytes are shared) */
     for (int64_t i = start; i < end; i++) {
         int64_t src_row = i + direction * offset;
@@ -312,10 +397,13 @@ static VecArray win_eval_segment(WinKind kind, const VecArray *input,
             int64_t *idx = (int64_t *)malloc((size_t)seg_len * sizeof(int64_t));
             for (int64_t i = 0; i < seg_len; i++) idx[i] = start + i;
             win_sort_indices(idx, seg_len, input);
-            for (int64_t i = 0; i < seg_len; i++) {
-                vec_array_set_valid(result, idx[i]);
-                result->buf.dbl[idx[i]] =
-                    desc ? (double)(seg_len - i) : (double)(i + 1);
+            if (!desc) {
+                for (int64_t i = 0; i < seg_len; i++) {
+                    vec_array_set_valid(result, idx[i]);
+                    result->buf.dbl[idx[i]] = (double)(i + 1);
+                }
+            } else {
+                win_row_number_desc(result, idx, seg_len, input);
             }
             free(idx);
         } else {
@@ -352,13 +440,46 @@ static VecArray win_eval_segment(WinKind kind, const VecArray *input,
         free(idx);
         break;
     }
+    case WIN_AVG_RANK: {
+        /* base::rank ties.method = "average": tied values share the mean of the
+           positions they would occupy. Sort-then-scan each equal-value run. */
+        int64_t *idx = (int64_t *)malloc((size_t)seg_len * sizeof(int64_t));
+        for (int64_t i = 0; i < seg_len; i++) idx[i] = start + i;
+        win_sort_indices(idx, seg_len, input);
+        int64_t i = 0;
+        while (i < seg_len) {
+            int64_t j = i + 1;
+            while (j < seg_len && vec_compare_values(input, idx[j], idx[i]) == 0)
+                j++;
+            /* positions (1-based) spanned by this run are i+1 .. j; their mean */
+            double avg = ((double)(i + 1) + (double)j) / 2.0;
+            for (int64_t k = i; k < j; k++) {
+                vec_array_set_valid(result, idx[k]);
+                result->buf.dbl[idx[k]] = avg;
+            }
+            i = j;
+        }
+        free(idx);
+        break;
+    }
+    case WIN_N:
+        for (int64_t i = start; i < end; i++) {
+            vec_array_set_valid(result, i);
+            result->buf.dbl[i] = (double)seg_len;
+        }
+        break;
     case WIN_DENSE_RANK: {
-        /* O(n log n) dense_rank via sort-then-scan (thread-safe) */
+        /* O(n log n) dense_rank via sort-then-scan (thread-safe). dplyr returns
+           NA for an NA input row; NA sorts last, so skip those rows. */
         int64_t *idx = (int64_t *)malloc((size_t)seg_len * sizeof(int64_t));
         for (int64_t i = 0; i < seg_len; i++) idx[i] = start + i;
         win_sort_indices(idx, seg_len, input);
         int64_t rank = 1;
         for (int64_t i = 0; i < seg_len; i++) {
+            if (!vec_array_is_valid(input, idx[i])) {
+                vec_array_set_null(result, idx[i]);
+                continue;
+            }
             if (i > 0 && vec_compare_values(input, idx[i], idx[i - 1]) != 0)
                 rank++;
             vec_array_set_valid(result, idx[i]);
@@ -445,9 +566,8 @@ static VecArray win_eval_segment(WinKind kind, const VecArray *input,
         int k = offset;
         for (int64_t i = start; i < end; i++) {
             int64_t row_idx = i - start;  /* 0-based within partition */
-            int64_t bucket = (row_idx * k / seg_len) + 1;
             vec_array_set_valid(result, i);
-            result->buf.dbl[i] = (double)bucket;
+            result->buf.dbl[i] = (double)win_ntile_bucket(row_idx, seg_len, k);
         }
         break;
     }
@@ -736,8 +856,9 @@ static VecBatch *win_segment_batch(WindowNode *wn, VecArray *cols, int n_cols,
                 vectra_error("window: column not found: %s", ws->input_col);
         }
 
-        VecArray out = vec_array_alloc(VEC_DOUBLE, glen);
         const VecArray *in_arr = (in_col >= 0) ? &result->columns[in_col] : NULL;
+        VecArray out = vec_array_alloc(
+            win_out_type(ws->kind, in_arr ? in_arr->type : VEC_DOUBLE), glen);
 
         if (win_is_roll(ws->kind)) {
             if (!ws->order_col)
@@ -825,6 +946,10 @@ typedef struct {
     int      ring_pos;    /* next write slot */
     int64_t  ring_seen;   /* rows pushed into the ring so far */
 
+    /* string lag: the ring holds one-row snapshots instead of doubles */
+    VecArray *ring_snap;  /* ring_size one-row VEC_STRING arrays */
+    uint8_t  *ring_snap_set;  /* 1 once a slot has been written */
+
     /* roll_* trailing-window state (persistent across batches) */
     double  *roll_ord;    /* order value (seconds) of each buffered row */
     double  *roll_val;    /* value column of each buffered row */
@@ -845,6 +970,12 @@ static void win_run_state_free(WinRunState *st, int n) {
         if (st[w].prev_set) vec_array_free(&st[w].prev);
         free(st[w].ring_val);
         free(st[w].ring_valid);
+        if (st[w].ring_snap) {
+            for (int r = 0; r < st[w].ring_size; r++)
+                if (st[w].ring_snap_set[r]) vec_array_free(&st[w].ring_snap[r]);
+            free(st[w].ring_snap);
+            free(st[w].ring_snap_set);
+        }
         free(st[w].roll_ord);
         free(st[w].roll_val);
         free(st[w].roll_valid);
@@ -874,6 +1005,22 @@ static void win_roll_stream_step(WinRunState *st, WinKind kind,
     /* Grow the ring buffer if the live window would overflow it. Compact
        first (drop everything left of roll_head) so growth is amortized. */
     if (st->roll_len - st->roll_base >= st->roll_cap) {
+        /* Rebase the min/max deque storage to the front. roll_dq_head/tail are
+           absolute counters that only advance; without this rebase they outrun
+           roll_cap (which grows only when the value window overflows) and the
+           push at roll_dq[roll_dq_tail++] writes out of bounds. The block fires
+           exactly when the value window equals roll_cap, so the live deque
+           (a subset of the live window) is always <= roll_cap and fits. */
+        if (st->roll_dq_tail > st->roll_dq_head) {
+            int64_t dsize = st->roll_dq_tail - st->roll_dq_head;
+            if (st->roll_dq_head > 0)
+                memmove(st->roll_dq, st->roll_dq + st->roll_dq_head,
+                        (size_t)dsize * sizeof(int64_t));
+            st->roll_dq_head = 0;
+            st->roll_dq_tail = dsize;
+        } else {
+            st->roll_dq_head = st->roll_dq_tail = 0;
+        }
         int64_t live = st->roll_len - st->roll_head;
         if (st->roll_head > st->roll_base && live < st->roll_cap) {
             int64_t shift = st->roll_head - st->roll_base;
@@ -997,13 +1144,15 @@ static VecBatch *window_ostream_next(WindowNode *wn) {
     for (int w = 0; w < wn->n_wins; w++) {
         WinSpec *ws = &wn->win_specs[w];
         WinRunState *st = &state[w];
-        VecArray out = vec_array_alloc(VEC_DOUBLE, n);
 
         int in_col = ws->input_col
                      ? vec_schema_find_col(cschema, ws->input_col) : -1;
         if (ws->input_col && in_col < 0)
             vectra_error("window: column not found: %s", ws->input_col);
         const VecArray *in_arr = (in_col >= 0) ? &b->columns[in_col] : NULL;
+
+        VecArray out = vec_array_alloc(
+            win_out_type(ws->kind, in_arr ? in_arr->type : VEC_DOUBLE), n);
 
         switch (ws->kind) {
         case WIN_CUMSUM:
@@ -1043,6 +1192,14 @@ static VecBatch *window_ostream_next(WindowNode *wn) {
         case WIN_DENSE_RANK:
         case WIN_PERCENT_RANK:
             for (int64_t i = 0; i < n; i++) {
+                /* dplyr's dense_rank returns NA for an NA input row. NA sorts
+                   last, so skip it without advancing the dense counter. (rank
+                   and percent_rank keep base-R behaviour here.) */
+                if (ws->kind == WIN_DENSE_RANK && in_arr &&
+                    !vec_array_is_valid(in_arr, i)) {
+                    vec_array_set_null(&out, i);
+                    continue;
+                }
                 int newgrp = (i == 0)
                     ? (!st->prev_set ||
                        !win_cells_equal(&st->prev, 0, in_arr, i))
@@ -1068,7 +1225,7 @@ static VecBatch *window_ostream_next(WindowNode *wn) {
                 st->seen++;
                 int64_t pos = st->seen - 1;
                 vec_array_set_valid(&out, i);
-                out.buf.dbl[i] = (double)((pos * k) / wn->total_n + 1);
+                out.buf.dbl[i] = (double)win_ntile_bucket(pos, wn->total_n, k);
             }
             break;
         }
@@ -1092,9 +1249,62 @@ static VecBatch *window_ostream_next(WindowNode *wn) {
             if (n > 0) win_snap_cell(st, in_arr, n - 1);
             break;
 
+        case WIN_N:
+            /* Partition size repeated per row; total_n is set above from the
+               inserted counting sort (win_spec_needs_n marks WIN_N). */
+            for (int64_t i = 0; i < n; i++) {
+                vec_array_set_valid(&out, i);
+                out.buf.dbl[i] = (double)wn->total_n;
+            }
+            break;
+
         case WIN_LEAD:   /* lead over arrival order = lag over reversed stream */
         case WIN_LAG: {
             int off = ws->offset;
+            if (out.type == VEC_STRING) {
+                /* String shift: the ring holds one-row snapshots of the last
+                   `off` input cells; the output is built in row order. */
+                vec_array_free(&out);
+                VecArrayBuilder bb = vec_builder_init(VEC_STRING);
+                if (off < 1) {
+                    for (int64_t i = 0; i < n; i++) {
+                        if (in_arr && vec_array_is_valid(in_arr, i))
+                            vec_builder_append_one(&bb, in_arr, i);
+                        else vec_builder_append_na(&bb);
+                    }
+                    out = vec_builder_finish(&bb);
+                    break;
+                }
+                if (!st->ring_snap) {
+                    st->ring_size = off;
+                    st->ring_snap = (VecArray *)calloc((size_t)off, sizeof(VecArray));
+                    st->ring_snap_set = (uint8_t *)calloc((size_t)off, 1);
+                }
+                for (int64_t i = 0; i < n; i++) {
+                    if (st->ring_seen >= off) {
+                        int slot = st->ring_pos;
+                        if (st->ring_snap_set[slot] &&
+                            vec_array_is_valid(&st->ring_snap[slot], 0))
+                            vec_builder_append_one(&bb, &st->ring_snap[slot], 0);
+                        else vec_builder_append_na(&bb);
+                    } else {
+                        /* out of range: string columns have no numeric default */
+                        vec_builder_append_na(&bb);
+                    }
+                    if (st->ring_snap_set[st->ring_pos])
+                        vec_array_free(&st->ring_snap[st->ring_pos]);
+                    VecArrayBuilder sb = vec_builder_init(VEC_STRING);
+                    if (in_arr && vec_array_is_valid(in_arr, i))
+                        vec_builder_append_one(&sb, in_arr, i);
+                    else vec_builder_append_na(&sb);
+                    st->ring_snap[st->ring_pos] = vec_builder_finish(&sb);
+                    st->ring_snap_set[st->ring_pos] = 1;
+                    st->ring_pos = (st->ring_pos + 1) % off;
+                    st->ring_seen++;
+                }
+                out = vec_builder_finish(&bb);
+                break;
+            }
             if (off < 1) {
                 for (int64_t i = 0; i < n; i++) {
                     if (in_arr && vec_array_is_valid(in_arr, i)) {
@@ -1309,8 +1519,14 @@ static VecBatch *window_next_batch(VecNode *self) {
                     vectra_error("window: column not found: %s", ws->input_col);
             }
 
-            VecArray out = vec_array_alloc(VEC_DOUBLE, n_rows);
             const VecArray *in_arr = (in_col >= 0) ? &cols[in_col] : NULL;
+            /* This non-streaming grouped path (reached only with a NULL temp_dir,
+               which the R bridge never passes) fills a double buffer positionally
+               per group; a string shift needs the streaming per-group path. */
+            if (win_out_type(ws->kind, in_arr ? in_arr->type : VEC_DOUBLE)
+                    != VEC_DOUBLE)
+                vectra_error("window: string lag/lead requires a spill directory");
+            VecArray out = vec_array_alloc(VEC_DOUBLE, n_rows);
 
             /* Pre-set all validity bits so the parallel loop only needs to
                clear bits for NAs.  We use a per-row byte flag (null_flags)
@@ -1358,9 +1574,12 @@ static VecBatch *window_next_batch(VecNode *self) {
                         int64_t *stmp   = (int64_t *)malloc((size_t)glen * sizeof(int64_t));
                         for (int64_t j = 0; j < glen; j++) sorted[j] = rows[j];
                         win_merge_sort(sorted, stmp, glen, in_arr);
-                        for (int64_t j = 0; j < glen; j++)
-                            out.buf.dbl[sorted[j]] =
-                                ws->desc ? (double)(glen - j) : (double)(j + 1);
+                        if (ws->desc) {
+                            win_row_number_desc(&out, sorted, glen, in_arr);
+                        } else {
+                            for (int64_t j = 0; j < glen; j++)
+                                out.buf.dbl[sorted[j]] = (double)(j + 1);
+                        }
                         free(stmp);
                         free(sorted);
                     } else {
@@ -1396,6 +1615,30 @@ static VecBatch *window_next_batch(VecNode *self) {
                     free(sorted);
                     break;
                 }
+                case WIN_AVG_RANK: {
+                    int64_t *sorted = (int64_t *)malloc((size_t)glen * sizeof(int64_t));
+                    int64_t *stmp   = (int64_t *)malloc((size_t)glen * sizeof(int64_t));
+                    for (int64_t j = 0; j < glen; j++) sorted[j] = rows[j];
+                    win_merge_sort(sorted, stmp, glen, in_arr);
+                    int64_t j = 0;
+                    while (j < glen) {
+                        int64_t e = j + 1;
+                        while (e < glen && vec_compare_values(in_arr,
+                                sorted[e], sorted[j]) == 0)
+                            e++;
+                        double avg = ((double)(j + 1) + (double)e) / 2.0;
+                        for (int64_t k = j; k < e; k++)
+                            out.buf.dbl[sorted[k]] = avg;
+                        j = e;
+                    }
+                    free(stmp);
+                    free(sorted);
+                    break;
+                }
+                case WIN_N:
+                    for (int64_t j = 0; j < glen; j++)
+                        out.buf.dbl[rows[j]] = (double)glen;
+                    break;
                 case WIN_DENSE_RANK: {
                     int64_t *sorted = (int64_t *)malloc((size_t)glen * sizeof(int64_t));
                     int64_t *stmp   = (int64_t *)malloc((size_t)glen * sizeof(int64_t));
@@ -1403,6 +1646,11 @@ static VecBatch *window_next_batch(VecNode *self) {
                     win_merge_sort(sorted, stmp, glen, in_arr);
                     int64_t rank = 1;
                     for (int64_t j = 0; j < glen; j++) {
+                        /* dplyr: an NA input row is NA (NA sorts last, skip it) */
+                        if (!vec_array_is_valid(in_arr, sorted[j])) {
+                            null_flags[sorted[j]] = 1;
+                            continue;
+                        }
                         if (j > 0 && vec_compare_values(in_arr,
                                 sorted[j], sorted[j - 1]) != 0)
                             rank++;
@@ -1497,10 +1745,8 @@ static VecBatch *window_next_batch(VecNode *self) {
 
                 case WIN_NTILE: {
                     int nt = ws->offset;  /* number of tiles */
-                    for (int64_t j = 0; j < glen; j++) {
-                        int64_t bucket = (j * nt / glen) + 1;
-                        out.buf.dbl[rows[j]] = (double)bucket;
-                    }
+                    for (int64_t j = 0; j < glen; j++)
+                        out.buf.dbl[rows[j]] = (double)win_ntile_bucket(j, glen, nt);
                     break;
                 }
 
@@ -1589,7 +1835,9 @@ static VecBatch *window_next_batch(VecNode *self) {
                 vectra_error("window: column not found: %s", ws->input_col);
         }
 
-        VecArray out = vec_array_alloc(VEC_DOUBLE, n_rows);
+        VecArray out = vec_array_alloc(
+            win_out_type(ws->kind, in_col >= 0 ? cols[in_col].type : VEC_DOUBLE),
+            n_rows);
         if (win_is_roll(ws->kind)) {
             if (!ws->order_col)
                 vectra_error("rolling window: order column required");
@@ -1617,6 +1865,11 @@ static VecBatch *window_next_batch(VecNode *self) {
     free(cols);
 
     return result;
+}
+
+/* A window appends columns to the rows it reads; the count is the child's. */
+static int64_t window_static_rows(const VecNode *self) {
+    return vec_node_static_rows(((const WindowNode *)self)->child);
 }
 
 static void window_free(VecNode *self) {
@@ -1650,13 +1903,17 @@ typedef enum {
 static WinOrdClass win_spec_ord_class(const WinSpec *ws) {
     switch (ws->kind) {
     case WIN_CUMSUM: case WIN_CUMMEAN: case WIN_CUMMIN: case WIN_CUMMAX:
-    case WIN_LAG:    case WIN_NTILE:
+    case WIN_LAG:    case WIN_NTILE:  case WIN_N:
         return WORD_NATURAL;
     case WIN_ROW_NUMBER:
         return ws->input_col ? WORD_BY_INPUT : WORD_NATURAL;
     case WIN_RANK: case WIN_DENSE_RANK: case WIN_PERCENT_RANK:
     case WIN_CUME_DIST:
         return WORD_BY_INPUT;
+    case WIN_AVG_RANK:
+        /* average rank needs each tie run's full size before emitting, which a
+           single forward pass cannot supply; use the in-memory / per-group path. */
+        return WORD_UNSUPP;
     case WIN_ROLL_SUM: case WIN_ROLL_MEAN: case WIN_ROLL_MIN:
     case WIN_ROLL_MAX: case WIN_ROLL_N:
         return WORD_BY_ORDER;
@@ -1670,7 +1927,7 @@ static WinOrdClass win_spec_ord_class(const WinSpec *ws) {
 /* Whether a spec needs the partition row count before it can emit. */
 static int win_spec_needs_n(const WinSpec *ws) {
     return ws->kind == WIN_NTILE || ws->kind == WIN_PERCENT_RANK
-        || ws->kind == WIN_CUME_DIST;
+        || ws->kind == WIN_CUME_DIST || ws->kind == WIN_N;
 }
 
 /* Sort direction for a WORD_BY_INPUT spec. rank/row_number honor desc();
@@ -1817,6 +2074,7 @@ VecNode *window_node_create(VecNode *child,
                                  key_names[k]);
                 sk[k].col_index = idx;
                 sk[k].descending = 0;
+                sk[k].na_last = 0;
             }
         } else if (sort_col) {
             int idx = vec_schema_find_col(rs, sort_col);
@@ -1824,9 +2082,14 @@ VecNode *window_node_create(VecNode *child,
                 vectra_error("window: order column not found: %s", sort_col);
             sk[0].col_index = idx;
             sk[0].descending = sort_col_desc;
+            /* NA behaves as the maximum value (flips with desc): a descending
+               value sort (cume_dist, rank) then streams NA first, matching the
+               "NA is the largest value" window semantics. */
+            sk[0].na_last = 0;
         }
         sk[n_ord].col_index = rowid_idx;   /* stable tiebreak; reverse for lead */
         sk[n_ord].descending = reverse;
+        sk[n_ord].na_last = 0;             /* row-id is never NA */
         SortNode *sn = sort_node_create((VecNode *)rid, n_ord + 1, sk,
                                         temp_dir, VECTRA_SORT_MEM_DEFAULT);
         src = (VecNode *)sn;
@@ -1861,7 +2124,7 @@ VecNode *window_node_create(VecNode *child,
     }
 
     /* Output schema: src columns (child cols, plus row-id when streaming) +
-       window columns (all double). */
+       window columns (double, except lag/lead on a string column). */
     int out_n = cs->n_cols + n_wins;
     char **names = (char **)malloc((size_t)out_n * sizeof(char *));
     VecType *types = (VecType *)malloc((size_t)out_n * sizeof(VecType));
@@ -1871,7 +2134,12 @@ VecNode *window_node_create(VecNode *child,
     }
     for (int w = 0; w < n_wins; w++) {
         names[cs->n_cols + w] = win_specs[w].output_name;
-        types[cs->n_cols + w] = VEC_DOUBLE;
+        VecType it = VEC_DOUBLE;
+        if (win_specs[w].input_col) {
+            int ci = vec_schema_find_col(cs, win_specs[w].input_col);
+            if (ci >= 0) it = cs->col_types[ci];
+        }
+        types[cs->n_cols + w] = win_out_type(win_specs[w].kind, it);
     }
     wn->base.output_schema = vec_schema_create(out_n, names, types);
     free(names);
@@ -1880,6 +2148,7 @@ VecNode *window_node_create(VecNode *child,
     wn->base.next_batch = window_next_batch;
     wn->base.kind = "WindowNode";
     wn->base.free_node = window_free;
+    wn->base.static_rows = window_static_rows;
     wn->base.row_count_hint = src->row_count_hint;
 
     if (!use_sort)

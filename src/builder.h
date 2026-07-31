@@ -31,8 +31,36 @@ VecArrayBuilder vec_builder_init(VecType type);
    Avoids repeated realloc in tight loops. */
 void vec_builder_reserve(VecArrayBuilder *b, int64_t extra);
 
+/* Pre-allocate the string-data arena for at least `extra_bytes` more bytes
+   (no-op for non-string builders). Lets a caller reserve before a parallel
+   append so the append never reallocs (and so never longjmps off a worker). */
+void vec_builder_reserve_data(VecArrayBuilder *b, int64_t extra_bytes);
+
 /* Append a full VecArray to the builder */
 void vec_builder_append_array(VecArrayBuilder *b, const VecArray *arr);
+
+/* Validate that arr may be appended to b (matching type, not a dictionary-
+   deferred string array). Raises a vectra_error otherwise. Exposed so a caller
+   can hoist the check ahead of a parallel append (the check longjmps on failure,
+   which is UB inside an OpenMP region). */
+void vec_builder_check_append(const VecArrayBuilder *b, const VecArray *arr);
+
+/* Like vec_builder_append_array but skips the input validation. The caller MUST
+   have already validated via vec_builder_check_append and reserved capacity;
+   this contains no longjmp-capable call, so it is safe inside an OpenMP region. */
+void vec_builder_append_array_nocheck(VecArrayBuilder *b, const VecArray *arr);
+
+/* Append rows [start, start + n) of arr. The bulk path for re-chunking a
+   column into different row-group boundaries: one memcpy of the values plus
+   a word-level validity copy, rather than n vec_builder_append_one calls.
+   vec_builder_append_array is this over the whole array. */
+void vec_builder_append_range(VecArrayBuilder *b, const VecArray *arr,
+                              int64_t start, int64_t n);
+
+/* Like vec_builder_append_range but skips input validation; same contract as
+   vec_builder_append_array_nocheck (safe inside an OpenMP region). */
+void vec_builder_append_range_nocheck(VecArrayBuilder *b, const VecArray *arr,
+                                      int64_t start, int64_t n);
 
 /* Append a single value from arr at row index */
 void vec_builder_append_one(VecArrayBuilder *b, const VecArray *arr, int64_t row);

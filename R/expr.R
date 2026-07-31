@@ -1,11 +1,30 @@
 # Convert a scalar R value to a literal expression node
-.env_val_to_literal <- function(varname, val) {
+.env_val_to_literal <- function(label, val) {
   if (is.logical(val) && length(val) == 1) return(list(kind = "lit_logical", value = val))
   if (is.integer(val) && length(val) == 1) return(list(kind = "lit_integer", value = val))
   if (is.double(val) && length(val) == 1) return(list(kind = "lit_double", value = val))
   if (is.character(val) && length(val) == 1) return(list(kind = "lit_string", value = val))
-  stop(sprintf(".env$%s must be a scalar logical/integer/double/string, got %s of length %d",
-               varname, class(val)[1], length(val)))
+  stop(sprintf("%s must be a scalar logical/integer/double/string, got %s of length %d",
+               label, class(val)[1], length(val)))
+}
+
+# The names in an expression that could refer to a column. Walks the call tree
+# rather than using all.vars(), which reports the field name of `$` and `@` as a
+# variable: in `d$ka` the name `ka` selects a field of `d` and says nothing about
+# a column called ka.
+.expr_symbols <- function(expr) {
+  if (is.name(expr)) return(as.character(expr))
+  if (!is.call(expr)) return(character(0))
+  head <- expr[[1]]
+  if (is.name(head)) {
+    fn <- as.character(head)
+    if (fn %in% c("::", ":::")) return(character(0))
+    if (fn %in% c("$", "@") && length(expr) == 3L)
+      return(.expr_symbols(expr[[2]]))
+  }
+  parts <- as.list(expr)[-1L]
+  if (is.call(head)) parts <- c(list(head), parts)
+  unlist(lapply(parts, .expr_symbols), use.names = FALSE)
 }
 
 # NSE expression capture -> serialized list for C bridge
@@ -51,10 +70,51 @@
 #                 sign, trunc, pmin, pmax
 .serialize_math <- function(fn, expr, env, cols) {
   if (fn == "pmin" || fn == "pmax") {
-    return(list(kind = fn,
-                left = serialize_expr(expr[[2]], env, cols),
-                right = serialize_expr(expr[[3]], env, cols)))
+    call_args <- as.list(expr)[-1]
+    nms <- names(call_args)
+    if (!is.null(nms) && any(nms == "na.rm"))
+      stop(sprintf("%s(na.rm=) is not supported", fn))
+    data_args <- if (is.null(nms)) call_args else call_args[!nzchar(nms)]
+    if (length(data_args) < 2)
+      stop(sprintf("%s() needs at least two arguments", fn))
+    # Left-fold N arguments into nested binary pmin/pmax.
+    acc <- serialize_expr(data_args[[1]], env, cols)
+    for (k in 2:length(data_args)) {
+      acc <- list(kind = fn, left = acc,
+                  right = serialize_expr(data_args[[k]], env, cols))
+    }
+    return(acc)
   }
+
+  # round(x, digits): the engine has only single-argument round, so express
+  # round(x, n) as round(x * 10^n) / 10^n via existing primitives.
+  if (fn == "round" && length(expr) >= 3) {
+    sx <- serialize_expr(expr[[2]], env, cols)
+    digits_expr <- expr[[3]]
+    dv <- tryCatch(eval(digits_expr, env), error = function(e) NULL)
+    if (!is.null(dv) && is.numeric(dv) && length(dv) == 1L && !is.na(dv)) {
+      factor_node <- list(kind = "lit_double", value = 10^dv)
+    } else {
+      # 10^d = exp(d * log(10)) for a non-constant number of digits
+      factor_node <- list(kind = "math_unary", fn = "e",
+        operand = list(kind = "arith", op = "*",
+          left = serialize_expr(digits_expr, env, cols),
+          right = list(kind = "lit_double", value = log(10))))
+    }
+    scaled  <- list(kind = "arith", op = "*", left = sx, right = factor_node)
+    rounded <- list(kind = "math_unary", fn = "r", operand = scaled)
+    return(list(kind = "arith", op = "/", left = rounded, right = factor_node))
+  }
+
+  # log(x, base): express as log(x) / log(base).
+  if (fn == "log" && length(expr) >= 3) {
+    return(list(kind = "arith", op = "/",
+      left  = list(kind = "math_unary", fn = "l",
+                   operand = serialize_expr(expr[[2]], env, cols)),
+      right = list(kind = "math_unary", fn = "l",
+                   operand = serialize_expr(expr[[3]], env, cols))))
+  }
+
   fn_char <- switch(fn,
     abs = "a", sqrt = "s", log = "l", exp = "e",
     floor = "f", ceiling = "c", round = "r",
@@ -83,16 +143,23 @@
     x <- expr[[3]]
     if (!is.character(pattern))
       stop("grepl: pattern must be a string literal")
-    fixed <- TRUE
+    fixed <- FALSE  # base R default: pattern is a regex unless fixed = TRUE
+    ignore_case <- FALSE
     nms <- names(expr)
     if (!is.null(nms)) {
       fi <- match("fixed", nms)
       if (!is.na(fi)) fixed <- isTRUE(eval(expr[[fi]], env))
+      ci <- match("ignore.case", nms)
+      if (!is.na(ci)) ignore_case <- isTRUE(eval(expr[[ci]], env))
+      if (!is.na(match("perl", nms)) && isTRUE(eval(expr[[match("perl", nms)]], env)))
+        stop("grepl(perl = TRUE) is not supported; the engine uses POSIX ",
+             "extended regular expressions")
     }
     return(list(kind = "grepl",
                 pattern = as.character(pattern),
                 operand = serialize_expr(x, env, cols),
-                fixed = fixed))
+                fixed = fixed,
+                ignore_case = ignore_case))
   }
 
   if (fn %in% c("tolower", "toupper", "trimws")) {
@@ -117,7 +184,9 @@
         data_args <- call_args[-si]
       }
       ci <- match("collapse", names(data_args))
-      if (!is.na(ci)) data_args <- data_args[-ci]
+      if (!is.na(ci))
+        stop("paste(collapse=) is not supported: paste is row-wise here, ",
+             "so it cannot reduce a column to a single string")
     }
     args <- lapply(data_args, serialize_expr, env = env, cols = cols)
     return(list(kind = "paste", args = args, sep = sep))
@@ -143,17 +212,24 @@
     x <- expr[[4]]
     if (!is.character(pattern)) stop(paste0(fn, ": pattern must be a string literal"))
     if (!is.character(replacement)) stop(paste0(fn, ": replacement must be a string literal"))
-    fixed <- TRUE
+    fixed <- FALSE  # base R default: pattern is a regex unless fixed = TRUE
+    ignore_case <- FALSE
     nms <- names(expr)
     if (!is.null(nms)) {
       fi <- match("fixed", nms)
       if (!is.na(fi)) fixed <- isTRUE(eval(expr[[fi]], env))
+      ci <- match("ignore.case", nms)
+      if (!is.na(ci)) ignore_case <- isTRUE(eval(expr[[ci]], env))
+      if (!is.na(match("perl", nms)) && isTRUE(eval(expr[[match("perl", nms)]], env)))
+        stop(fn, "(perl = TRUE) is not supported; the engine uses POSIX ",
+             "extended regular expressions")
     }
     return(list(kind = fn,
                 pattern = as.character(pattern),
                 replacement = as.character(replacement),
                 operand = serialize_expr(x, env, cols),
-                fixed = fixed))
+                fixed = fixed,
+                ignore_case = ignore_case))
   }
 
   if (fn == "str_extract") {
@@ -204,10 +280,32 @@
   }
 
   # if_else / ifelse
-  list(kind = "if_else",
-       cond = serialize_expr(expr[[2]], env, cols),
-       then_expr = serialize_expr(expr[[3]], env, cols),
-       else_expr = serialize_expr(expr[[4]], env, cols))
+  sc <- serialize_expr(expr[[2]], env, cols)
+  sy <- serialize_expr(expr[[3]], env, cols)
+  sn <- serialize_expr(expr[[4]], env, cols)
+
+  # dplyr's if_else() has a 4th argument, `missing`, used where the condition
+  # is NA. Express it via case_when so NA conditions take the missing value.
+  if (fn == "if_else") {
+    args <- as.list(expr)[-1]
+    an <- names(args)
+    missing_expr <- NULL
+    if (!is.null(an) && !is.na(match("missing", an))) {
+      missing_expr <- args[[match("missing", an)]]
+    } else if (length(args) >= 4L && (is.null(an) || an[4] == "")) {
+      missing_expr <- args[[4]]
+    }
+    if (!is.null(missing_expr)) {
+      return(list(kind = "case_when",
+        cases = list(
+          list(cond = list(kind = "is_na", operand = sc),
+               val  = serialize_expr(missing_expr, env, cols)),
+          list(cond = sc, val = sy)),
+        default = sn))
+    }
+  }
+
+  list(kind = "if_else", cond = sc, then_expr = sy, else_expr = sn)
 }
 
 # Type casting: as.numeric, as.double, as.integer, as.character, as.logical
@@ -599,8 +697,27 @@ serialize_expr <- function(expr, env = parent.frame(), cols = NULL) {
         (identical(op, quote(`$`)) || identical(op, quote(`[[`)))) {
       varname <- if (identical(op, quote(`$`))) as.character(expr[[3]]) else eval(expr[[3]], env)
       val <- get(varname, envir = env)
-      return(.env_val_to_literal(varname, val))
+      return(.env_val_to_literal(paste0(".env$", varname), val))
     }
+
+    # .data$col or .data[["col"]] / .data[[var]] -- the tidy-eval column pronoun.
+    # Resolves to a plain column reference; for [[var]] the name is evaluated in
+    # the caller's environment.
+    if (is.name(lhs) && identical(as.character(lhs), ".data") &&
+        (identical(op, quote(`$`)) || identical(op, quote(`[[`)))) {
+      colname <- if (identical(op, quote(`$`))) as.character(expr[[3]])
+                 else eval(expr[[3]], env)
+      if (!is.character(colname) || length(colname) != 1L)
+        stop(".data[[...]] must resolve to a single column name")
+      return(list(kind = "col_ref", name = colname))
+    }
+  }
+
+  # Unwrap namespace-qualified heads: pkg::fn(...) / pkg:::fn(...) -> fn(...)
+  head <- expr[[1]]
+  if (is.call(head) && length(head) == 3L && is.name(head[[1L]]) &&
+      as.character(head[[1L]]) %in% c("::", ":::")) {
+    expr[[1]] <- head[[3L]]
   }
 
   fn <- as.character(expr[[1]])
@@ -619,6 +736,18 @@ serialize_expr <- function(expr, env = parent.frame(), cols = NULL) {
 
   handler <- .expr_dispatch[[fn]]
   if (!is.null(handler)) return(handler(fn, expr, env, cols))
+
+  # A call the engine has no operation for, naming no column, belongs to the
+  # calling environment: evaluate it there and carry the value as a literal, the
+  # same way a bare name is resolved above. This is what lets a filter reach a
+  # value that is computed rather than stored in a variable, as in
+  # `filter(x, id == keys[i])` or `filter(x, day > range$hi)`. A call that does
+  # name a column stays an error, so a typo or a genuinely unsupported column
+  # operation still reports itself as one.
+  if (is.null(cols) || !any(.expr_symbols(expr) %in% cols)) {
+    val <- tryCatch(eval(expr, env), error = function(e) NULL)
+    if (!is.null(val)) return(.env_val_to_literal(deparse1(expr), val))
+  }
 
   stop(sprintf("unsupported function in expression: %s", fn))
 }

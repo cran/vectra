@@ -9,6 +9,67 @@
 #include <math.h>
 #include <time.h>
 
+/* Civil-date arithmetic (Howard Hinnant's public-domain algorithms), exact for
+   the full range including negative (pre-1970) days. Used instead of the C
+   library gmtime/timegm, which reject a negative time_t on Windows (gmtime_s
+   returns EINVAL and leaves the struct at -1, silently producing year 1899). */
+static void civil_from_days(int64_t z, int *yy, int *mm, int *dd) {
+    z += 719468;
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    int64_t doe = z - era * 146097;                 /* [0, 146096] */
+    int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    int64_t y   = yoe + era * 400;
+    int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    int64_t mp  = (5 * doy + 2) / 153;              /* [0, 11] */
+    int64_t d   = doy - (153 * mp + 2) / 5 + 1;     /* [1, 31] */
+    int64_t m   = mp < 10 ? mp + 3 : mp - 9;        /* [1, 12] */
+    *yy = (int)(y + (m <= 2));
+    *mm = (int)m;
+    *dd = (int)d;
+}
+
+static int64_t days_from_civil(int y, int m, int d) {
+    int64_t yy  = y - (m <= 2);
+    int64_t era = (yy >= 0 ? yy : yy - 399) / 400;
+    int64_t yoe = yy - era * 400;
+    int64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+/* Split epoch seconds (possibly negative, UTC) into calendar fields. */
+static void civil_from_secs(double secs, int *Y, int *Mo, int *D,
+                            int *h, int *mi, int *s) {
+    int64_t days = (int64_t)floor(secs / 86400.0);
+    int64_t rem  = (int64_t)floor(secs - (double)days * 86400.0);  /* [0,86400) */
+    if (rem < 0) { rem += 86400; days -= 1; }
+    if (rem >= 86400) { rem -= 86400; days += 1; }
+    civil_from_days(days, Y, Mo, D);
+    *h  = (int)(rem / 3600);
+    *mi = (int)((rem % 3600) / 60);
+    *s  = (int)(rem % 60);
+}
+
+static int date_is_leap(int y) {
+    return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+}
+
+static int date_days_in_month(int y, int m) {
+    static const int dim[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    if (m == 2 && date_is_leap(y)) return 29;
+    return dim[m - 1];
+}
+
+/* Decide whether a datetime operand's numeric value is in days (Date) or
+   seconds (POSIXct). Prefer the parse-time scale resolved from the column's
+   schema annotation; fall back to a magnitude guess only for a computed
+   operand whose class was lost. */
+static int datetime_is_date(char date_scale, double val) {
+    if (date_scale == 'D') return 1;
+    if (date_scale == 'T') return 0;
+    return fabs(val) < 200000.0;
+}
+
 VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
                                   const VecBatch *batch) {
     switch (op) {
@@ -16,9 +77,12 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
     case EXPR_PMAX: {
         VecArray *l = vec_expr_eval(expr->left, batch);
         VecArray *r = vec_expr_eval(expr->right, batch);
-        /* Coerce both to double */
-        if (l->type == VEC_INT64) { VecArray *t = vec_coerce(l, VEC_DOUBLE); vec_array_free(l); free(l); l = t; }
-        if (r->type == VEC_INT64) { VecArray *t = vec_coerce(r, VEC_DOUBLE); vec_array_free(r); free(r); r = t; }
+        /* Coerce any non-double operand to double before reading buf.dbl.
+           A bool/narrow-int operand has a smaller element than double, so
+           reading it through buf.dbl would over-read; a string operand
+           errors cleanly in vec_coerce rather than being type-punned. */
+        if (l->type != VEC_DOUBLE) { VecArray *t = vec_coerce(l, VEC_DOUBLE); vec_array_free(l); free(l); l = t; }
+        if (r->type != VEC_DOUBLE) { VecArray *t = vec_coerce(r, VEC_DOUBLE); vec_array_free(r); free(r); r = t; }
         int64_t n = l->length;
         VecArray *out = (VecArray *)malloc(sizeof(VecArray));
         *out = vec_array_alloc(VEC_DOUBLE, n);
@@ -34,8 +98,10 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
     }
     case EXPR_DATE_PART: {
         VecArray *o = vec_expr_eval(expr->operand, batch);
-        /* Coerce to double if needed */
-        if (o->type == VEC_INT64) {
+        /* Coerce any non-double operand to double before reading buf.dbl;
+           a bool/narrow-int operand would otherwise be over-read, a string
+           operand errors cleanly in vec_coerce. */
+        if (o->type != VEC_DOUBLE) {
             VecArray *t = vec_coerce(o, VEC_DOUBLE);
             vec_array_free(o); free(o); o = t;
         }
@@ -46,30 +112,17 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
             if (!vec_array_is_valid(o, i)) { vec_array_set_null(out, i); continue; }
             vec_array_set_valid(out, i);
             double val = o->buf.dbl[i];
-            time_t ts;
-            struct tm tm_val;
-            /* Detect Date (days since epoch) vs POSIXct (seconds since epoch).
-               Date values are typically in range 0-25000 (1970-2038).
-               POSIXct values are > 1e9 (seconds). */
-            if (fabs(val) < 200000.0) {
-                /* Date: days since 1970-01-01 */
-                ts = (time_t)(val * 86400.0);
-            } else {
-                /* POSIXct: seconds since 1970-01-01 */
-                ts = (time_t)val;
-            }
-#ifdef _WIN32
-            gmtime_s(&tm_val, &ts);
-#else
-            gmtime_r(&ts, &tm_val);
-#endif
+            double secs = datetime_is_date(expr->date_scale, val)
+                          ? val * 86400.0 : val;
+            int Y, Mo, D, hh, mi, ss;
+            civil_from_secs(secs, &Y, &Mo, &D, &hh, &mi, &ss);
             switch (expr->date_part) {
-            case 'Y': out->buf.dbl[i] = (double)(tm_val.tm_year + 1900); break;
-            case 'M': out->buf.dbl[i] = (double)(tm_val.tm_mon + 1); break;
-            case 'D': out->buf.dbl[i] = (double)tm_val.tm_mday; break;
-            case 'h': out->buf.dbl[i] = (double)tm_val.tm_hour; break;
-            case 'm': out->buf.dbl[i] = (double)tm_val.tm_min; break;
-            case 's': out->buf.dbl[i] = (double)tm_val.tm_sec; break;
+            case 'Y': out->buf.dbl[i] = (double)Y;  break;
+            case 'M': out->buf.dbl[i] = (double)Mo; break;
+            case 'D': out->buf.dbl[i] = (double)D;  break;
+            case 'h': out->buf.dbl[i] = (double)hh; break;
+            case 'm': out->buf.dbl[i] = (double)mi; break;
+            case 's': out->buf.dbl[i] = (double)ss; break;
             default: vectra_error("unknown date part: %c", expr->date_part);
             }
         }
@@ -89,35 +142,27 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
             /* Parse YYYY-MM-DD format */
             if (slen < 10) { vec_array_set_null(out, i); continue; }
             const char *p = s->buf.str.data + so;
-            int year = 0, mon = 0, mday = 0;
-            int j;
-            for (j = 0; j < 4; j++) year = year * 10 + (p[j] - '0');
-            mon = (p[5] - '0') * 10 + (p[6] - '0');
-            mday = (p[8] - '0') * 10 + (p[9] - '0');
-            if (mon < 1 || mon > 12 || mday < 1 || mday > 31) {
+            /* Require the exact YYYY-MM-DD shape with digit fields and a single
+               separator character ('-' or '/', consistent across both slots, as
+               base R's default tryFormats accepts both %Y-%m-%d and %Y/%m/%d);
+               validate the day against the actual month length so "2021-02-30"
+               is rejected (returns NA, as base R does) rather than normalized to
+               a bogus date. */
+            char sepc = p[4];
+            int ok = ((sepc == '-' || sepc == '/') && p[7] == sepc);
+            for (int j = 0; ok && j < 10; j++)
+                if (j != 4 && j != 7 && (p[j] < '0' || p[j] > '9')) ok = 0;
+            if (!ok) { vec_array_set_null(out, i); continue; }
+            int year = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
+            int mon  = (p[5]-'0')*10 + (p[6]-'0');
+            int mday = (p[8]-'0')*10 + (p[9]-'0');
+            if (mon < 1 || mon > 12 || mday < 1 ||
+                mday > date_days_in_month(year, mon)) {
                 vec_array_set_null(out, i);
                 continue;
             }
-            {
-                struct tm tm_val;
-                time_t ts;
-                memset(&tm_val, 0, sizeof(tm_val));
-                tm_val.tm_year = year - 1900;
-                tm_val.tm_mon = mon - 1;
-                tm_val.tm_mday = mday;
-                tm_val.tm_isdst = 0;
-#ifdef _WIN32
-                ts = _mkgmtime(&tm_val);
-#else
-                ts = timegm(&tm_val);
-#endif
-                if (ts == (time_t)-1) {
-                    vec_array_set_null(out, i);
-                } else {
-                    vec_array_set_valid(out, i);
-                    out->buf.dbl[i] = (double)(ts / 86400);
-                }
-            }
+            vec_array_set_valid(out, i);
+            out->buf.dbl[i] = (double)days_from_civil(year, mon, mday);
         }
         vec_array_free(s); free(s);
         return out;
@@ -128,7 +173,10 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
            magnitude like EXPR_DATE_PART; the result is returned in the same
            scale so it stays a valid Date / POSIXct value. */
         VecArray *o = vec_expr_eval(expr->operand, batch);
-        if (o->type == VEC_INT64) {
+        /* Coerce any non-double operand to double before reading buf.dbl;
+           a bool/narrow-int operand would otherwise be over-read, a string
+           operand errors cleanly in vec_coerce. */
+        if (o->type != VEC_DOUBLE) {
             VecArray *t = vec_coerce(o, VEC_DOUBLE);
             vec_array_free(o); free(o); o = t;
         }
@@ -156,7 +204,7 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
             if (!vec_array_is_valid(o, i)) { vec_array_set_null(out, i); continue; }
             vec_array_set_valid(out, i);
             double val = o->buf.dbl[i];
-            int is_date = fabs(val) < 200000.0;
+            int is_date = datetime_is_date(expr->date_scale, val);
             double secs = is_date ? val * 86400.0 : val;
             double floored;
 
@@ -164,35 +212,19 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
                 double bucket = (double)n * unit_secs;
                 floored = floor(secs / bucket) * bucket;
             } else {
-                time_t ts = (time_t)floor(secs);
-                struct tm tm_val;
-#ifdef _WIN32
-                gmtime_s(&tm_val, &ts);
-#else
-                gmtime_r(&ts, &tm_val);
-#endif
-                tm_val.tm_hour = 0; tm_val.tm_min = 0; tm_val.tm_sec = 0;
-                tm_val.tm_mday = 1;
-                tm_val.tm_isdst = 0;
+                int Y, Mo, D, hh, mi, ss;
+                civil_from_secs(secs, &Y, &Mo, &D, &hh, &mi, &ss);
                 if (unit == 'y') {
-                    int y = tm_val.tm_year + 1900;
-                    int fy = (int)floor((double)(y - 1970) / (double)n) * n + 1970;
-                    tm_val.tm_year = fy - 1900;
-                    tm_val.tm_mon = 0;
+                    int fy = (int)floor((double)(Y - 1970) / (double)n) * n + 1970;
+                    Y = fy; Mo = 1; D = 1;
                 } else if (unit == 'q') {
-                    tm_val.tm_mon = (tm_val.tm_mon / 3) * 3;
+                    Mo = ((Mo - 1) / 3) * 3 + 1; D = 1;
                 } else { /* month */
-                    int total = (tm_val.tm_year + 1900) * 12 + tm_val.tm_mon;
+                    int total = Y * 12 + (Mo - 1);
                     int fm = (int)floor((double)total / (double)n) * n;
-                    tm_val.tm_year = fm / 12 - 1900;
-                    tm_val.tm_mon = fm % 12;
+                    Y = fm / 12; Mo = fm % 12 + 1; D = 1;
                 }
-#ifdef _WIN32
-                ts = _mkgmtime(&tm_val);
-#else
-                ts = timegm(&tm_val);
-#endif
-                floored = (double)ts;
+                floored = (double)days_from_civil(Y, Mo, D) * 86400.0;
             }
 
             out->buf.dbl[i] = is_date ? floored / 86400.0 : floored;
@@ -204,9 +236,13 @@ VecArray *vec_expr_eval_extended(VecExprKind op, const VecExpr *expr,
         VecArray *cond = vec_expr_eval(expr->cond, batch);
         VecArray *then_v = vec_expr_eval(expr->then_expr, batch);
         VecArray *else_v = vec_expr_eval(expr->else_expr, batch);
-        /* Coerce then/else to common type (string > double > int64 > bool) */
-        VecType common = (then_v->type == VEC_STRING || else_v->type == VEC_STRING) ? VEC_STRING :
-                         (then_v->type == VEC_DOUBLE || else_v->type == VEC_DOUBLE) ? VEC_DOUBLE : then_v->type;
+        /* Coerce then/else to a symmetric common type: string wins if either
+           branch is a string, otherwise the wider numeric type of the two.
+           Using vec_common_type keeps this order-independent, so
+           if_else(cond, TRUE, 5L) and if_else(cond, 5L, TRUE) agree. */
+        VecType common = (then_v->type == VEC_STRING || else_v->type == VEC_STRING)
+                         ? VEC_STRING
+                         : vec_common_type(then_v->type, else_v->type);
         if (then_v->type != common) { VecArray *t2 = vec_coerce(then_v, common); vec_array_free(then_v); free(then_v); then_v = t2; }
         if (else_v->type != common) { VecArray *e2 = vec_coerce(else_v, common); vec_array_free(else_v); free(else_v); else_v = e2; }
         int64_t n = cond->length;

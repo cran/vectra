@@ -14,6 +14,7 @@ static inline int64_t agg_get_i64(const VecArray *col, int64_t row) {
     case VEC_INT32:  return (int64_t)col->buf.i32[row];
     case VEC_INT16:  return (int64_t)col->buf.i16[row];
     case VEC_INT8:   return (int64_t)col->buf.i8[row];
+    case VEC_BOOL:   return (int64_t)col->buf.bln[row];
     default:         return 0;
     }
 }
@@ -42,6 +43,11 @@ AggAccum agg_accum_init(AggKind kind, VecType input_type, int na_rm,
        The feed function uses agg_get_i64() to read any int width. */
     acc.input_type = (input_type == VEC_INT8 || input_type == VEC_INT16 ||
                       input_type == VEC_INT32) ? VEC_INT64 : input_type;
+    /* min()/max() have no logical read path; a logical column reduces to its
+       0/1 integer values, matching R's min(c(TRUE, FALSE)) == 0. Other kinds
+       keep the logical type (sum/mean/any/all read it directly). */
+    if (acc.input_type == VEC_BOOL && (kind == AGG_MIN || kind == AGG_MAX))
+        acc.input_type = VEC_INT64;
     acc.na_rm = na_rm;
     acc.mem_budget = mem_budget;
     acc.temp_dir = temp_dir;
@@ -52,6 +58,26 @@ static void grow_has_na(AggAccum *acc, int64_t old_cap, int64_t new_cap) {
     acc->has_na = (int *)realloc(acc->has_na, (size_t)new_cap * sizeof(int));
     if (!acc->has_na) vectra_error("agg alloc failed");
     memset(acc->has_na + old_cap, 0, (size_t)(new_cap - old_cap) * sizeof(int));
+}
+
+/* Per-group owned-string slots for string first()/last(). New slots start NULL
+   so agg_accum_free can free each unconditionally. */
+static void grow_str_val(AggAccum *acc, int64_t old_cap, int64_t new_cap) {
+    acc->str_val = (char **)realloc(acc->str_val, (size_t)new_cap * sizeof(char *));
+    acc->str_len = (int64_t *)realloc(acc->str_len, (size_t)new_cap * sizeof(int64_t));
+    if (!acc->str_val || !acc->str_len) vectra_error("agg alloc failed");
+    memset(acc->str_val + old_cap, 0, (size_t)(new_cap - old_cap) * sizeof(char *));
+    memset(acc->str_len + old_cap, 0, (size_t)(new_cap - old_cap) * sizeof(int64_t));
+}
+
+/* Copy `slen` bytes from `src` into group g's owned slot, replacing any prior
+   value (used by last(); first() calls it once). */
+static void str_val_set(AggAccum *acc, int64_t g, const char *src, int64_t slen) {
+    char *p = (char *)realloc(acc->str_val[g], (size_t)(slen > 0 ? slen : 1));
+    if (!p) vectra_error("agg alloc failed");
+    if (slen > 0) memcpy(p, src, (size_t)slen);
+    acc->str_val[g] = p;
+    acc->str_len[g] = slen;
 }
 
 void agg_accum_ensure(AggAccum *acc, int64_t n_groups) {
@@ -120,7 +146,9 @@ void agg_accum_ensure(AggAccum *acc, int64_t n_groups) {
         if (!acc->has_first) vectra_error("agg alloc failed");
         memset(acc->has_first + old_cap, 0, (size_t)(new_cap - old_cap) * sizeof(int));
         grow_has_na(acc, old_cap, new_cap);
-        if (acc->input_type == VEC_INT64) {
+        if (acc->input_type == VEC_STRING) {
+            grow_str_val(acc, old_cap, new_cap);
+        } else if (acc->input_type == VEC_INT64) {
             acc->first_i64 = (int64_t *)realloc(acc->first_i64, (size_t)new_cap * sizeof(int64_t));
             if (!acc->first_i64) vectra_error("agg alloc failed");
         } else {
@@ -133,7 +161,9 @@ void agg_accum_ensure(AggAccum *acc, int64_t n_groups) {
         if (!acc->has_value) vectra_error("agg alloc failed");
         memset(acc->has_value + old_cap, 0, (size_t)(new_cap - old_cap) * sizeof(int));
         grow_has_na(acc, old_cap, new_cap);
-        if (acc->input_type == VEC_INT64) {
+        if (acc->input_type == VEC_STRING) {
+            grow_str_val(acc, old_cap, new_cap);
+        } else if (acc->input_type == VEC_INT64) {
             acc->last_i64 = (int64_t *)realloc(acc->last_i64, (size_t)new_cap * sizeof(int64_t));
             if (!acc->last_i64) vectra_error("agg alloc failed");
         } else {
@@ -226,6 +256,10 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         }
         if (acc->input_type == VEC_DOUBLE) {
             double v = col->buf.dbl[row];
+            /* NaN has no ordering: v < min is always false, so without this a NaN
+               is silently skipped unless it is the first value (order-dependent).
+               R propagates it: a NaN in the group makes min NaN (na.rm drops it). */
+            if (isnan(v)) { if (!acc->na_rm) acc->has_na[group_id] = 1; break; }
             if (!acc->has_value[group_id] || v < acc->min_dbl[group_id]) {
                 acc->min_dbl[group_id] = v;
                 acc->has_value[group_id] = 1;
@@ -245,6 +279,7 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         }
         if (acc->input_type == VEC_DOUBLE) {
             double v = col->buf.dbl[row];
+            if (isnan(v)) { if (!acc->na_rm) acc->has_na[group_id] = 1; break; }
             if (!acc->has_value[group_id] || v > acc->max_dbl[group_id]) {
                 acc->max_dbl[group_id] = v;
                 acc->has_value[group_id] = 1;
@@ -280,32 +315,58 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         }
         break;
     case AGG_FIRST:
-        if (!is_valid) {
-            if (!acc->na_rm) acc->has_na[group_id] = 1;
-            break;
-        }
+        /* dplyr first(): the literal first element of the group. With the
+           default na_rm = FALSE, capture on the very first row seen whether it
+           is NA or not, so a later NA cannot poison a non-NA first element and
+           an NA first element yields NA. With na_rm = TRUE, skip NA rows and
+           capture the first non-NA element. has_na[group_id] marks that the
+           captured element itself is NA (consumed by agg_accum_finish). */
+        if (acc->na_rm && !is_valid) break;
         if (!acc->has_first[group_id]) {
             acc->has_first[group_id] = 1;
-            if (acc->input_type == VEC_DOUBLE)
-                acc->first_dbl[group_id] = col->buf.dbl[row];
-            else if (acc->input_type == VEC_INT64)
-                acc->first_i64[group_id] = agg_get_i64(col, row);
-            else if (acc->input_type == VEC_BOOL)
-                acc->first_dbl[group_id] = (double)col->buf.bln[row];
+            if (!is_valid) {
+                acc->has_na[group_id] = 1;
+            } else {
+                acc->has_na[group_id] = 0;
+                if (acc->input_type == VEC_DOUBLE)
+                    acc->first_dbl[group_id] = col->buf.dbl[row];
+                else if (acc->input_type == VEC_INT64)
+                    acc->first_i64[group_id] = agg_get_i64(col, row);
+                else if (acc->input_type == VEC_BOOL)
+                    acc->first_dbl[group_id] = (double)col->buf.bln[row];
+                else if (acc->input_type == VEC_STRING) {
+                    int64_t so = col->buf.str.offsets[row];
+                    str_val_set(acc, group_id, col->buf.str.data + so,
+                                col->buf.str.offsets[row + 1] - so);
+                }
+            }
         }
         break;
     case AGG_LAST:
-        if (!is_valid) {
-            if (!acc->na_rm) acc->has_na[group_id] = 1;
-            break;
-        }
+        /* dplyr last(): the literal last element of the group. With the default
+           na_rm = FALSE, overwrite on every row so the final row wins even when
+           it is NA. With na_rm = TRUE, skip NA rows and keep the last non-NA
+           element. has_na[group_id] marks the captured (last-seen) element as
+           NA; a valid row resets it, so a trailing non-NA is not poisoned by an
+           earlier NA. */
+        if (acc->na_rm && !is_valid) break;
         acc->has_value[group_id] = 1;
-        if (acc->input_type == VEC_DOUBLE)
-            acc->last_dbl[group_id] = col->buf.dbl[row];
-        else if (acc->input_type == VEC_INT64)
-            acc->last_i64[group_id] = agg_get_i64(col, row);
-        else if (acc->input_type == VEC_BOOL)
-            acc->last_dbl[group_id] = (double)col->buf.bln[row];
+        if (!is_valid) {
+            acc->has_na[group_id] = 1;
+        } else {
+            acc->has_na[group_id] = 0;
+            if (acc->input_type == VEC_DOUBLE)
+                acc->last_dbl[group_id] = col->buf.dbl[row];
+            else if (acc->input_type == VEC_INT64)
+                acc->last_i64[group_id] = agg_get_i64(col, row);
+            else if (acc->input_type == VEC_BOOL)
+                acc->last_dbl[group_id] = (double)col->buf.bln[row];
+            else if (acc->input_type == VEC_STRING) {
+                int64_t so = col->buf.str.offsets[row];
+                str_val_set(acc, group_id, col->buf.str.data + so,
+                            col->buf.str.offsets[row + 1] - so);
+            }
+        }
         break;
     case AGG_ANY:
         if (!is_valid) {
@@ -315,7 +376,11 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         if (acc->input_type == VEC_BOOL) {
             if (col->buf.bln[row]) acc->has_value[group_id] = 1;
         } else if (acc->input_type == VEC_DOUBLE) {
-            if (col->buf.dbl[row] != 0.0) acc->has_value[group_id] = 1;
+            double v = col->buf.dbl[row];
+            /* NaN coerces to NA in a logical context (R): feed it as NA into the
+               three-valued any/all rather than counting it as a definite TRUE. */
+            if (isnan(v)) { if (!acc->na_rm) acc->has_na[group_id] = 1; }
+            else if (v != 0.0) acc->has_value[group_id] = 1;
         } else if (acc->input_type == VEC_INT64) {
             if (agg_get_i64(col, row) != 0) acc->has_value[group_id] = 1;
         }
@@ -328,19 +393,29 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         if (acc->input_type == VEC_BOOL) {
             if (!col->buf.bln[row]) acc->has_value[group_id] = 0;
         } else if (acc->input_type == VEC_DOUBLE) {
-            if (col->buf.dbl[row] == 0.0) acc->has_value[group_id] = 0;
+            double v = col->buf.dbl[row];
+            if (isnan(v)) { if (!acc->na_rm) acc->has_na[group_id] = 1; }
+            else if (v == 0.0) acc->has_value[group_id] = 0;
         } else if (acc->input_type == VEC_INT64) {
             if (agg_get_i64(col, row) == 0) acc->has_value[group_id] = 0;
         }
         break;
     case AGG_N_DISTINCT:
-        if (!is_valid) break; /* NAs are not counted as distinct values */
+        if (!is_valid) {
+            /* dplyr's default na.rm = FALSE counts NA as one distinct value */
+            if (!acc->na_rm) acc->has_na[group_id] = 1;
+            break;
+        }
         {
             uint64_t h;
             if (acc->input_type == VEC_INT64)
                 h = nd_hash_val_i64(agg_get_i64(col, row));
-            else if (acc->input_type == VEC_DOUBLE)
-                h = nd_hash_val_dbl(col->buf.dbl[row]);
+            else if (acc->input_type == VEC_DOUBLE) {
+                double v = col->buf.dbl[row];
+                if (v == 0.0) v = 0.0;         /* -0.0 and 0.0 are one value */
+                else if (v != v) v = (double)NAN; /* all NaN are one value */
+                h = nd_hash_val_dbl(v);
+            }
             else if (acc->input_type == VEC_STRING) {
                 int64_t so = col->buf.str.offsets[row];
                 int64_t slen = col->buf.str.offsets[row+1] - so;
@@ -366,6 +441,38 @@ void agg_accum_feed(AggAccum *acc, int64_t group_id,
         }
         break;
     }
+}
+
+/* Build a VEC_STRING result for string first()/last(). A group is NA when it
+   captured an NA element (has_na) or nothing was captured (present[i] == 0);
+   otherwise it emits the group's owned byte slot (possibly empty). */
+static VecArray agg_finish_string(AggAccum *acc, const int *present) {
+    int64_t n = acc->n_groups;
+    int64_t total = 0;
+    for (int64_t i = 0; i < n; i++) {
+        int is_na = (acc->has_na && acc->has_na[i]) || !present[i];
+        if (!is_na) total += acc->str_len[i];
+    }
+    VecArray arr = vec_array_alloc(VEC_STRING, n);
+    free(arr.buf.str.data);
+    arr.buf.str.data     = (char *)malloc((size_t)(total > 0 ? total : 1));
+    if (!arr.buf.str.data) vectra_error("agg alloc failed");
+    arr.buf.str.data_len = total;
+    int64_t off = 0;
+    for (int64_t i = 0; i < n; i++) {
+        arr.buf.str.offsets[i] = off;
+        int is_na = (acc->has_na && acc->has_na[i]) || !present[i];
+        if (is_na) {
+            vec_array_set_null(&arr, i);
+        } else {
+            vec_array_set_valid(&arr, i);
+            int64_t slen = acc->str_len[i];
+            if (slen > 0) memcpy(arr.buf.str.data + off, acc->str_val[i], (size_t)slen);
+            off += slen;
+        }
+    }
+    arr.buf.str.offsets[n] = off;
+    return arr;
 }
 
 VecArray agg_accum_finish(AggAccum *acc) {
@@ -487,6 +594,8 @@ VecArray agg_accum_finish(AggAccum *acc) {
         return arr;
     }
     case AGG_FIRST: {
+        if (acc->input_type == VEC_STRING)
+            return agg_finish_string(acc, acc->has_first);
         VecArray arr = vec_array_alloc(VEC_DOUBLE, n);
         for (int64_t i = 0; i < n; i++) {
             if ((acc->has_na && acc->has_na[i]) || !acc->has_first[i]) {
@@ -502,6 +611,8 @@ VecArray agg_accum_finish(AggAccum *acc) {
         return arr;
     }
     case AGG_LAST: {
+        if (acc->input_type == VEC_STRING)
+            return agg_finish_string(acc, acc->has_value);
         VecArray arr = vec_array_alloc(VEC_DOUBLE, n);
         for (int64_t i = 0; i < n; i++) {
             if ((acc->has_na && acc->has_na[i]) || !acc->has_value[i]) {
@@ -516,15 +627,32 @@ VecArray agg_accum_finish(AggAccum *acc) {
         }
         return arr;
     }
-    case AGG_ANY:
-    case AGG_ALL: {
+    case AGG_ANY: {
+        /* R: a TRUE determines the result even with NAs present; NA only when
+           no TRUE was seen and an NA was. has_value == a TRUE was seen. */
         VecArray arr = vec_array_alloc(VEC_DOUBLE, n);
         for (int64_t i = 0; i < n; i++) {
-            if (acc->has_na && acc->has_na[i]) {
+            if (acc->has_value[i]) {
+                vec_array_set_valid(&arr, i); arr.buf.dbl[i] = 1.0;
+            } else if (acc->has_na && acc->has_na[i]) {
                 vec_array_set_null(&arr, i);
             } else {
-                vec_array_set_valid(&arr, i);
-                arr.buf.dbl[i] = (double)acc->has_value[i];
+                vec_array_set_valid(&arr, i); arr.buf.dbl[i] = 0.0;
+            }
+        }
+        return arr;
+    }
+    case AGG_ALL: {
+        /* R: a FALSE determines the result even with NAs present; NA only when
+           no FALSE was seen and an NA was. has_value == 0 means a FALSE seen. */
+        VecArray arr = vec_array_alloc(VEC_DOUBLE, n);
+        for (int64_t i = 0; i < n; i++) {
+            if (!acc->has_value[i]) {
+                vec_array_set_valid(&arr, i); arr.buf.dbl[i] = 0.0;
+            } else if (acc->has_na && acc->has_na[i]) {
+                vec_array_set_null(&arr, i);
+            } else {
+                vec_array_set_valid(&arr, i); arr.buf.dbl[i] = 1.0;
             }
         }
         return arr;
@@ -532,9 +660,11 @@ VecArray agg_accum_finish(AggAccum *acc) {
     case AGG_N_DISTINCT: {
         VecArray arr = vec_array_alloc(VEC_DOUBLE, n);
         vec_array_set_all_valid(&arr);
-        for (int64_t i = 0; i < n; i++)
-            arr.buf.dbl[i] = acc->store
-                ? (double)agg_spill_n_distinct(&acc->store[i]) : 0.0;
+        for (int64_t i = 0; i < n; i++) {
+            double d = acc->store ? (double)agg_spill_n_distinct(&acc->store[i]) : 0.0;
+            if (acc->has_na && acc->has_na[i]) d += 1.0; /* NA counts once */
+            arr.buf.dbl[i] = d;
+        }
         return arr;
     }
     case AGG_MEDIAN: {
@@ -574,6 +704,11 @@ void agg_accum_free(AggAccum *acc) {
     free(acc->last_dbl);
     free(acc->last_i64);
     free(acc->has_first);
+    if (acc->str_val) {
+        for (int64_t i = 0; i < acc->capacity; i++) free(acc->str_val[i]);
+        free(acc->str_val);
+    }
+    free(acc->str_len);
     /* median / n_distinct spill stores (frees buffers and unlinks run files) */
     if (acc->store) {
         for (int64_t i = 0; i < acc->capacity; i++) agg_spill_free(&acc->store[i]);

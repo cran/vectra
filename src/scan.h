@@ -15,7 +15,8 @@ typedef struct {
     Vtr1TdcFile   *file;
     int           *col_mask;       /* which columns to read */
     uint32_t       next_rg;        /* next row group to read */
-    uint32_t       last_rg;        /* exclusive upper bound (0 = use n_rowgroups) */
+    uint32_t       last_rg;        /* exclusive upper bound when last_rg_set */
+    int            last_rg_set;    /* 1 = last_rg is authoritative (0 is a valid bound) */
     int            rg_range_set;   /* 1 = binary search narrowed the range */
     VecExpr       *predicate;      /* pushed-down filter predicate (NULL = none) */
     int            pred_borrowed;  /* 1 = don't free predicate (owned by filter node) */
@@ -40,6 +41,10 @@ int scan_node_is_parallel_safe(const VecNode *node);
 
 /* Accessors for parallel I/O integration */
 const char   *scan_node_get_path(const VecNode *node);
+
+/* Names the .vtri index this scan's predicate will probe, for explain().
+   Returns 1 and writes the indexed columns into buf, or 0 if none applies. */
+int scan_node_index_desc(const VecNode *node, char *buf, int bufsize);
 Vtr1TdcFile  *scan_node_get_file(const VecNode *node);
 const int    *scan_node_get_col_mask(const VecNode *node);
 

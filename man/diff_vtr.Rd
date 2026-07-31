@@ -37,6 +37,16 @@ This is a \strong{logical diff} (key-based set difference), not a binary file
 diff.  Rows with the same key that have changed values are not reported
 as modified — use \code{added} and \code{deleted} together to detect updates (a key
 that appears in both means a row was replaced).
+
+\code{key_col} is treated as a \strong{primary key}: keys are assumed unique within
+each file, so if the same key appears on several rows of \code{new_path} only one
+is reported in \code{added}.
+
+Both files are streamed through the external sort (keyed by \code{key_col}) and
+merged in a single forward pass, so peak memory is bounded by the sort's
+spill budget (\code{\link[=vectra_mem]{vectra_mem()}}) rather than by the number of distinct keys.
+The added rows stream to a temp file; only the returned \code{deleted} key vector
+is materialised (its size is the number of deleted keys).
 }
 \examples{
 f1 <- tempfile(fileext = ".vtr")

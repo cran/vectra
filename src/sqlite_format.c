@@ -3,7 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <math.h>
+
+/* 64-bit file offsets: a SQLite database easily exceeds 2 GB, where a plain
+   fseek/(long) cast wraps on LLP64 Windows and seeks to the wrong page. Use the
+   wide seek everywhere, matching byte_reader.c. */
+#if defined(_WIN32)
+  #define SQLFMT_FSEEK64(fp, off) _fseeki64((fp), (int64_t)(off), SEEK_SET)
+#else
+  #define SQLFMT_FSEEK64(fp, off) fseeko((fp), (off_t)(off), SEEK_SET)
+#endif
 
 /* ================================================================== */
 /*  Part 1: Utilities — big-endian I/O, varint codec                   */
@@ -90,6 +100,14 @@ static int write_varint(uint8_t *p, int64_t val) {
 
 #define MAX_BTREE_DEPTH 20
 #define PAGE1_HEADER_OFFSET 100 /* B-tree header on page 1 starts at 100 */
+/* Reject a cell whose declared payload exceeds this: a corrupt varint can claim
+   a multi-GB payload and drive a huge realloc + over-read. Well past any real
+   SQLite row (SQLITE_MAX_LENGTH defaults to ~1e9). */
+#define SQLFMT_MAX_PAYLOAD ((int64_t)1 << 31)
+/* Slack appended to a page buffer so the two leaf-cell header varints (payload
+   size + rowid, up to 18 bytes total) read near the page end stay inside the
+   allocation even for a corrupt cell pointer at the last byte. */
+#define SQLFMT_PAGE_SLACK 24
 
 typedef struct {
     uint32_t page_no;
@@ -137,7 +155,7 @@ struct SqlfmtReader {
 
 static int read_page(SqlfmtReader *r, uint32_t page_no, uint8_t *buf) {
     int64_t offset = (int64_t)(page_no - 1) * r->page_size;
-    if (fseek(r->fp, (long)offset, SEEK_SET) != 0) return -1;
+    if (SQLFMT_FSEEK64(r->fp, offset) != 0) return -1;
     if (fread(buf, 1, r->page_size, r->fp) != r->page_size) return -1;
     return 0;
 }
@@ -150,7 +168,7 @@ static int init_level(SqlfmtReader *r, int lvl, uint32_t page_no) {
     L->hdr_offset = (page_no == 1) ? PAGE1_HEADER_OFFSET : 0;
 
     if (!L->page_buf) {
-        L->page_buf = (uint8_t *)malloc(r->page_size);
+        L->page_buf = (uint8_t *)malloc(r->page_size + SQLFMT_PAGE_SLACK);
         if (!L->page_buf) return -1;
     }
     if (read_page(r, page_no, L->page_buf) != 0) return -1;
@@ -160,6 +178,15 @@ static int init_level(SqlfmtReader *r, int lvl, uint32_t page_no) {
     L->is_leaf = (ptype == 0x0D);
     L->n_cells = read_be16(hdr + 3);
     L->right_child = L->is_leaf ? 0 : read_be32(hdr + 8);
+
+    /* The cell-pointer array (hdr + 8 or 12, two bytes per cell) must fit
+       inside the page, or cell_ptr() would read pointer slots past the
+       allocation. A declared n_cells too large for the page is corrupt. */
+    int cell_hdr = L->is_leaf ? 8 : 12;
+    if ((int64_t)L->hdr_offset + cell_hdr + 2 * (int64_t)L->n_cells >
+        (int64_t)r->page_size) {
+        return -1;
+    }
     return 0;
 }
 
@@ -183,6 +210,18 @@ static int64_t serial_type_len(int st) {
     return 0;
 }
 
+/* Bytes of a table-leaf cell payload stored locally; the remainder spills to
+   overflow pages. This is SQLite's page-format formula (reserved region is 0
+   for our writer). Reader and writer share it so a cell round-trips and files
+   are readable by real SQLite. */
+static int64_t sqlfmt_local_payload(uint32_t usable, int64_t payload) {
+    int64_t max_local = (int64_t)usable - 35;
+    if (payload <= max_local) return payload;
+    int64_t min_local = ((int64_t)usable - 12) * 32 / 255 - 23;
+    int64_t k = min_local + (payload - min_local) % ((int64_t)usable - 4);
+    return (k <= max_local) ? k : min_local;
+}
+
 /* Read a cell payload, handling overflow pages.
    cell_data points to the start of the payload (after rowid varint for leaf cells).
    total_payload = declared payload size.
@@ -190,7 +229,9 @@ static int64_t serial_type_len(int st) {
 static int read_payload(SqlfmtReader *r, const uint8_t *cell_data,
                          int64_t total_payload, int64_t local_size,
                          uint32_t overflow_page) {
-    if (total_payload > r->record_cap) {
+    /* Keep >= 9 bytes of headroom past record_len so parse_record's serial-type
+       varint scan (up to 9 bytes) near the header end stays in the allocation. */
+    if (total_payload + 9 > r->record_cap) {
         r->record_cap = total_payload + 256;
         r->record_buf = (uint8_t *)realloc(r->record_buf, (size_t)r->record_cap);
         if (!r->record_buf) return -1;
@@ -232,16 +273,22 @@ static int parse_record(SqlfmtReader *r) {
     const uint8_t *p = r->record_buf;
     int64_t hdr_size;
     int off = read_varint(p, &hdr_size);
+    /* The header size includes its own varint and cannot exceed the record. */
+    if (hdr_size < off || hdr_size > r->record_len) return -1;
 
     int ncol = 0;
     int64_t data_offset = hdr_size;
     while (off < hdr_size && ncol < SQLFMT_MAX_COLS) {
         int64_t st;
         off += read_varint(p + off, &st);
+        int64_t len = serial_type_len((int)st);
+        /* A value that spills past the record end would let the value readers
+           over-read record_buf; a corrupt header is rejected rather than trusted. */
+        if (len < 0 || data_offset + len > r->record_len) return -1;
         r->cols[ncol].serial_type = (int)st;
         r->cols[ncol].offset = data_offset;
-        r->cols[ncol].length = serial_type_len((int)st);
-        data_offset += r->cols[ncol].length;
+        r->cols[ncol].length = len;
+        data_offset += len;
         ncol++;
     }
     r->cur_n_cols = ncol;
@@ -254,7 +301,9 @@ static int read_leaf_cell(SqlfmtReader *r) {
     if (L->cell_idx >= L->n_cells) return 0;
 
     uint16_t cp = cell_ptr(L, L->cell_idx);
+    if (cp >= r->page_size) return -1;   /* corrupt cell pointer */
     const uint8_t *cell = L->page_buf + cp;
+    int64_t page_avail = (int64_t)r->page_size - cp;  /* bytes left in page */
     int off = 0;
 
     /* Payload size (varint) */
@@ -266,19 +315,16 @@ static int read_leaf_cell(SqlfmtReader *r) {
     off += read_varint(cell + off, &rowid);
     (void)rowid;
 
+    if (payload_size < 0 || payload_size > SQLFMT_MAX_PAYLOAD) return -1;
+
     /* Compute local payload size and overflow page */
     uint32_t usable = r->page_size - r->reserved;
-    int64_t X = (int64_t)usable - 35;
-    int64_t local_size;
+    int64_t local_size = sqlfmt_local_payload(usable, payload_size);
+    if (local_size < 0 || off + local_size > page_avail) return -1;  /* spills past page */
     uint32_t overflow_page = 0;
-
-    if (payload_size <= X) {
-        local_size = payload_size;
-    } else {
-        int64_t M = (((int64_t)usable - 12) * 32 / 255) - 23;
-        local_size = M;
-        if (local_size > payload_size) local_size = payload_size;
-        /* Overflow page number follows the local payload */
+    if (local_size < payload_size) {
+        /* Overflow page number (4 bytes) follows the local payload */
+        if (off + local_size + 4 > page_avail) return -1;
         overflow_page = read_be32(cell + off + (int)local_size);
     }
 
@@ -312,6 +358,7 @@ static int btree_next(SqlfmtReader *r) {
             uint32_t child;
             if (L->cell_idx < L->n_cells) {
                 uint16_t cp = cell_ptr(L, L->cell_idx);
+                if (cp + 4 > r->page_size) return -1;  /* corrupt cell pointer */
                 child = read_be32(L->page_buf + cp);
             } else {
                 child = L->right_child;
@@ -512,10 +559,29 @@ int sqlfmt_reader_open(const char *path, const char *table,
         return -1;
     }
 
-    /* Page size: 2 bytes at offset 16. Value of 1 means 65536. */
+    /* Page size: 2 bytes at offset 16. Value of 1 means 65536. Enforce
+       SQLite's own invariant (a power of two in [512, 65536]) before it is
+       used to size page buffers and offset every page read -- a corrupt or
+       hostile value would otherwise under-allocate page_buf and let the
+       page-1 header / cell-pointer reads run off the allocation. */
     uint16_t raw_ps = read_be16(hdr + 16);
     r->page_size = (raw_ps == 1) ? 65536 : (uint32_t)raw_ps;
+    if (r->page_size < 512 || r->page_size > 65536 ||
+        (r->page_size & (r->page_size - 1)) != 0) {
+        snprintf(r->errmsg, 256, "invalid SQLite page size (%u)", r->page_size);
+        *out = r;
+        return -1;
+    }
     r->reserved = hdr[20];
+    /* The usable region (page_size - reserved) must leave room for a minimal
+       page; SQLite requires it to be at least 480 bytes. Guarding here keeps
+       usable = page_size - reserved from underflowing downstream. */
+    if ((uint32_t)r->reserved > r->page_size - 480) {
+        snprintf(r->errmsg, 256, "invalid SQLite reserved region (%u)",
+                 (unsigned)r->reserved);
+        *out = r;
+        return -1;
+    }
     r->n_pages = read_be32(hdr + 28);
 
     /* Only support UTF-8 */
@@ -576,6 +642,16 @@ int sqlfmt_reader_col_type(SqlfmtReader *r, int col) {
     return SQLFMT_TEXT; /* blob → text fallback */
 }
 
+/* Decode an 8-byte IEEE 754 big-endian double from the record buffer. */
+static double read_be_f64(const uint8_t *p) {
+    uint64_t bits = 0;
+    for (int i = 0; i < 8; i++)
+        bits = (bits << 8) | p[i];
+    double d;
+    memcpy(&d, &bits, 8);
+    return d;
+}
+
 int64_t sqlfmt_reader_int64(SqlfmtReader *r, int col) {
     if (col < 0 || col >= r->cur_n_cols) return 0;
     int st = r->cols[col].serial_type;
@@ -585,43 +661,36 @@ int64_t sqlfmt_reader_int64(SqlfmtReader *r, int col) {
         return read_be_signed(r->record_buf + r->cols[col].offset,
                               (int)r->cols[col].length);
     }
+    if (st == 7) /* REAL stored in an integer column: truncate, like CAST */
+        return (int64_t)read_be_f64(r->record_buf + r->cols[col].offset);
     return 0;
 }
 
 double sqlfmt_reader_double(SqlfmtReader *r, int col) {
     if (col < 0 || col >= r->cur_n_cols) return 0.0;
     int st = r->cols[col].serial_type;
-    if (st == 7) {
-        /* IEEE 754 big-endian */
-        uint64_t bits = 0;
-        const uint8_t *p = r->record_buf + r->cols[col].offset;
-        for (int i = 0; i < 8; i++)
-            bits = (bits << 8) | p[i];
-        double d;
-        memcpy(&d, &bits, 8);
-        return d;
-    }
+    if (st == 7)
+        return read_be_f64(r->record_buf + r->cols[col].offset);
     /* Integer types → convert */
     return (double)sqlfmt_reader_int64(r, col);
 }
 
+/* Returns a pointer to the cell's raw text bytes inside record_buf (NOT
+   null-terminated), or NULL if the cell is not a text value (blob, numeric,
+   or a type-mismatched value in a text-affinity column). The matching byte
+   length is reported by sqlfmt_reader_bytes; the two are always consistent so
+   the caller's memcpy never reads past the returned buffer. */
 const char *sqlfmt_reader_text(SqlfmtReader *r, int col) {
-    if (col < 0 || col >= r->cur_n_cols) return "";
+    if (col < 0 || col >= r->cur_n_cols) return NULL;
     int st = r->cols[col].serial_type;
-    if (st < 13 || (st & 1) != 1) return "";
-    int64_t off = r->cols[col].offset;
-    int64_t len = r->cols[col].length;
-    /* Copy to a separate buffer to avoid clobbering adjacent record data
-       with the null terminator */
-    static char text_buf[65536];
-    if (len >= (int64_t)sizeof(text_buf)) len = sizeof(text_buf) - 1;
-    memcpy(text_buf, r->record_buf + off, (size_t)len);
-    text_buf[len] = '\0';
-    return text_buf;
+    if (st < 13 || (st & 1) != 1) return NULL; /* not a text serial type */
+    return (const char *)(r->record_buf + r->cols[col].offset);
 }
 
 int sqlfmt_reader_bytes(SqlfmtReader *r, int col) {
     if (col < 0 || col >= r->cur_n_cols) return 0;
+    int st = r->cols[col].serial_type;
+    if (st < 13 || (st & 1) != 1) return 0; /* consistent with reader_text NULL */
     return (int)r->cols[col].length;
 }
 
@@ -801,7 +870,7 @@ static void flush_leaf_page(SqlfmtWriter *w, int64_t max_rowid) {
     pg[7] = 0; /* fragmented free bytes */
 
     int64_t offset = (int64_t)(w->next_page_no - 1) * WRITER_PAGE_SIZE;
-    fseek(w->fp, (long)offset, SEEK_SET);
+    SQLFMT_FSEEK64(w->fp, offset);
     fwrite(pg, 1, WRITER_PAGE_SIZE, w->fp);
 
     /* Track this leaf */
@@ -908,13 +977,43 @@ int sqlfmt_writer_insert(SqlfmtWriter *w) {
 
     int64_t rowid = w->next_rowid++;
 
-    /* Build cell: payload_size(varint) + rowid(varint) + record */
+    /* A record larger than the local cell budget spills onto a chain of
+       overflow pages, exactly as the reader expects. Without this a large cell
+       (e.g. a text value bigger than a page) overflowed the page buffer. */
+    uint32_t usable = WRITER_PAGE_SIZE;
+    int64_t payload_size = (int64_t)rec.len;
+    int64_t local = sqlfmt_local_payload(usable, payload_size);
+
+    uint32_t first_ovfl = 0;
+    if (local < payload_size) {
+        first_ovfl = w->next_page_no;
+        int64_t remaining = payload_size - local;
+        const uint8_t *src = rec.data + local;
+        uint8_t obuf[WRITER_PAGE_SIZE];
+        while (remaining > 0) {
+            int64_t chunk = remaining < (int64_t)(usable - 4)
+                                ? remaining : (int64_t)(usable - 4);
+            memset(obuf, 0, WRITER_PAGE_SIZE);
+            uint32_t next = (remaining - chunk > 0) ? (w->next_page_no + 1) : 0;
+            write_be32(obuf, next);
+            memcpy(obuf + 4, src, (size_t)chunk);
+            int64_t offset = (int64_t)(w->next_page_no - 1) * WRITER_PAGE_SIZE;
+            SQLFMT_FSEEK64(w->fp, offset);
+            fwrite(obuf, 1, WRITER_PAGE_SIZE, w->fp);
+            w->next_page_no++;
+            src += chunk;
+            remaining -= chunk;
+        }
+    }
+
+    /* Build cell: payload_size(varint) + rowid(varint) + local payload
+       + [first overflow page number (be32) when spilled]. */
     uint8_t cell_hdr[18];
     int hdr_len = 0;
-    hdr_len += write_varint(cell_hdr + hdr_len, rec.len);
+    hdr_len += write_varint(cell_hdr + hdr_len, payload_size);
     hdr_len += write_varint(cell_hdr + hdr_len, rowid);
 
-    int cell_total = hdr_len + (int)rec.len;
+    int cell_total = hdr_len + (int)local + (first_ovfl ? 4 : 0);
 
     /* Check if cell fits in current page */
     int avail = w->cur_content_end - w->cur_ptr_end - 2; /* -2 for cell ptr */
@@ -926,9 +1025,11 @@ int sqlfmt_writer_insert(SqlfmtWriter *w) {
 
     /* Write cell content at end of page (growing down) */
     w->cur_content_end -= cell_total;
-    memcpy(w->cur_page + w->cur_content_end, cell_hdr, (size_t)hdr_len);
-    memcpy(w->cur_page + w->cur_content_end + hdr_len,
-           rec.data, (size_t)rec.len);
+    uint8_t *dst = w->cur_page + w->cur_content_end;
+    memcpy(dst, cell_hdr, (size_t)hdr_len);
+    memcpy(dst + hdr_len, rec.data, (size_t)local);
+    if (first_ovfl)
+        write_be32(dst + hdr_len + (int)local, first_ovfl);
 
     /* Write cell pointer */
     write_be16(w->cur_page + w->cur_ptr_end,
@@ -1007,7 +1108,7 @@ void sqlfmt_writer_close(SqlfmtWriter *w) {
         write_be16(ipage + 5, (uint16_t)content_end); /* content area start */
 
         int64_t offset = (int64_t)(data_root - 1) * WRITER_PAGE_SIZE;
-        fseek(w->fp, (long)offset, SEEK_SET);
+        SQLFMT_FSEEK64(w->fp, offset);
         fwrite(ipage, 1, WRITER_PAGE_SIZE, w->fp);
         w->next_page_no++;
     }
@@ -1134,7 +1235,7 @@ void sqlfmt_writer_close(SqlfmtWriter *w) {
     write_be16(page1 + 108, (uint16_t)p1_content_end);
 
     /* Write page 1 */
-    fseek(w->fp, 0, SEEK_SET);
+    SQLFMT_FSEEK64(w->fp, 0);
     fwrite(page1, 1, WRITER_PAGE_SIZE, w->fp);
 
     free(schema_rec.data);

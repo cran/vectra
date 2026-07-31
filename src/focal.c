@@ -120,11 +120,24 @@ SEXP C_focal_strip(SEXP in_sexp, SEXP dims_sexp, SEXP w_sexp, SEXP kdims_sexp,
 
     int parallel = (double)out_h * W * kh * kw > 50000.0;
 
+    /* One scratch buffer per thread (kh*kw is small and constant), NULL-checked
+       via an OOM latch raised on the master after the region -- erroring from a
+       worker thread would longjmp out of OpenMP. */
+    volatile int oom = 0;
     #ifdef _OPENMP
-    #pragma omp parallel for if(parallel) schedule(static)
+    #pragma omp parallel if(parallel)
+    #endif
+    {
+    double *vals = (double *)malloc((size_t)kh * kw * sizeof(double));
+    if (!vals) {
+        #pragma omp atomic write
+        oom = 1;
+    }
+    #ifdef _OPENMP
+    #pragma omp for schedule(static)
     #endif
     for (int i = 0; i < out_h; ++i) {
-        double *vals = (double *)malloc((size_t)kh * kw * sizeof(double));
+        if (oom) continue;
         int ir0 = top + i;
         for (int c = 0; c < W; ++c) {
             int m = 0, tainted = 0;
@@ -151,9 +164,11 @@ SEXP C_focal_strip(SEXP in_sexp, SEXP dims_sexp, SEXP w_sexp, SEXP kdims_sexp,
             }
             o[(size_t)c * out_h + i] = focal_reduce(fun, vals, m, sw, swv, tainted);
         }
-        free(vals);
+    }
+    free(vals);
     }
 
+    if (oom) { UNPROTECT(1); vectra_error("focal: allocation failed"); }
     UNPROTECT(1);
     return out;
 }
@@ -407,7 +422,9 @@ SEXP C_vecr_writer_write_strip(SEXP ptr_sexp, SEXP band_sexp, SEXP ty_sexp,
     size_t esz = vecr_dtype_size(fdt);
     void *buf = malloc((size_t)strip_h * W * esz);
     if (!buf) { free(row); vectra_error("alloc failed for strip cast"); }
-    vecr_cast_doubles_to_dtype(row, (int64_t)strip_h * W, fdt, buf);
+    vecr_cast_doubles_to_dtype(row, (int64_t)strip_h * W, fdt,
+                               vecr_writer_has_nodata(w), vecr_writer_nodata(w),
+                               buf);
     free(row);
 
     int rc = vecr_writer_write_tile_row(w, band, ty, buf, strip_h);

@@ -8,7 +8,18 @@
 #include <string.h>
 #include <ctype.h>
 #include <regex.h>
+#include <math.h>
 #include "vec_omp.h"
+
+/* Case-insensitive byte compare: 1 if a[0..n) equals b[0..n) ignoring ASCII
+   case. Used for fixed (non-regex) matching with ignore.case = TRUE. */
+static inline int mem_ci_eq(const char *a, const char *b, size_t n) {
+    for (size_t k = 0; k < n; k++) {
+        if (tolower((unsigned char)a[k]) != tolower((unsigned char)b[k]))
+            return 0;
+    }
+    return 1;
+}
 
 /* Expand regex backreferences (\1..\9) in replacement string.
    Writes expanded replacement to dst, returns bytes written. */
@@ -64,6 +75,33 @@ static double jaro_winkler_sim(const char *s, int64_t len_s,
     return strdist_jaro_winkler(s, len_s, t, len_t);
 }
 
+/* %in% helpers: read a numeric operand cell as the comparison key bits.
+ * For VEC_DOUBLE keys, -0.0 is normalized to +0.0 so it hashes and compares
+ * equal to +0.0 (matching R); an int64/bool operand promotes to double. For
+ * VEC_INT64 keys, a bool operand promotes to int64. Both produce an 8-byte key
+ * so one bit-keyed hash set serves both numeric comparison types. */
+static inline uint64_t in_key_from_operand(const VecArray *o, int64_t i,
+                                           VecType set_type) {
+    uint64_t bits;
+    if (set_type == VEC_DOUBLE) {
+        double v = (o->type == VEC_DOUBLE) ? o->buf.dbl[i]
+                 : (o->type == VEC_INT64)  ? (double)o->buf.i64[i]
+                 :                           (double)o->buf.bln[i];
+        if (v == 0.0) v = 0.0; /* collapse -0.0 to +0.0 */
+        memcpy(&bits, &v, sizeof(bits));
+    } else {
+        int64_t v = (o->type == VEC_INT64) ? o->buf.i64[i]
+                  : (o->type == VEC_DOUBLE) ? (int64_t)o->buf.dbl[i]
+                  :                           (int64_t)o->buf.bln[i];
+        memcpy(&bits, &v, sizeof(bits));
+    }
+    return bits;
+}
+
+static inline uint64_t in_key_hash(uint64_t bits) {
+    return bits * 0x00000100000001B3ULL ^ 0xcbf29ce484222325ULL;
+}
+
 VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
                                 const VecBatch *batch) {
     switch (op) {
@@ -102,13 +140,14 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
                 continue;
             int64_t slen = s->buf.str.offsets[i + 1] - s->buf.str.offsets[i];
             int64_t st = (start_a->type == VEC_DOUBLE)
-                         ? (int64_t)start_a->buf.dbl[i]
+                         ? vec_d2i_saturate(start_a->buf.dbl[i])
                          : start_a->buf.i64[i];
             int64_t sp = (stop_a->type == VEC_DOUBLE)
-                         ? (int64_t)stop_a->buf.dbl[i]
+                         ? vec_d2i_saturate(stop_a->buf.dbl[i])
                          : stop_a->buf.i64[i];
-            st = st - 1; /* R is 1-based */
-            if (st < 0) st = 0;
+            /* R is 1-based. Clamp before subtracting: a saturated st == INT64_MIN
+               would overflow (UB) on st - 1. Any start <= 1 clamps to 0 anyway. */
+            if (st > 0) st = st - 1; else st = 0;
             if (sp > slen) sp = slen;
             if (sp > st) total_len += sp - st;
         }
@@ -132,13 +171,12 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
             int64_t so = s->buf.str.offsets[i];
             int64_t slen = s->buf.str.offsets[i + 1] - so;
             int64_t st = (start_a->type == VEC_DOUBLE)
-                         ? (int64_t)start_a->buf.dbl[i]
+                         ? vec_d2i_saturate(start_a->buf.dbl[i])
                          : start_a->buf.i64[i];
             int64_t sp = (stop_a->type == VEC_DOUBLE)
-                         ? (int64_t)stop_a->buf.dbl[i]
+                         ? vec_d2i_saturate(stop_a->buf.dbl[i])
                          : stop_a->buf.i64[i];
-            st = st - 1;
-            if (st < 0) st = 0;
+            if (st > 0) st = st - 1; else st = 0;  /* clamp before -1 (avoid INT64_MIN UB) */
             if (sp > slen) sp = slen;
             int64_t sub_len = (sp > st) ? sp - st : 0;
             if (sub_len > 0) {
@@ -165,27 +203,41 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
         VecArray *out = (VecArray *)malloc(sizeof(VecArray));
         *out = vec_array_alloc(VEC_BOOL, n);
 
+        int re_flags = REG_EXTENDED | REG_NOSUB;
+        if (expr->ignore_case) re_flags |= REG_ICASE;
         if (!expr->fixed) {
             /* Regex mode — parallel with per-thread compiled regex */
             regex_t re_check;
-            if (regcomp(&re_check, pattern, REG_EXTENDED | REG_NOSUB) != 0)
+            if (regcomp(&re_check, pattern, re_flags) != 0)
                 vectra_error("grepl: invalid regex pattern: %s", pattern);
             regfree(&re_check);
+            volatile int oom = 0;
             #pragma omp parallel if(n > 1000)
             {
                 regex_t re_local;
-                regcomp(&re_local, pattern, REG_EXTENDED | REG_NOSUB);
+                regcomp(&re_local, pattern, re_flags);
                 int64_t tl_cap = 256;
                 char *tl_buf = (char *)malloc((size_t)tl_cap);
+                if (!tl_buf) {
+                    #pragma omp atomic write
+                    oom = 1;
+                }
                 #pragma omp for schedule(dynamic, 64)
                 for (int64_t i = 0; i < n; i++) {
+                    if (oom) continue;
                     if (!vec_array_is_valid(s, i)) { vec_array_set_null(out, i); continue; }
                     vec_array_set_valid(out, i);
                     int64_t so = s->buf.str.offsets[i];
                     int64_t slen = s->buf.str.offsets[i + 1] - so;
                     if (slen + 1 > tl_cap) {
+                        char *nb = (char *)realloc(tl_buf, (size_t)(slen + 1));
+                        if (!nb) {
+                            #pragma omp atomic write
+                            oom = 1;
+                            continue;
+                        }
+                        tl_buf = nb;
                         tl_cap = slen + 1;
-                        tl_buf = (char *)realloc(tl_buf, (size_t)tl_cap);
                     }
                     memcpy(tl_buf, s->buf.str.data + so, (size_t)slen);
                     tl_buf[slen] = '\0';
@@ -194,6 +246,7 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
                 free(tl_buf);
                 regfree(&re_local);
             }
+            if (oom) vectra_error("grepl: alloc failed");
         } else {
             /* Fixed substring match */
             for (int64_t i = 0; i < n; i++) {
@@ -204,8 +257,11 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
                 int found = 0;
                 if (pat_len <= slen) {
                     for (int64_t j = 0; j <= slen - pat_len; j++) {
-                        if (memcmp(s->buf.str.data + so + j, pattern, (size_t)pat_len) == 0)
-                            { found = 1; break; }
+                        const char *hay = s->buf.str.data + so + j;
+                        int eq = expr->ignore_case
+                                     ? (mem_ci_eq(hay, pattern, (size_t)pat_len))
+                                     : (memcmp(hay, pattern, (size_t)pat_len) == 0);
+                        if (eq) { found = 1; break; }
                     }
                 }
                 out->buf.bln[i] = (uint8_t)found;
@@ -277,107 +333,125 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
         VecArray *o = vec_expr_eval(expr->operand, batch);
         int64_t n = o->length;
         int64_t ns = expr->n_set;
+        VecType st = expr->set_type;
         VecArray *out = (VecArray *)malloc(sizeof(VecArray));
         *out = vec_array_alloc(VEC_BOOL, n);
 
-        /* For large sets, build a hash set for O(1) lookup */
-        if (ns > 16) {
-            /* FNV-1a hash set with open addressing */
-            int64_t ht_cap = 1;
-            while (ht_cap < ns * 2) ht_cap <<= 1;
-            int64_t mask = ht_cap - 1;
-            uint64_t *ht_hashes = (uint64_t *)calloc((size_t)ht_cap, sizeof(uint64_t));
-            int8_t *ht_used = (int8_t *)calloc((size_t)ht_cap, sizeof(int8_t));
-            int64_t *ht_idx = (int64_t *)malloc((size_t)ht_cap * sizeof(int64_t));
-            /* Insert set values */
-            for (int64_t j = 0; j < ns; j++) {
-                uint64_t h;
-                if (o->type == VEC_DOUBLE) {
-                    double v = expr->set_dbl[j];
-                    memcpy(&h, &v, sizeof(h));
-                    h = h * 0x00000100000001B3ULL ^ 0xcbf29ce484222325ULL;
-                } else if (o->type == VEC_INT64) {
-                    int64_t v = expr->set_i64[j];
-                    memcpy(&h, &v, sizeof(h));
-                    h = h * 0x00000100000001B3ULL ^ 0xcbf29ce484222325ULL;
-                } else {
+        if (st == VEC_STRING) {
+            if (o->type != VEC_STRING)
+                vectra_error("%%in%%: a character set can only match a string column");
+            if (ns > 16) {
+                /* FNV-1a hash set over the string set */
+                int64_t ht_cap = 1;
+                while (ht_cap < ns * 2) ht_cap <<= 1;
+                int64_t mask = ht_cap - 1;
+                uint64_t *ht_hashes = (uint64_t *)calloc((size_t)ht_cap, sizeof(uint64_t));
+                int8_t *ht_used = (int8_t *)calloc((size_t)ht_cap, sizeof(int8_t));
+                int64_t *ht_idx = (int64_t *)malloc((size_t)ht_cap * sizeof(int64_t));
+                for (int64_t j = 0; j < ns; j++) {
                     const char *s = expr->set_str[j];
-                    h = 0xcbf29ce484222325ULL;
+                    uint64_t h = 0xcbf29ce484222325ULL;
                     for (const char *p = s; *p; p++)
                         h = (h ^ (uint8_t)*p) * 0x00000100000001B3ULL;
+                    int64_t slot = (int64_t)(h & (uint64_t)mask);
+                    while (ht_used[slot]) slot = (slot + 1) & mask;
+                    ht_hashes[slot] = h; ht_used[slot] = 1; ht_idx[slot] = j;
                 }
-                int64_t slot = (int64_t)(h & (uint64_t)mask);
-                while (ht_used[slot]) slot = (slot + 1) & mask;
-                ht_hashes[slot] = h;
-                ht_used[slot] = 1;
-                ht_idx[slot] = j;
-            }
-            for (int64_t i = 0; i < n; i++) {
-                if (!vec_array_is_valid(o, i)) { vec_array_set_null(out, i); continue; }
-                vec_array_set_valid(out, i);
-                uint64_t h;
-                if (o->type == VEC_DOUBLE) {
-                    double v = o->buf.dbl[i];
-                    memcpy(&h, &v, sizeof(h));
-                    h = h * 0x00000100000001B3ULL ^ 0xcbf29ce484222325ULL;
-                } else if (o->type == VEC_INT64) {
-                    int64_t v = o->buf.i64[i];
-                    memcpy(&h, &v, sizeof(h));
-                    h = h * 0x00000100000001B3ULL ^ 0xcbf29ce484222325ULL;
-                } else {
+                for (int64_t i = 0; i < n; i++) {
+                    if (!vec_array_is_valid(o, i)) { vec_array_set_valid(out, i); out->buf.bln[i] = (uint8_t)expr->set_has_na; continue; }
+                    vec_array_set_valid(out, i);
                     int64_t so2 = o->buf.str.offsets[i], eo2 = o->buf.str.offsets[i + 1];
-                    h = 0xcbf29ce484222325ULL;
+                    int64_t slen2 = eo2 - so2;
+                    uint64_t h = 0xcbf29ce484222325ULL;
                     for (int64_t k = so2; k < eo2; k++)
                         h = (h ^ (uint8_t)o->buf.str.data[k]) * 0x00000100000001B3ULL;
-                }
-                int found = 0;
-                int64_t slot = (int64_t)(h & (uint64_t)mask);
-                while (ht_used[slot]) {
-                    if (ht_hashes[slot] == h) {
-                        int64_t j = ht_idx[slot];
-                        /* Verify equality */
-                        if (o->type == VEC_DOUBLE) {
-                            if (o->buf.dbl[i] == expr->set_dbl[j]) { found = 1; break; }
-                        } else if (o->type == VEC_INT64) {
-                            if (o->buf.i64[i] == expr->set_i64[j]) { found = 1; break; }
-                        } else {
-                            int64_t so2 = o->buf.str.offsets[i], eo2 = o->buf.str.offsets[i + 1];
-                            int64_t slen2 = eo2 - so2;
+                    int found = 0;
+                    int64_t slot = (int64_t)(h & (uint64_t)mask);
+                    while (ht_used[slot]) {
+                        if (ht_hashes[slot] == h) {
+                            int64_t j = ht_idx[slot];
                             int64_t clen = (int64_t)strlen(expr->set_str[j]);
                             if (slen2 == clen && memcmp(o->buf.str.data + so2, expr->set_str[j], (size_t)slen2) == 0)
                                 { found = 1; break; }
                         }
+                        slot = (slot + 1) & mask;
                     }
-                    slot = (slot + 1) & mask;
+                    out->buf.bln[i] = (uint8_t)found;
                 }
-                out->buf.bln[i] = (uint8_t)found;
-            }
-            free(ht_hashes); free(ht_used); free(ht_idx);
-        } else {
-            /* Small set: linear scan */
-            for (int64_t i = 0; i < n; i++) {
-                if (!vec_array_is_valid(o, i)) { vec_array_set_null(out, i); continue; }
-                vec_array_set_valid(out, i);
-                int found = 0;
-                if (o->type == VEC_DOUBLE) {
-                    double v = o->buf.dbl[i];
-                    for (int64_t j = 0; j < ns; j++)
-                        if (v == expr->set_dbl[j]) { found = 1; break; }
-                } else if (o->type == VEC_INT64) {
-                    int64_t v = o->buf.i64[i];
-                    for (int64_t j = 0; j < ns; j++)
-                        if (v == expr->set_i64[j]) { found = 1; break; }
-                } else if (o->type == VEC_STRING) {
+                free(ht_hashes); free(ht_used); free(ht_idx);
+            } else {
+                for (int64_t i = 0; i < n; i++) {
+                    if (!vec_array_is_valid(o, i)) { vec_array_set_valid(out, i); out->buf.bln[i] = (uint8_t)expr->set_has_na; continue; }
+                    vec_array_set_valid(out, i);
                     int64_t so2 = o->buf.str.offsets[i], eo2 = o->buf.str.offsets[i + 1];
                     int64_t slen2 = eo2 - so2;
+                    int found = 0;
                     for (int64_t j = 0; j < ns; j++) {
                         int64_t clen = (int64_t)strlen(expr->set_str[j]);
                         if (slen2 == clen && memcmp(o->buf.str.data + so2, expr->set_str[j], (size_t)slen2) == 0)
                             { found = 1; break; }
                     }
+                    out->buf.bln[i] = (uint8_t)found;
                 }
-                out->buf.bln[i] = (uint8_t)found;
             }
+        } else {
+            /* numeric %in%: the set is coerced (at parse) to the operand's
+             * comparison type, so both sides reduce to an 8-byte key and one
+             * bit-keyed hash/linear routine serves VEC_DOUBLE and VEC_INT64. */
+            if (o->type == VEC_STRING)
+                vectra_error("%%in%%: a numeric set cannot match a string column");
+            uint64_t *set_keys = (uint64_t *)malloc((size_t)(ns > 0 ? ns : 1) * sizeof(uint64_t));
+            for (int64_t j = 0; j < ns; j++) {
+                uint64_t bits;
+                if (st == VEC_DOUBLE) {
+                    double v = expr->set_dbl[j];
+                    if (v == 0.0) v = 0.0; /* collapse -0.0 to +0.0 */
+                    memcpy(&bits, &v, sizeof(bits));
+                } else {
+                    int64_t v = expr->set_i64[j];
+                    memcpy(&bits, &v, sizeof(bits));
+                }
+                set_keys[j] = bits;
+            }
+            if (ns > 16) {
+                int64_t ht_cap = 1;
+                while (ht_cap < ns * 2) ht_cap <<= 1;
+                int64_t mask = ht_cap - 1;
+                uint64_t *ht_hashes = (uint64_t *)calloc((size_t)ht_cap, sizeof(uint64_t));
+                int8_t *ht_used = (int8_t *)calloc((size_t)ht_cap, sizeof(int8_t));
+                int64_t *ht_idx = (int64_t *)malloc((size_t)ht_cap * sizeof(int64_t));
+                for (int64_t j = 0; j < ns; j++) {
+                    uint64_t h = in_key_hash(set_keys[j]);
+                    int64_t slot = (int64_t)(h & (uint64_t)mask);
+                    while (ht_used[slot]) slot = (slot + 1) & mask;
+                    ht_hashes[slot] = h; ht_used[slot] = 1; ht_idx[slot] = j;
+                }
+                for (int64_t i = 0; i < n; i++) {
+                    if (!vec_array_is_valid(o, i)) { vec_array_set_valid(out, i); out->buf.bln[i] = (uint8_t)expr->set_has_na; continue; }
+                    vec_array_set_valid(out, i);
+                    uint64_t kb = in_key_from_operand(o, i, st);
+                    uint64_t h = in_key_hash(kb);
+                    int found = 0;
+                    int64_t slot = (int64_t)(h & (uint64_t)mask);
+                    while (ht_used[slot]) {
+                        if (ht_hashes[slot] == h && set_keys[ht_idx[slot]] == kb) { found = 1; break; }
+                        slot = (slot + 1) & mask;
+                    }
+                    out->buf.bln[i] = (uint8_t)found;
+                }
+                free(ht_hashes); free(ht_used); free(ht_idx);
+            } else {
+                for (int64_t i = 0; i < n; i++) {
+                    if (!vec_array_is_valid(o, i)) { vec_array_set_valid(out, i); out->buf.bln[i] = (uint8_t)expr->set_has_na; continue; }
+                    vec_array_set_valid(out, i);
+                    uint64_t kb = in_key_from_operand(o, i, st);
+                    int found = 0;
+                    for (int64_t j = 0; j < ns; j++)
+                        if (set_keys[j] == kb) { found = 1; break; }
+                    out->buf.bln[i] = (uint8_t)found;
+                }
+            }
+            free(set_keys);
         }
         vec_array_free(o); free(o);
         return out;
@@ -469,7 +543,9 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
             /* Regex mode: compile regex, two-pass replacement with backreference support */
             #define MAX_GROUPS 10
             regex_t re;
-            if (regcomp(&re, pat, REG_EXTENDED) != 0)
+            int re_flags = REG_EXTENDED;
+            if (expr->ignore_case) re_flags |= REG_ICASE;
+            if (regcomp(&re, pat, re_flags) != 0)
                 vectra_error("gsub/sub: invalid regex: %s", pat);
 
             /* Pass 1: compute output lengths (reusable buffer) */
@@ -560,7 +636,10 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
             int64_t out_len = 0, j = 0;
             int replaced = 0;
             while (j <= slen - plen) {
-                if (memcmp(s->buf.str.data + so + j, pat, (size_t)plen) == 0 && !(only_first && replaced)) {
+                const char *hay = s->buf.str.data + so + j;
+                int eq = expr->ignore_case ? mem_ci_eq(hay, pat, (size_t)plen)
+                                           : (memcmp(hay, pat, (size_t)plen) == 0);
+                if (eq && !(only_first && replaced)) {
                     out_len += rlen;
                     j += plen;
                     replaced = 1;
@@ -590,7 +669,10 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
             int64_t j = 0;
             int replaced = 0;
             while (j <= slen - plen) {
-                if (memcmp(s->buf.str.data + so + j, pat, (size_t)plen) == 0 && !(only_first && replaced)) {
+                const char *hay = s->buf.str.data + so + j;
+                int eq = expr->ignore_case ? mem_ci_eq(hay, pat, (size_t)plen)
+                                           : (memcmp(hay, pat, (size_t)plen) == 0);
+                if (eq && !(only_first && replaced)) {
                     if (rlen > 0) memcpy(out->buf.str.data + off, rep, (size_t)rlen);
                     off += rlen;
                     j += plen;
@@ -796,16 +878,16 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
             }
         }
 
-        /* Pass 1: compute total output length */
+        /* Pass 1: compute total output length. An NA operand stringifies to the
+           literal "NA" (2 bytes), matching base R (paste never yields NA); the
+           row is never nulled. */
         int64_t total = 0;
         for (int64_t i = 0; i < n; i++) {
-            int any_na = 0;
             for (int64_t c = 0; c < nc; c++) {
-                if (!vec_array_is_valid(args[c], i)) { any_na = 1; break; }
-            }
-            if (any_na) continue;
-            for (int64_t c = 0; c < nc; c++) {
-                total += args[c]->buf.str.offsets[i+1] - args[c]->buf.str.offsets[i];
+                if (vec_array_is_valid(args[c], i))
+                    total += args[c]->buf.str.offsets[i+1] - args[c]->buf.str.offsets[i];
+                else
+                    total += 2; /* "NA" */
                 if (c < nc - 1) total += sep_len;
             }
         }
@@ -816,21 +898,22 @@ VecArray *vec_expr_eval_string(VecExprKind op, const VecExpr *expr,
         out->buf.str.data = (char *)malloc((size_t)(total > 0 ? total : 1));
         out->buf.str.data_len = total;
 
-        /* Pass 2: fill */
+        /* Pass 2: fill. An NA operand contributes the literal "NA" (2 bytes),
+           kept identical to the length pass; the output row is always valid. */
         int64_t off = 0;
         for (int64_t i = 0; i < n; i++) {
             out->buf.str.offsets[i] = off;
-            int any_na = 0;
-            for (int64_t c = 0; c < nc; c++) {
-                if (!vec_array_is_valid(args[c], i)) { any_na = 1; break; }
-            }
-            if (any_na) { vec_array_set_null(out, i); continue; }
             vec_array_set_valid(out, i);
             for (int64_t c = 0; c < nc; c++) {
-                int64_t s = args[c]->buf.str.offsets[i];
-                int64_t l = args[c]->buf.str.offsets[i+1] - s;
-                if (l > 0) memcpy(out->buf.str.data + off, args[c]->buf.str.data + s, (size_t)l);
-                off += l;
+                if (vec_array_is_valid(args[c], i)) {
+                    int64_t s = args[c]->buf.str.offsets[i];
+                    int64_t l = args[c]->buf.str.offsets[i+1] - s;
+                    if (l > 0) memcpy(out->buf.str.data + off, args[c]->buf.str.data + s, (size_t)l);
+                    off += l;
+                } else {
+                    memcpy(out->buf.str.data + off, "NA", 2);
+                    off += 2;
+                }
                 if (c < nc - 1 && sep_len > 0) {
                     memcpy(out->buf.str.data + off, sep, (size_t)sep_len);
                     off += sep_len;

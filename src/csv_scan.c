@@ -309,11 +309,14 @@ static VecType *csv_infer_types(ByteReader *rd, int n_cols, int64_t infer_n,
 /* ------------------------------------------------------------------ */
 
 /* Parse a field value into the appropriate column array at row index i.
-   Sets validity bits. */
-static void csv_parse_cell(VecArray *col, int64_t i, const char *val) {
+   Sets validity bits. Returns 1 when a non-NA token failed to parse to the
+   inferred column type (the cell is set to NA as documented for guess_max,
+   but the caller latches this so the loss is reported once instead of being
+   silent); returns 0 for a genuine NA or a successful parse. */
+static int csv_parse_cell(VecArray *col, int64_t i, const char *val) {
     if (is_na_field(val)) {
         vec_array_set_null(col, i);
-        return;
+        return 0;
     }
     vec_array_set_valid(col, i);
 
@@ -323,31 +326,41 @@ static void csv_parse_cell(VecArray *col, int64_t i, const char *val) {
     case VEC_INT16:
     case VEC_INT32: {
         int64_t v;
-        if (try_parse_int64(val, &v))
+        if (try_parse_int64(val, &v)) {
             col->buf.i64[i] = v;
-        else
-            vec_array_set_null(col, i); /* shouldn't happen after inference */
+        } else {
+            vec_array_set_null(col, i); /* value outside the inferred int type */
+            return 1;
+        }
         break;
     }
     case VEC_DOUBLE: {
         double v;
-        if (try_parse_double(val, &v))
+        if (try_parse_double(val, &v)) {
             col->buf.dbl[i] = v;
-        else
+        } else {
             vec_array_set_null(col, i);
+            return 1;
+        }
         break;
     }
     case VEC_BOOL:
         if (strcmp(val, "TRUE") == 0 || strcmp(val, "true") == 0 ||
             strcmp(val, "True") == 0)
             col->buf.bln[i] = 1;
-        else
+        else if (strcmp(val, "FALSE") == 0 || strcmp(val, "false") == 0 ||
+                 strcmp(val, "False") == 0)
             col->buf.bln[i] = 0;
+        else {
+            vec_array_set_null(col, i); /* not a bool token past guess_max -> NA */
+            return 1;
+        }
         break;
     case VEC_STRING:
         /* Strings are accumulated in a second pass — handled by caller */
         break;
     }
+    return 0;
 }
 
 /* Read up to batch_size rows into a VecBatch. Returns NULL on EOF. */
@@ -450,8 +463,15 @@ static VecBatch *csv_read_batch(CsvScanNode *sn) {
             }
             arr.buf.str.offsets[n_rows] = offset;
         } else {
-            for (int64_t r = 0; r < n_rows; r++)
-                csv_parse_cell(&arr, r, rows_data[r][c]);
+            for (int64_t r = 0; r < n_rows; r++) {
+                if (csv_parse_cell(&arr, r, rows_data[r][c]) &&
+                    !sn->coercion_warned && !sn->coercion_pending) {
+                    /* Latch the first column whose value did not fit the
+                       inferred type; the main-thread return path warns once. */
+                    sn->coercion_pending = 1;
+                    sn->coercion_col = c;
+                }
+            }
         }
 
         batch->columns[c] = arr;
@@ -484,6 +504,18 @@ static VecBatch *csv_scan_next_batch(VecNode *self) {
         sn->exhausted = 1;
         return NULL;
     }
+    /* csv_read_batch latched a coercion-to-NA on the pull thread (no R alloc
+       there); surface it here, on the R main thread, exactly once per scan. */
+    if (sn->coercion_pending && !sn->coercion_warned) {
+        const char *col_nm = sn->base.output_schema.col_names[sn->coercion_col];
+        sn->coercion_warned = 1;
+        sn->coercion_pending = 0;
+        Rf_warning(
+            "CSV column '%s' has values that do not match the column type "
+            "inferred from the type-inference sample; those cells were read as "
+            "NA. Increase guess_max= or set col_types= to read them.",
+            col_nm);
+    }
     return batch;
 }
 
@@ -499,11 +531,15 @@ static void csv_scan_free(VecNode *self) {
 /*  Constructor                                                        */
 /* ------------------------------------------------------------------ */
 
-#define CSV_INFER_ROWS 1000
-
 CsvScanNode *csv_scan_node_create(const char *path, int64_t batch_size,
-                                  char delim) {
+                                  char delim, int64_t guess_max,
+                                  const char *const *ov_names,
+                                  const int *ov_types, int n_ov) {
     if (delim == '\0') delim = ',';
+    /* guess_max <= 0 means infer over the whole file (correct for columns whose
+       type only becomes apparent past the default window, at the cost of an
+       extra read pass). */
+    if (guess_max <= 0) guess_max = INT64_MAX;
     ByteReader *rd = byte_reader_open(path);
     if (!rd) vectra_error("cannot open CSV file: %s", path);
 
@@ -518,7 +554,17 @@ CsvScanNode *csv_scan_node_create(const char *path, int64_t batch_size,
 
     FieldVec header_fields;
     fv_init(&header_fields);
-    csv_split_fields(line.data, line.len, &header_fields, delim);
+    /* Strip a leading UTF-8 BOM (EF BB BF) so the first column name is clean.
+       Files saved as "CSV UTF-8" by Excel / PowerShell begin with it, and an
+       unstripped BOM corrupts every name reference to the first column. */
+    char   *hdr  = line.data;
+    int64_t hlen = line.len;
+    if (hlen >= 3 && (unsigned char)hdr[0] == 0xEF &&
+        (unsigned char)hdr[1] == 0xBB && (unsigned char)hdr[2] == 0xBF) {
+        hdr  += 3;
+        hlen -= 3;
+    }
+    csv_split_fields(hdr, hlen, &header_fields, delim);
     gbuf_free(&line);
 
     int n_cols = header_fields.n;
@@ -532,7 +578,23 @@ CsvScanNode *csv_scan_node_create(const char *path, int64_t batch_size,
     int64_t data_start = rd->tell_fn(rd);
 
     /* Infer types from first N rows */
-    VecType *col_types = csv_infer_types(rd, n_cols, CSV_INFER_ROWS, delim);
+    VecType *col_types = csv_infer_types(rd, n_cols, guess_max, delim);
+
+    /* Apply explicit per-column type overrides (e.g. force a zero-padded ID
+       column to character so inference does not numericize it). Unknown names
+       are an error so a typo is not silently ignored. */
+    for (int j = 0; j < n_ov; j++) {
+        int found = -1;
+        for (int c = 0; c < n_cols; c++)
+            if (strcmp(header_fields.items[c], ov_names[j]) == 0) { found = c; break; }
+        if (found < 0) {
+            free(col_types);
+            fv_free(&header_fields);
+            rd->close_fn(rd);
+            vectra_error("col_types: column '%s' not found in CSV header", ov_names[j]);
+        }
+        col_types[found] = (VecType)ov_types[j];
+    }
 
     /* Seek back to data start for reading */
     rd->seek_fn(rd, data_start);

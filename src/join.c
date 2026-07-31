@@ -13,6 +13,7 @@
 #include "vtr1_tdc.h"
 #include "vtr_codec.h"
 #include "error.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,11 @@ static int child_sorted_on_keys(VecNode *child, const int *key_idx, int n_keys);
 /* FNV-1a constants (must match hash.c) */
 #define FNV_OFFSET 14695981039346656037ULL
 #define FNV_PRIME  1099511628211ULL
+
+/* Cap on rows emitted per next_batch call. Bounds the many-to-many output so a
+   hot key cannot materialize batch_size * chain_len rows in one resident batch;
+   the probe resumes mid-chain across calls (mirrors the merge-join path). */
+#define JOIN_PROBE_EMIT_MAX 65536
 
 /* ------------------------------------------------------------------ */
 /*  JoinHT: hash table for build side                                  */
@@ -91,13 +97,19 @@ static uint64_t hash_join_key(const VecArray *cols, const int *key_indices,
 
 static int join_keys_equal(const VecArray *probe_cols, const int *probe_key_idx,
                            const VecArray *build_cols, const int *build_key_idx,
-                           int n_keys, int64_t probe_row, int64_t build_row) {
+                           int n_keys, int64_t probe_row, int64_t build_row,
+                           int na_matches) {
     for (int k = 0; k < n_keys; k++) {
         const VecArray *pa = &probe_cols[probe_key_idx[k]];
         const VecArray *ba = &build_cols[build_key_idx[k]];
         int pv = vec_array_is_valid(pa, probe_row);
         int bv = vec_array_is_valid(ba, build_row);
-        if (!pv || !bv) return 0;  /* NA never matches */
+        if (!pv || !bv) {
+            /* na_matches: NA matches NA (dplyr default); otherwise NA never
+               matches (SQL). One side NA and the other not is never a match. */
+            if (na_matches && !pv && !bv) continue;
+            return 0;
+        }
         switch (pa->type) {
         case VEC_INT64:
             if (pa->buf.i64[probe_row] != ba->buf.i64[build_row]) return 0;
@@ -111,9 +123,13 @@ static int join_keys_equal(const VecArray *probe_cols, const int *probe_key_idx,
         case VEC_INT8:
             if (pa->buf.i8[probe_row] != ba->buf.i8[build_row]) return 0;
             break;
-        case VEC_DOUBLE:
-            if (pa->buf.dbl[probe_row] != ba->buf.dbl[build_row]) return 0;
+        case VEC_DOUBLE: {
+            double pd = pa->buf.dbl[probe_row], bd = ba->buf.dbl[build_row];
+            /* NaN keys match each other (as in group_by/distinct and the merge
+               path); plain != would reject NaN==NaN and miss the join. */
+            if (pd != bd && !(pd != pd && bd != bd)) return 0;
             break;
+        }
         case VEC_BOOL:
             if (pa->buf.bln[probe_row] != ba->buf.bln[build_row]) return 0;
             break;
@@ -137,7 +153,7 @@ static int join_keys_equal(const VecArray *probe_cols, const int *probe_key_idx,
 static int64_t jht_probe(const JoinHT *jht, uint64_t hash,
                           const VecArray *probe_cols, const int *probe_key_idx,
                           const VecArray *build_cols, const int *build_key_idx,
-                          int n_keys, int64_t probe_row) {
+                          int n_keys, int64_t probe_row, int na_matches) {
     int64_t mask = jht->n_slots - 1;
     int64_t slot = (int64_t)(hash & (uint64_t)mask);
     for (;;) {
@@ -147,7 +163,7 @@ static int64_t jht_probe(const JoinHT *jht, uint64_t hash,
             while (br >= 0) {
                 if (join_keys_equal(probe_cols, probe_key_idx,
                                     build_cols, build_key_idx,
-                                    n_keys, probe_row, br))
+                                    n_keys, probe_row, br, na_matches))
                     return br;
                 br = jht->build_next[br];
             }
@@ -159,12 +175,12 @@ static int64_t jht_probe(const JoinHT *jht, uint64_t hash,
 static int64_t jht_chain_next(const JoinHT *jht, int64_t build_row,
                                const VecArray *probe_cols, const int *probe_key_idx,
                                const VecArray *build_cols, const int *build_key_idx,
-                               int n_keys, int64_t probe_row) {
+                               int n_keys, int64_t probe_row, int na_matches) {
     int64_t br = jht->build_next[build_row];
     while (br >= 0) {
         if (join_keys_equal(probe_cols, probe_key_idx,
                             build_cols, build_key_idx,
-                            n_keys, probe_row, br))
+                            n_keys, probe_row, br, na_matches))
             return br;
         br = jht->build_next[br];
     }
@@ -555,6 +571,7 @@ static VecNode *make_partition_join(JoinNode *jn, int p) {
     JoinNode *sj = join_node_create((VecNode *)lsc, (VecNode *)rsc, jn->kind,
                                     jn->n_keys, keys, jn->suffix_x, jn->suffix_y,
                                     jn->mem_budget, jn->temp_dir);
+    sj->na_matches = jn->na_matches;   /* inherit NA-matching in re-partition */
     sj->spill_depth = jn->spill_depth + 1;
     return (VecNode *)sj;
 }
@@ -700,27 +717,52 @@ static int64_t bnl_load_block(JoinNode *jn) {
 /* Probe one probe batch against the current build block. Emits matched pairs
    for inner/left/full; records probe-matched (non-inner) and build-matched
    (full) into the global bitsets. Advances jn->bnl_pbase. NULL when empty. */
-static VecBatch *bnl_probe_batch(JoinNode *jn, VecBatch *pbatch) {
+/* Set up the resumable cursor for one BNL probe batch (owns pbatch). */
+static void bnl_probe_load(JoinNode *jn, VecBatch *pbatch) {
+    memset(jn->bnl_pcoerced, 0, sizeof(jn->bnl_pcoerced));
+    jn->bnl_phcols = NULL;
+    jn->bnl_pcols = join_coerce_probe_keys(jn, pbatch, jn->bnl_pcoerced,
+                                           &jn->bnl_phcols);
+    jn->bnl_pb = pbatch;
+    jn->bnl_probe_li = 0;
+    jn->bnl_chain_br = -1;
+}
+
+/* Early teardown of an in-flight BNL probe batch (consumer stopped mid-batch).
+   The normal completion path in bnl_probe_emit advances bnl_pbase itself. */
+static void bnl_probe_drain(JoinNode *jn) {
+    if (!jn->bnl_pb) return;
+    join_free_probe_keys(jn, jn->bnl_pcoerced, jn->bnl_phcols);
+    jn->bnl_pcols = NULL; jn->bnl_phcols = NULL;
+    vec_batch_free(jn->bnl_pb); jn->bnl_pb = NULL;
+}
+
+/* Emit up to JOIN_PROBE_EMIT_MAX rows for the active BNL probe batch against the
+   current build block, resuming mid-chain. Returns a batch when the cap is hit
+   (batch stays active) or when the batch completes (drained; maybe NULL). */
+static VecBatch *bnl_probe_emit(JoinNode *jn) {
+    VecBatch *pbatch = jn->bnl_pb;
     int l_ncols = jn->left->output_schema.n_cols;
     int out_ncols = jn->base.output_schema.n_cols;
     int64_t p_logical = vec_batch_logical_rows(pbatch);
+    VecArray *probe_cols = jn->bnl_pcols;
+    VecArrayBuilder *out = join_alloc_out(jn, out_ncols, JOIN_PROBE_EMIT_MAX);
 
-    VecArray *coerced[16] = {0};
-    VecArray *hash_cols = NULL;
-    VecArray *probe_cols = join_coerce_probe_keys(jn, pbatch, coerced, &hash_cols);
-
-    VecArrayBuilder *out = join_alloc_out(jn, out_ncols, p_logical);
-
-    for (int64_t li = 0; li < p_logical; li++) {
+    while (jn->bnl_probe_li < p_logical) {
+        int64_t li = jn->bnl_probe_li;
         int64_t pr = vec_batch_physical_row(pbatch, li);
         int64_t gord = jn->bnl_pbase + li;
-        uint64_t h = hash_join_key(probe_cols, jn->lkey_idx, jn->n_keys, pr);
-        int64_t br = jht_probe(&jn->jht, h, probe_cols, jn->lkey_idx,
-                               jn->r_cols, jn->rkey_idx, jn->n_keys, pr);
-        if (br < 0) continue;  /* no match in this block */
-
-        if (jn->kind != JOIN_INNER)
-            jn->bnl_pmatched[gord >> 3] |= (uint8_t)(1 << (gord & 7));
+        int resuming = (jn->bnl_chain_br >= 0);
+        int64_t br;
+        if (resuming) {
+            br = jn->bnl_chain_br;
+        } else {
+            uint64_t h = hash_join_key(probe_cols, jn->lkey_idx, jn->n_keys, pr);
+            br = jht_probe(&jn->jht, h, probe_cols, jn->lkey_idx,
+                           jn->r_cols, jn->rkey_idx, jn->n_keys, pr, jn->na_matches);
+            if (br >= 0 && jn->kind != JOIN_INNER)
+                jn->bnl_pmatched[gord >> 3] |= (uint8_t)(1 << (gord & 7));
+        }
 
         if (jn->kind == JOIN_INNER || jn->kind == JOIN_LEFT ||
             jn->kind == JOIN_FULL) {
@@ -731,15 +773,34 @@ static VecBatch *bnl_probe_batch(JoinNode *jn, VecBatch *pbatch) {
                 }
                 join_emit_matched(jn, out, pbatch->columns, l_ncols, pr, br);
                 br = jht_chain_next(&jn->jht, br, probe_cols, jn->lkey_idx,
-                                    jn->r_cols, jn->rkey_idx, jn->n_keys, pr);
+                                    jn->r_cols, jn->rkey_idx, jn->n_keys, pr,
+                                    jn->na_matches);
+                if (out[0].length >= JOIN_PROBE_EMIT_MAX) {
+                    if (br < 0) {
+                        /* Chain exhausted exactly at the cap: this row is done.
+                           Advance so the next call starts a fresh probe rather
+                           than re-emitting this chain. */
+                        jn->bnl_probe_li++;
+                        jn->bnl_chain_br = -1;
+                    } else {
+                        jn->bnl_chain_br = br;   /* resume mid-chain next call */
+                    }
+                    return join_finish_out(jn, out, out_ncols);
+                }
             }
         }
         /* semi/anti: only the pmatched bit; output happens in finalize */
+        jn->bnl_probe_li++;
+        jn->bnl_chain_br = -1;
     }
 
+    /* Batch done against this block: advance the global ordinal and drain. */
     jn->bnl_pbase += p_logical;
-    join_free_probe_keys(jn, coerced, hash_cols);
-    return join_finish_out(jn, out, out_ncols);
+    join_free_probe_keys(jn, jn->bnl_pcoerced, jn->bnl_phcols);
+    jn->bnl_pcols = NULL; jn->bnl_phcols = NULL;
+    VecBatch *res = join_finish_out(jn, out, out_ncols);
+    vec_batch_free(jn->bnl_pb); jn->bnl_pb = NULL;
+    return res;
 }
 
 /* Finalize probe-side output from a full probe re-scan: left/full emit unmatched
@@ -813,16 +874,18 @@ static VecBatch *join_bnl_next_batch(JoinNode *jn) {
             continue;
         }
         if (jn->bnl_stage == 1) {                 /* probe current block */
-            VecBatch *pb = jn->bnl_pscan->next_batch(jn->bnl_pscan);
-            if (!pb) {                            /* block's probe pass done */
-                jn->bnl_pscan->free_node(jn->bnl_pscan); jn->bnl_pscan = NULL;
-                jn->bnl_block_base += jn->jht.n_build;
-                bnl_free_block(jn);
-                jn->bnl_stage = 0;
-                continue;
+            if (jn->bnl_pb == NULL) {
+                VecBatch *pb = jn->bnl_pscan->next_batch(jn->bnl_pscan);
+                if (!pb) {                        /* block's probe pass done */
+                    jn->bnl_pscan->free_node(jn->bnl_pscan); jn->bnl_pscan = NULL;
+                    jn->bnl_block_base += jn->jht.n_build;
+                    bnl_free_block(jn);
+                    jn->bnl_stage = 0;
+                    continue;
+                }
+                bnl_probe_load(jn, pb);
             }
-            VecBatch *out = bnl_probe_batch(jn, pb);
-            vec_batch_free(pb);
+            VecBatch *out = bnl_probe_emit(jn);   /* bounded, resumes mid-chain */
             if (out) return out;
             continue;
         }
@@ -957,7 +1020,11 @@ static inline uint64_t hash_i64(int64_t val) {
 }
 
 static inline uint64_t hash_dbl(double val) {
-    if (val == 0.0) val = 0.0; /* normalize -0 */
+    /* Match hash.c vec_hash_value: normalize -0 to +0 and every NaN payload to
+       one canonical NaN, so a NaN probe key hashes to the same bucket as the
+       canonicalized build key and can actually meet it in join_keys_equal. */
+    if (val == 0.0) val = 0.0;
+    else if (val != val) val = (double)NAN;
     uint64_t h = FNV_OFFSET;
     const uint8_t *p = (const uint8_t *)&val;
     for (int k = 0; k < 8; k++) { h ^= p[k]; h *= FNV_PRIME; }
@@ -972,28 +1039,19 @@ static inline uint64_t hash_string(const char *data, int64_t off, int64_t end) {
     return h;
 }
 
-static VecBatch *join_probe_one(JoinNode *jn, VecBatch *pbatch) {
-    const VecSchema *lschema = &jn->left->output_schema;
-    int l_ncols = lschema->n_cols;
-    int out_ncols = jn->base.output_schema.n_cols;
+/* Load the next probe batch and set up cached, resumable probe state. Returns 0
+   if the left child is exhausted (nothing loaded), 1 if a batch is now active. */
+static int join_probe_load(JoinNode *jn) {
+    VecBatch *pbatch = jn->left->next_batch(jn->left);
+    if (!pbatch) return 0;
     int64_t p_logical = vec_batch_logical_rows(pbatch);
 
     /* Build coerced probe key columns for hashing/comparison.
        The batch itself stays untouched (originals used for output). */
-    VecArray *coerced_probe_keys[16] = {0};
+    memset(jn->probe_coerced, 0, sizeof(jn->probe_coerced));
     VecArray *hash_cols = NULL;
     VecArray *probe_cols = join_coerce_probe_keys(jn, pbatch,
-                                                  coerced_probe_keys, &hash_cols);
-
-    /* Initialize output builders with reserve for expected output */
-    VecArrayBuilder *out = join_alloc_out(jn, out_ncols, p_logical);
-
-    /* For left_join/full_join: track which logical probe rows got a match */
-    uint8_t *probe_matched = NULL;
-    if (jn->kind == JOIN_LEFT || jn->kind == JOIN_FULL) {
-        int64_t nbytes = (p_logical + 7) / 8;
-        probe_matched = (uint8_t *)calloc(nbytes > 0 ? (size_t)nbytes : 1, 1);
-    }
+                                                  jn->probe_coerced, &hash_cols);
 
     /* Vectorized pre-hash: compute hashes for logical rows only */
     uint64_t *phash = (uint64_t *)malloc(
@@ -1054,78 +1112,121 @@ static VecBatch *join_probe_one(JoinNode *jn, VecBatch *pbatch) {
         }
     }
 
-    /* Probe each logical row using pre-computed hashes */
-    for (int64_t li = 0; li < p_logical; li++) {
-        int64_t pr = vec_batch_physical_row(pbatch, li);
-        int64_t br = jht_probe(&jn->jht, phash[li],
-                                probe_cols, jn->lkey_idx,
-                                jn->r_cols, jn->rkey_idx,
-                                jn->n_keys, pr);
-
-        switch (jn->kind) {
-        case JOIN_SEMI:
-            if (br >= 0)
-                join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
-            break;
-
-        case JOIN_ANTI:
-            if (br < 0)
-                join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
-            break;
-
-        case JOIN_INNER:
-            while (br >= 0) {
-                join_emit_matched(jn, out, pbatch->columns, l_ncols, pr, br);
-                br = jht_chain_next(&jn->jht, br,
-                    probe_cols, jn->lkey_idx,
-                    jn->r_cols, jn->rkey_idx, jn->n_keys, pr);
-            }
-            break;
-
-        case JOIN_LEFT:
-            if (br >= 0) {
-                probe_matched[li / 8] |= (uint8_t)(1 << (li % 8));
-                while (br >= 0) {
-                    join_emit_matched(jn, out, pbatch->columns, l_ncols, pr, br);
-                    br = jht_chain_next(&jn->jht, br,
-                        probe_cols, jn->lkey_idx,
-                        jn->r_cols, jn->rkey_idx, jn->n_keys, pr);
-                }
-            }
-            break;
-
-        case JOIN_FULL:
-            if (br >= 0) {
-                probe_matched[li / 8] |= (uint8_t)(1 << (li % 8));
-                while (br >= 0) {
-                    jn->build_matched[br / 8] |=
-                        (uint8_t)(1 << (br % 8));
-                    join_emit_matched(jn, out, pbatch->columns, l_ncols, pr, br);
-                    br = jht_chain_next(&jn->jht, br,
-                        probe_cols, jn->lkey_idx,
-                        jn->r_cols, jn->rkey_idx, jn->n_keys, pr);
-                }
-            }
-            break;
-        }
-    }
-
-    free(phash);
-
-    /* left_join / full_join: emit unmatched probe rows with NA right columns */
+    /* Left/full track which probe rows matched (for the unmatched-emit phase). */
+    uint8_t *probe_matched = NULL;
     if (jn->kind == JOIN_LEFT || jn->kind == JOIN_FULL) {
-        for (int64_t li = 0; li < p_logical; li++) {
-            if (probe_matched[li / 8] & (1 << (li % 8))) continue;
-            int64_t pr = vec_batch_physical_row(pbatch, li);
-            join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
-        }
-        free(probe_matched);
+        int64_t nbytes = (p_logical + 7) / 8;
+        probe_matched = (uint8_t *)calloc(nbytes > 0 ? (size_t)nbytes : 1, 1);
     }
 
-    join_free_probe_keys(jn, coerced_probe_keys, hash_cols);
+    jn->probe_cur = pbatch;
+    jn->probe_cols = probe_cols;
+    jn->probe_hash_cols = hash_cols;
+    jn->probe_hash = phash;
+    jn->probe_matched = probe_matched;
+    jn->probe_li = 0;
+    jn->probe_chain_br = -1;
+    jn->probe_phase = 0;
+    jn->probe_unmatched_li = 0;
+    return 1;
+}
 
-    /* Build result batch (NULL when empty, e.g. anti_join with all matches). */
-    return join_finish_out(jn, out, out_ncols);
+/* Free the cached state for the current probe batch. */
+static void join_probe_drain(JoinNode *jn) {
+    free(jn->probe_hash);    jn->probe_hash = NULL;
+    free(jn->probe_matched); jn->probe_matched = NULL;
+    join_free_probe_keys(jn, jn->probe_coerced, jn->probe_hash_cols);
+    jn->probe_cols = NULL;
+    jn->probe_hash_cols = NULL;
+    if (jn->probe_cur) { vec_batch_free(jn->probe_cur); jn->probe_cur = NULL; }
+}
+
+/* Emit up to JOIN_PROBE_EMIT_MAX output rows from the active probe batch,
+   resuming from the saved cursor. Returns a batch when the cap is hit (batch
+   stays active for the next call) or when the batch completes (state drained;
+   possibly NULL if the final chunk is empty, in which case the caller reloads).
+   The mid-chain resume is what bounds the many-to-many cross product. */
+static VecBatch *join_probe_emit(JoinNode *jn) {
+    VecBatch *pbatch = jn->probe_cur;
+    const VecSchema *lschema = &jn->left->output_schema;
+    int l_ncols = lschema->n_cols;
+    int out_ncols = jn->base.output_schema.n_cols;
+    int64_t p_logical = vec_batch_logical_rows(pbatch);
+    VecArray *probe_cols = jn->probe_cols;
+    VecArrayBuilder *out = join_alloc_out(jn, out_ncols, JOIN_PROBE_EMIT_MAX);
+
+    /* Phase 0: match probe rows against the build hash table. */
+    while (jn->probe_phase == 0 && jn->probe_li < p_logical) {
+        int64_t li = jn->probe_li;
+        int64_t pr = vec_batch_physical_row(pbatch, li);
+        int resuming = (jn->probe_chain_br >= 0);
+        int64_t br = resuming
+            ? jn->probe_chain_br
+            : jht_probe(&jn->jht, jn->probe_hash[li], probe_cols, jn->lkey_idx,
+                        jn->r_cols, jn->rkey_idx, jn->n_keys, pr, jn->na_matches);
+
+        if (jn->kind == JOIN_SEMI) {
+            if (br >= 0) join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
+            jn->probe_li++; jn->probe_chain_br = -1;
+        } else if (jn->kind == JOIN_ANTI) {
+            if (br < 0) join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
+            jn->probe_li++; jn->probe_chain_br = -1;
+        } else {
+            /* INNER / LEFT / FULL: walk the whole build chain for this key. */
+            if (!resuming && br >= 0 &&
+                (jn->kind == JOIN_LEFT || jn->kind == JOIN_FULL))
+                jn->probe_matched[li / 8] |= (uint8_t)(1 << (li % 8));
+            while (br >= 0) {
+                if (jn->kind == JOIN_FULL)
+                    jn->build_matched[br / 8] |= (uint8_t)(1 << (br % 8));
+                join_emit_matched(jn, out, pbatch->columns, l_ncols, pr, br);
+                br = jht_chain_next(&jn->jht, br, probe_cols, jn->lkey_idx,
+                                    jn->r_cols, jn->rkey_idx, jn->n_keys, pr,
+                                    jn->na_matches);
+                if (out[0].length >= JOIN_PROBE_EMIT_MAX) {
+                    if (br < 0) {
+                        /* Chain exhausted exactly at the cap: this row is done.
+                           Advance so the next call starts a fresh probe rather
+                           than re-emitting this chain (br == -1 is also the
+                           not-resuming sentinel, so it must not be left here
+                           with probe_li unadvanced). */
+                        jn->probe_li++;
+                        jn->probe_chain_br = -1;
+                    } else {
+                        jn->probe_chain_br = br;   /* resume mid-chain next call */
+                    }
+                    return join_finish_out(jn, out, out_ncols);
+                }
+            }
+            jn->probe_li++; jn->probe_chain_br = -1;
+        }
+        if (out[0].length >= JOIN_PROBE_EMIT_MAX)
+            return join_finish_out(jn, out, out_ncols);
+    }
+
+    /* Phase 0 done: non-outer joins finish this batch here. */
+    if (jn->probe_phase == 0) {
+        if (jn->kind == JOIN_LEFT || jn->kind == JOIN_FULL) {
+            jn->probe_phase = 1;   /* fall through to the unmatched-emit phase */
+        } else {
+            VecBatch *res = join_finish_out(jn, out, out_ncols);
+            join_probe_drain(jn);
+            return res;
+        }
+    }
+
+    /* Phase 1 (left/full): emit unmatched probe rows with NA right columns. */
+    while (jn->probe_unmatched_li < p_logical) {
+        int64_t li = jn->probe_unmatched_li++;
+        if (jn->probe_matched[li / 8] & (1 << (li % 8))) continue;
+        int64_t pr = vec_batch_physical_row(pbatch, li);
+        join_emit_left_only(jn, out, pbatch->columns, l_ncols, pr);
+        if (out[0].length >= JOIN_PROBE_EMIT_MAX)
+            return join_finish_out(jn, out, out_ncols);
+    }
+    VecBatch *res = join_finish_out(jn, out, out_ncols);
+    join_probe_drain(jn);
+    return res;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1408,11 +1509,12 @@ static VecBatch *merge_join_batch(JoinNode *jn) {
                 emitted++;
             }
             jn->merge_r_cursor++;
-        } else if (merge_left_key_na(jn, pr)) {
-            /* cmp == 0 with an NA key means both keys are NA, which must not
-               match (as in the hash path). Treat this left row as unmatched and
-               advance it; the NA build rows are left for the finalize pass (full)
-               or dropped (inner/left/semi/anti). */
+        } else if (!jn->na_matches && merge_left_key_na(jn, pr)) {
+            /* SQL semantics: cmp == 0 with an NA key means both keys are NA,
+               which must not match. Treat this left row as unmatched and advance
+               it; the NA build rows are left for the finalize pass (full) or
+               dropped (inner/left/semi/anti). Under na_matches this branch is
+               skipped so NA falls into the equal-key match below (dplyr). */
             if (jn->kind == JOIN_LEFT || jn->kind == JOIN_FULL)
                 join_emit_left_only(jn, out, jn->merge_l_batch->columns,
                                     l_ncols, pr);
@@ -1548,19 +1650,19 @@ static VecBatch *join_next_batch(VecNode *self) {
                                              : JSTATE_DONE;
     }
 
-    /* Hash join probe phase: pull left batches, skip empty-output batches */
+    /* Hash join probe phase: pull left batches and emit their matches in
+       bounded chunks (join_probe_emit resumes mid-chain, so a hot key cannot
+       blow up one output batch). Skip batches whose final chunk is empty. */
     while (jn->state == JSTATE_PROBE) {
-        VecBatch *pbatch = jn->left->next_batch(jn->left);
-        if (!pbatch) {
+        if (jn->probe_cur == NULL && !join_probe_load(jn)) {
             /* Left child exhausted */
             jn->state = (jn->kind == JOIN_FULL) ? JSTATE_FINALIZE
                                                  : JSTATE_DONE;
             break;
         }
-        VecBatch *result = join_probe_one(jn, pbatch);
-        vec_batch_free(pbatch);
+        VecBatch *result = join_probe_emit(jn);
         if (result) return result;
-        /* Empty output for this batch (e.g. anti_join all matched): loop */
+        /* NULL: this batch drained with an empty final chunk -> reload. */
     }
 
     while (jn->state == JSTATE_FINALIZE) {
@@ -1578,6 +1680,9 @@ static VecBatch *join_next_batch(VecNode *self) {
 
 static void join_free(VecNode *self) {
     JoinNode *jn = (JoinNode *)self;
+    /* A consumer may stop mid-batch (e.g. head()); free any cached probe state. */
+    if (jn->probe_cur) join_probe_drain(jn);
+    if (jn->bnl_pb) bnl_probe_drain(jn);
     jn->left->free_node(jn->left);
     jn->right->free_node(jn->right);
     free(jn->keys);
@@ -1626,12 +1731,18 @@ JoinNode *join_node_create(VecNode *left, VecNode *right,
                            JoinKind kind, int n_keys, JoinKey *keys,
                            const char *suffix_x, const char *suffix_y,
                            int64_t mem_budget, const char *temp_dir) {
+    /* Several spill-path locals (common[16], rkey[16], lkey[16], ckeys[16]) and
+       the probe-key coercion loop are fixed at 16; a join on more keys would
+       overrun them. Reject up front rather than corrupt the stack. */
+    if (n_keys > 16)
+        vectra_error("join supports at most 16 key columns (got %d)", n_keys);
     JoinNode *jn = (JoinNode *)calloc(1, sizeof(JoinNode));
     if (!jn) vectra_error("alloc failed for JoinNode");
     jn->left = left;
     jn->right = right;
     jn->kind = kind;
     jn->n_keys = n_keys;
+    jn->na_matches = 1;   /* dplyr default; the bridge overrides from R */
     jn->keys = keys;
     jn->mem_budget = mem_budget;
     if (temp_dir) {

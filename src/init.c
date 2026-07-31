@@ -5,6 +5,7 @@
 #include <Rinternals.h>
 #include "r_bridge.h"
 #include "vtr_append.h"
+#include "vtr_append_cols.h"
 #include "vec_omp.h"
 
 /* block.c R bridge functions */
@@ -127,6 +128,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_node_optimize",   (DL_FUNC) &C_node_optimize,   1},
     {"C_node_next_batch", (DL_FUNC) &C_node_next_batch, 1},
     {"C_node_schema",  (DL_FUNC) &C_node_schema,   1},
+    {"C_node_static_rows", (DL_FUNC) &C_node_static_rows, 1},
     {"C_node_plan",    (DL_FUNC) &C_node_plan,     1},
     {"C_filter_node",  (DL_FUNC) &C_filter_node,   2},
     {"C_project_node",   (DL_FUNC) &C_project_node,  3},
@@ -136,11 +138,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_limit_node",     (DL_FUNC) &C_limit_node,      2},
     {"C_topn_node",      (DL_FUNC) &C_topn_node,       4},
     {"C_group_topn_node",(DL_FUNC) &C_group_topn_node, 5},
-    {"C_join_node",      (DL_FUNC) &C_join_node,       8},
+    {"C_join_node",      (DL_FUNC) &C_join_node,       9},
     {"C_window_node",    (DL_FUNC) &C_window_node,     3},
     {"C_concat_node",   (DL_FUNC) &C_concat_node,    1},
     {"C_write_csv",     (DL_FUNC) &C_write_csv,      2},
-    {"C_csv_scan_node", (DL_FUNC) &C_csv_scan_node,  3},
+    {"C_csv_scan_node", (DL_FUNC) &C_csv_scan_node,  6},
     {"C_sql_scan_node", (DL_FUNC) &C_sql_scan_node,  3},
     {"C_write_sqlite",  (DL_FUNC) &C_write_sqlite,   3},
     {"C_tiff_scan_node", (DL_FUNC) &C_tiff_scan_node, 2},
@@ -154,8 +156,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_tiff_read_crs",          (DL_FUNC) &C_tiff_read_crs,          1},
     {"C_write_vtr_node", (DL_FUNC) &C_write_vtr_node, 7},
     {"C_append_vtr",     (DL_FUNC) &C_append_vtr,     2},
+    {"C_append_cols_vtr", (DL_FUNC) &C_append_cols_vtr, 3},
     {"C_delete_vtr",     (DL_FUNC) &C_delete_vtr,      2},
-    {"C_diff_vtr",       (DL_FUNC) &C_diff_vtr,        3},
+    {"C_diff_vtr",       (DL_FUNC) &C_diff_vtr,        4},
     {"C_fuzzy_join_node", (DL_FUNC) &C_fuzzy_join_node, 11},
     {"C_interval_join_node", (DL_FUNC) &C_interval_join_node, 13},
     {"C_block_materialize", (DL_FUNC) &C_block_materialize, 1},
@@ -163,6 +166,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"C_block_fuzzy_lookup",  (DL_FUNC) &C_block_fuzzy_lookup,  8},
     {"C_create_index",      (DL_FUNC) &C_create_index,      3},
     {"C_has_index",         (DL_FUNC) &C_has_index,         2},
+    {"C_index_spec",        (DL_FUNC) &C_index_spec,        2},
     {"C_tdc_encode_column",   (DL_FUNC) &C_tdc_encode_column,   2},
     {"C_tdc_decode_column",   (DL_FUNC) &C_tdc_decode_column,   3},
     {"C_tdc_dict_roundtrip",  (DL_FUNC) &C_tdc_dict_roundtrip,  1},

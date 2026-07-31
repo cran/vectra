@@ -24,6 +24,7 @@
 
 #include "vtr1_tdc.h"
 #include "vtr_codec_tdc.h"
+#include "vtr_fileops.h"
 #include "schema.h"
 #include "batch.h"
 #include "array.h"
@@ -192,7 +193,8 @@ static uint64_t count_nulls(const uint8_t *validity, int64_t n_rows) {
  * Returns 1 if any column has stats (so the encoder call should fire),
  * 0 if every column collapsed to has_stats == 0 (e.g. zero-row group). */
 static int vtr1_tdc_compute_rowgroup_stats(const VecBatch *batch,
-                                           tdc_column_stats *out) {
+                                           tdc_column_stats *out,
+                                           const VtrQuantizeSpec *qspecs) {
     int any = 0;
     int n_cols = batch->n_cols;
     int64_t n_rows = batch->n_rows;
@@ -224,11 +226,27 @@ static int vtr1_tdc_compute_rowgroup_stats(const VecBatch *batch,
             for (int64_t i = 0; i < n_rows; i++) {
                 if (!vec_array_is_valid(col, i)) continue;
                 double v = col->buf.dbl[i];
+                /* NaN is a valid double but has no ordering: folding it in would
+                   leave an inverted range (min=+Inf, max=-Inf) with has_stats=1,
+                   which corrupts sorted-column detection and the binary search.
+                   Skip it — a NaN never satisfies a comparison predicate anyway. */
+                if (isnan(v)) continue;
                 if (v < mn) mn = v;
                 if (v > mx) mx = v;
                 found = 1;
             }
             if (found) {
+                /* If this column is quantized, the reader reconstructs each value
+                   as round((v-offset)*scale)/scale+offset, which differs from the
+                   raw v by up to 0.5/scale. The filter evaluates the reconstructed
+                   value, so widen the zone-map range by that half-step; otherwise a
+                   group whose reconstructed edge crosses a predicate boundary could
+                   be pruned while it actually matches. */
+                if (qspecs && qspecs[c].enabled && qspecs[c].scale > 0.0) {
+                    double half = 0.5 / qspecs[c].scale;
+                    mn -= half;
+                    mx += half;
+                }
                 uint64_t mn_bits, mx_bits;
                 memcpy(&mn_bits, &mn, 8);
                 memcpy(&mx_bits, &mx, 8);
@@ -282,6 +300,46 @@ static void vtr1_tdc_writer_free_ann(Vtr1TdcWriter *w) {
     w->ann_buf = NULL;
 }
 
+/* Build the tdc column descriptors for a VecSchema. On success *desc_out
+ * holds n_cols entries pointing into `schema` (which must outlive them) and
+ * into *ann_out, which owns one packed annotation payload per column.
+ * Returns 0 on allocation failure, having freed whatever it took. */
+static int vtr1_tdc_build_desc(const VecSchema *schema,
+                               tdc_column_desc **desc_out, char ***ann_out) {
+    int n_cols = schema->n_cols;
+    *desc_out = NULL;
+    *ann_out  = NULL;
+    if (n_cols <= 0) return 1;
+
+    tdc_column_desc *desc =
+        (tdc_column_desc *)calloc((size_t)n_cols, sizeof(*desc));
+    char **ann = (char **)calloc((size_t)n_cols, sizeof(char *));
+    if (!desc || !ann) { free(desc); free(ann); return 0; }
+
+    for (int i = 0; i < n_cols; i++) {
+        const char *user_ann = schema->col_annotations
+                             ? schema->col_annotations[i] : NULL;
+        uint16_t alen = 0;
+        ann[i] = vtr1_tdc_pack_annotation(schema->col_types[i], user_ann, &alen);
+        desc[i].name       = schema->col_names[i];
+        desc[i].name_len   = (uint16_t)strlen(schema->col_names[i]);
+        desc[i].dtype      = (uint8_t)vtr_type_to_tdc_dtype(schema->col_types[i]);
+        desc[i].annotation = ann[i];
+        desc[i].ann_len    = alen;
+    }
+    *desc_out = desc;
+    *ann_out  = ann;
+    return 1;
+}
+
+static void vtr1_tdc_free_desc(tdc_column_desc *desc, char **ann, int n_cols) {
+    if (ann) {
+        for (int i = 0; i < n_cols; i++) free(ann[i]);
+        free(ann);
+    }
+    free(desc);
+}
+
 Vtr1TdcWriter *vtr1_open_tdc_writer(const char *path, const VecSchema *schema) {
     if (!path || !schema || schema->n_cols < 0) {
         vectra_error("vtr1_open_tdc_writer: invalid arguments");
@@ -297,27 +355,9 @@ Vtr1TdcWriter *vtr1_open_tdc_writer(const char *path, const VecSchema *schema) {
     w->n_cols = schema->n_cols;
 
     int n_cols = schema->n_cols;
-    if (n_cols > 0) {
-        w->desc_buf = (tdc_column_desc *)calloc((size_t)n_cols, sizeof(*w->desc_buf));
-        w->ann_buf  = (char **)calloc((size_t)n_cols, sizeof(char *));
-        if (!w->desc_buf || !w->ann_buf) {
-            vtr1_tdc_writer_free_ann(w);
-            free(w->desc_buf);
-            vec_schema_free(&w->schema); free(w); fclose(fp);
-            vectra_error("alloc failed for tdc_column_desc / annotation array");
-        }
-        for (int i = 0; i < n_cols; i++) {
-            const char *user_ann = (w->schema.col_annotations)
-                                 ? w->schema.col_annotations[i] : NULL;
-            uint16_t alen = 0;
-            w->ann_buf[i] = vtr1_tdc_pack_annotation(w->schema.col_types[i],
-                                                     user_ann, &alen);
-            w->desc_buf[i].name        = w->schema.col_names[i];
-            w->desc_buf[i].name_len    = (uint16_t)strlen(w->schema.col_names[i]);
-            w->desc_buf[i].dtype       = (uint8_t)vtr_type_to_tdc_dtype(w->schema.col_types[i]);
-            w->desc_buf[i].annotation  = w->ann_buf[i];
-            w->desc_buf[i].ann_len     = alen;
-        }
+    if (!vtr1_tdc_build_desc(&w->schema, &w->desc_buf, &w->ann_buf)) {
+        vec_schema_free(&w->schema); free(w); fclose(fp);
+        vectra_error("alloc failed for tdc_column_desc / annotation array");
     }
 
     tdc_schema sch = {0};
@@ -418,7 +458,7 @@ void vtr1_write_rowgroup_tdc(Vtr1TdcWriter        *w,
         tdc_column_stats *stats =
             (tdc_column_stats *)calloc((size_t)n_cols, sizeof(tdc_column_stats));
         if (!stats) vectra_error("alloc failed for tdc_column_stats");
-        int any = vtr1_tdc_compute_rowgroup_stats(batch, stats);
+        int any = vtr1_tdc_compute_rowgroup_stats(batch, stats, qspecs);
         if (any) {
             tdc_status sst = tdc_stream_encoder_set_rowgroup_stats(
                 w->enc, stats, (uint16_t)n_cols);
@@ -455,6 +495,176 @@ void vtr1_close_tdc_writer(Vtr1TdcWriter *w) {
     }
     vtr1_tdc_writer_free_ann(w);
     free(w->desc_buf);
+    vec_schema_free(&w->schema);
+    if (w->fp) fclose(w->fp);
+    free(w);
+}
+
+/* ============================================================ widener === */
+
+/*
+ * Appends columns to an existing container in place. The existing column
+ * data is never read: tdc writes the new blocks, a replacement schema, and
+ * a rebuilt index past the old trailer, then patches the 64-byte header
+ * last. Interrupted before that patch, the file still reads as it did
+ * before -- so unlike vtr1_open_tdc_writer this path deliberately opens the
+ * target itself, in update mode, rather than going through a temp file.
+ */
+
+struct Vtr1TdcWidener {
+    FILE               *fp;
+    tdc_stream_encoder *enc;
+    VecSchema           schema;     /* the FULL widened schema, deep-copied */
+    tdc_column_desc    *desc_buf;
+    char              **ann_buf;
+    int                 n_cols;     /* of the widened schema */
+    int                 n_new;      /* appended columns */
+    int64_t             orig_size;  /* file length before any widen write */
+};
+
+Vtr1TdcWidener *vtr1_open_tdc_widener(const char *path,
+                                      const VecSchema *widened_schema,
+                                      int n_new_cols) {
+    if (!path || !widened_schema || n_new_cols <= 0 ||
+        n_new_cols > widened_schema->n_cols) {
+        vectra_error("vtr1_open_tdc_widener: invalid arguments");
+    }
+
+    FILE *fp = fopen(path, "r+b");
+    if (!fp) vectra_error("cannot open file for widening: %s", path);
+
+    Vtr1TdcWidener *w = (Vtr1TdcWidener *)calloc(1, sizeof(*w));
+    if (!w) { fclose(fp); vectra_error("alloc failed for Vtr1TdcWidener"); }
+    w->fp     = fp;
+    w->schema = vec_schema_copy(widened_schema);
+    w->n_cols = widened_schema->n_cols;
+    w->n_new  = n_new_cols;
+    w->orig_size = vtr_file_size(fp);
+
+    if (!vtr1_tdc_build_desc(&w->schema, &w->desc_buf, &w->ann_buf)) {
+        vec_schema_free(&w->schema); free(w); fclose(fp);
+        vectra_error("alloc failed for tdc_column_desc / annotation array");
+    }
+
+    tdc_schema sch = {0};
+    sch.n_columns = (uint16_t)w->n_cols;
+    sch.columns   = w->desc_buf;
+
+    tdc_stream_encoder_widen_config cfg = {0};
+    cfg.io.write_fn = vtr1_tdc_io_write;
+    cfg.io.read_fn  = vtr1_tdc_io_read;
+    cfg.io.seek_fn  = vtr1_tdc_io_seek;
+    cfg.io.ctx      = fp;
+    cfg.schema      = &sch;
+    cfg.realloc_fn  = vtr1_tdc_realloc;
+    cfg.alloc_user  = NULL;
+
+    tdc_status st = tdc_stream_encoder_open_widen(&cfg, &w->enc);
+    if (st != TDC_OK) {
+        vtr1_tdc_free_desc(w->desc_buf, w->ann_buf, w->n_cols);
+        vec_schema_free(&w->schema);
+        free(w);
+        fclose(fp);
+        vectra_error("tdc_stream_encoder_open_widen failed: status=%d", (int)st);
+    }
+    return w;
+}
+
+void vtr1_widen_rowgroup_tdc(Vtr1TdcWidener *w, uint32_t rg_idx,
+                             const VecBatch *batch, int comp_level) {
+    if (!w || !batch) vectra_error("vtr1_widen_rowgroup_tdc: NULL handle/batch");
+    if (batch->n_cols != w->n_new) {
+        vectra_error("widen batch n_cols=%d mismatches appended column count %d",
+                     batch->n_cols, w->n_new);
+    }
+
+    /* The appended columns land at the tail of the widened schema. */
+    int first = w->n_cols - w->n_new;
+
+    /* Stats for the appended columns only; indices 0..n_new-1 of `batch`
+     * map to schema positions first..n_cols-1. */
+    tdc_column_stats *stats = NULL;
+    if (batch->n_rows > 0) {
+        stats = (tdc_column_stats *)calloc((size_t)w->n_new,
+                                           sizeof(tdc_column_stats));
+        if (!stats) vectra_error("alloc failed for tdc_column_stats");
+        if (!vtr1_tdc_compute_rowgroup_stats(batch, stats, NULL)) {
+            free(stats);
+            stats = NULL;
+        }
+    }
+
+    tdc_buffer trial = {0};
+    trial.realloc_fn = vtr1_tdc_realloc;
+    for (int c = 0; c < w->n_new; c++) {
+        const VecArray *col = &batch->columns[c];
+        if (col->type != w->schema.col_types[first + c]) {
+            free(stats);
+            if (trial.data) vtr1_tdc_realloc(NULL, trial.data, 0);
+            vectra_error("widen col %d type=%d mismatches schema type=%d",
+                         c, (int)col->type, (int)w->schema.col_types[first + c]);
+        }
+
+        VtrTdcEncodeRequest req;
+        tdc_status st = vtr_codec_tdc_prepare_request(
+            &req, col, batch->n_rows, comp_level, NULL, NULL,
+            vtr1_tdc_realloc, NULL);
+        if (st != TDC_OK) {
+            vtr_codec_tdc_release_request(&req, vtr1_tdc_realloc, NULL);
+            free(stats);
+            if (trial.data) vtr1_tdc_realloc(NULL, trial.data, 0);
+            vectra_error("prepare_request failed for widen col %d: status=%d",
+                         c, (int)st);
+        }
+
+        if (comp_level == VTR_COMPRESS_SMALL)
+            vtr_codec_tdc_optimize_small(&req, col, 0, 0, &trial);
+
+        st = tdc_stream_encoder_widen_block(
+            w->enc, (uint64_t)rg_idx, &req.block, &req.spec,
+            stats ? &stats[c] : NULL);
+        vtr_codec_tdc_release_request(&req, vtr1_tdc_realloc, NULL);
+        if (st != TDC_OK) {
+            free(stats);
+            if (trial.data) vtr1_tdc_realloc(NULL, trial.data, 0);
+            vectra_error("tdc_stream_encoder_widen_block failed for col %d "
+                         "of rowgroup %u: status=%d", c, rg_idx, (int)st);
+        }
+    }
+    if (trial.data) vtr1_tdc_realloc(NULL, trial.data, 0);
+    free(stats);
+}
+
+/* Free the widener without committing: no schema, no index, no header
+ * patch. The container is left exactly as it was found, and the bytes
+ * written past its trailer -- referenced by nothing -- are truncated away
+ * so a repeatedly-failing append cannot grow the file without bound. */
+void vtr1_abort_tdc_widener(Vtr1TdcWidener *w) {
+    if (!w) return;
+    if (w->enc) tdc_stream_encoder_abort(&w->enc);
+    if (w->fp) {
+        fflush(w->fp);
+        vtr_file_truncate(w->fp, w->orig_size);
+    }
+    vtr1_tdc_free_desc(w->desc_buf, w->ann_buf, w->n_cols);
+    vec_schema_free(&w->schema);
+    if (w->fp) fclose(w->fp);
+    free(w);
+}
+
+void vtr1_close_tdc_widener(Vtr1TdcWidener *w) {
+    if (!w) return;
+    if (w->enc) {
+        tdc_status st = tdc_stream_encoder_close(&w->enc);
+        if (st != TDC_OK) {
+            vtr1_tdc_free_desc(w->desc_buf, w->ann_buf, w->n_cols);
+            vec_schema_free(&w->schema);
+            if (w->fp) fclose(w->fp);
+            free(w);
+            vectra_error("tdc_stream_encoder_close failed: status=%d", (int)st);
+        }
+    }
+    vtr1_tdc_free_desc(w->desc_buf, w->ann_buf, w->n_cols);
     vec_schema_free(&w->schema);
     if (w->fp) fclose(w->fp);
     free(w);

@@ -187,6 +187,17 @@ VecArray *vec_expr_eval_geom(const VecExpr *expr, const VecBatch *batch) {
         size_t hl; const unsigned char *hx = (n > 0) ? hex_at(rarr, 0, &hl) : NULL;
         if (hx) cgeom = GEOSWKBReader_readHEX_r(cctx, rd, hx, hl);
         GEOSWKBReader_destroy_r(cctx, rd);
+        if (cgeom) {
+            /* The binary relate predicates short-circuit through
+             * getEnvelopeInternal(), which lazily caches the envelope INSIDE the
+             * geometry on first touch. cgeom is shared read-only across the worker
+             * threads below, so warm its envelope once here on the master thread --
+             * before the parallel region -- to keep the workers from racing to
+             * populate that cache. cctx is live until GEOS_finish_r(cctx) further
+             * down, so it is valid to query cgeom in it here. */
+            double xmin, ymin, xmax, ymax;
+            GEOSGeom_getExtent_r(cctx, cgeom, &xmin, &ymin, &xmax, &ymax);
+        }
     }
 
     /* Numeric / boolean outputs land straight in the result array; string and
@@ -205,6 +216,7 @@ VecArray *vec_expr_eval_geom(const VecExpr *expr, const VecBatch *batch) {
     }
 
     int do_par = (n > GEOM_PAR_THRESHOLD);
+    volatile int oom = 0;   /* set by a worker on alloc failure; raised on master */
 #ifdef _OPENMP
     #pragma omp parallel if(do_par)
 #endif
@@ -264,7 +276,9 @@ VecArray *vec_expr_eval_geom(const VecExpr *expr, const VecBatch *batch) {
                     int64_t tl = (int64_t) strlen(t);
                     char *s = (char *) malloc((size_t) (tl > 0 ? tl : 1));
                     if (!s) { GEOSFree_r(ctx, t); GEOSGeom_destroy_r(ctx, xg);
-                              vectra_error("alloc failed in geometry op"); }
+                              #pragma omp atomic write
+                              oom = 1;
+                              continue; }  /* xg freed here; skip loop-end free */
                     memcpy(s, t, (size_t) tl);
                     GEOSFree_r(ctx, t);
                     strs[i] = s; slens[i] = tl; ok[i] = 1;
@@ -283,7 +297,9 @@ VecArray *vec_expr_eval_geom(const VecExpr *expr, const VecBatch *batch) {
                         char *s = (char *) malloc(wl > 0 ? wl : 1);
                         if (!s) { GEOSFree_r(ctx, buf); GEOSGeom_destroy_r(ctx, rg);
                                   GEOSGeom_destroy_r(ctx, xg);
-                                  vectra_error("alloc failed in geometry op"); }
+                                  #pragma omp atomic write
+                                  oom = 1;
+                                  continue; }  /* rg+xg freed here; skip loop-end */
                         memcpy(s, buf, wl);
                         GEOSFree_r(ctx, buf);
                         strs[i] = s; slens[i] = (int64_t) wl; ok[i] = 1;
@@ -300,6 +316,18 @@ VecArray *vec_expr_eval_geom(const VecExpr *expr, const VecBatch *batch) {
 
     if (cgeom) GEOSGeom_destroy_r(cctx, cgeom);
     if (cctx)  GEOS_finish_r(cctx);
+
+    if (oom) {
+        /* Raise on the master thread, not from inside the worker loop. */
+        if (cat == GC_STRING || cat == GC_GEOM) {
+            for (int64_t i = 0; i < n; i++) if (ok[i]) free(strs[i]);
+            free(strs); free(slens); free(ok);
+        }
+        vec_array_free(g); free(g);
+        if (rarr) { vec_array_free(rarr); free(rarr); }
+        if (parr) { vec_array_free(parr); free(parr); }
+        vectra_error("alloc failed in geometry op");
+    }
 
     /* Assemble string / geometry output from the per-row buffers. */
     if (cat == GC_STRING || cat == GC_GEOM) {

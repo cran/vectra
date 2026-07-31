@@ -28,6 +28,18 @@ static VecType decltype_to_vectype(const char *decl) {
 /*  Batch reading                                                      */
 /* ------------------------------------------------------------------ */
 
+/* realloc that raises on OOM instead of returning NULL. On failure the
+   original block is left untouched (realloc does not free it when it returns
+   NULL), and vectra_error longjmps before the caller overwrites its pointer,
+   so the caller's buffer stays valid rather than being clobbered to NULL and
+   dereferenced. */
+static void *sql_grow_buffer(void *ptr, size_t nbytes) {
+    void *tmp = realloc(ptr, nbytes);
+    if (!tmp)
+        vectra_error("SQL scan: out of memory growing column buffer");
+    return tmp;
+}
+
 static VecBatch *sql_read_batch(SqlScanNode *sn) {
     int n_cols = sn->n_cols;
     int64_t batch_size = sn->batch_size;
@@ -76,7 +88,7 @@ static VecBatch *sql_read_batch(SqlScanNode *sn) {
         if (n_rows >= rows_cap) {
             rows_cap *= 2;
             for (int c = 0; c < n_cols; c++) {
-                col_nulls[c] = (uint8_t *)realloc(col_nulls[c],
+                col_nulls[c] = (uint8_t *)sql_grow_buffer(col_nulls[c],
                     (size_t)rows_cap * sizeof(uint8_t));
                 memset(col_nulls[c] + n_rows, 0,
                     (size_t)(rows_cap - n_rows));
@@ -85,18 +97,18 @@ static VecBatch *sql_read_batch(SqlScanNode *sn) {
                 case VEC_INT8:
                 case VEC_INT16:
                 case VEC_INT32:
-                    col_i64[c] = (int64_t *)realloc(col_i64[c],
+                    col_i64[c] = (int64_t *)sql_grow_buffer(col_i64[c],
                         (size_t)rows_cap * sizeof(int64_t)); break;
                 case VEC_DOUBLE:
-                    col_dbl[c] = (double *)realloc(col_dbl[c],
+                    col_dbl[c] = (double *)sql_grow_buffer(col_dbl[c],
                         (size_t)rows_cap * sizeof(double)); break;
                 case VEC_BOOL:
-                    col_bln[c] = (uint8_t *)realloc(col_bln[c],
+                    col_bln[c] = (uint8_t *)sql_grow_buffer(col_bln[c],
                         (size_t)rows_cap * sizeof(uint8_t)); break;
                 case VEC_STRING:
-                    col_str_ptrs[c] = (char **)realloc(col_str_ptrs[c],
+                    col_str_ptrs[c] = (char **)sql_grow_buffer(col_str_ptrs[c],
                         (size_t)rows_cap * sizeof(char *));
-                    col_str_lens[c] = (int64_t *)realloc(col_str_lens[c],
+                    col_str_lens[c] = (int64_t *)sql_grow_buffer(col_str_lens[c],
                         (size_t)rows_cap * sizeof(int64_t)); break;
                 }
             }
@@ -108,6 +120,14 @@ static VecBatch *sql_read_batch(SqlScanNode *sn) {
                 col_nulls[c][n_rows] = 1;
                 if (sn->col_types[c] == VEC_STRING)
                     col_str_ptrs[c][n_rows] = NULL;
+                continue;
+            }
+            /* A text/blob value stored in a numeric column has no numeric
+               value (the typed readers would return a fake 0); surface it as
+               NA. The VEC_STRING branch handles the reverse (numeric cell in a
+               text column) via a NULL text pointer. */
+            if (ctype == SQLFMT_TEXT && sn->col_types[c] != VEC_STRING) {
+                col_nulls[c][n_rows] = 1;
                 continue;
             }
             switch (sn->col_types[c]) {
@@ -126,6 +146,33 @@ static VecBatch *sql_read_batch(SqlScanNode *sn) {
                 break;
             case VEC_STRING: {
                 const char *txt = sqlfmt_reader_text(sn->reader, c);
+                if (txt == NULL) {
+                    /* Non-text value in a string column. For an untyped (BLOB
+                       affinity) column render the number as text so the column is
+                       not lost; for a genuinely-text column keep the NA. */
+                    if (sn->col_untyped[c] &&
+                        (ctype == SQLFMT_INTEGER || ctype == SQLFMT_FLOAT)) {
+                        char buf[32];
+                        int len;
+                        if (ctype == SQLFMT_INTEGER)
+                            len = snprintf(buf, sizeof(buf), "%lld",
+                                           (long long)sqlfmt_reader_int64(sn->reader, c));
+                        else
+                            len = snprintf(buf, sizeof(buf), "%.17g",
+                                           sqlfmt_reader_double(sn->reader, c));
+                        if (len < 0) len = 0;
+                        if (len >= (int)sizeof(buf)) len = (int)sizeof(buf) - 1;
+                        char *copy = (char *)malloc((size_t)(len + 1));
+                        memcpy(copy, buf, (size_t)len);
+                        copy[len] = '\0';
+                        col_str_ptrs[c][n_rows] = copy;
+                        col_str_lens[c][n_rows] = len;
+                    } else {
+                        col_nulls[c][n_rows] = 1;
+                        col_str_ptrs[c][n_rows] = NULL;
+                    }
+                    break;
+                }
                 int len = sqlfmt_reader_bytes(sn->reader, c);
                 char *copy = (char *)malloc((size_t)(len + 1));
                 memcpy(copy, txt, (size_t)len);
@@ -231,6 +278,7 @@ static void sql_scan_free(VecNode *self) {
     SqlScanNode *sn = (SqlScanNode *)self;
     sqlfmt_reader_close(sn->reader);
     free(sn->col_types);
+    free(sn->col_untyped);
     vec_schema_free(&sn->base.output_schema);
     free(sn);
 }
@@ -252,9 +300,15 @@ SqlScanNode *sql_scan_node_create(const char *path, const char *table,
 
     /* Build column types from declared types */
     VecType *col_types = (VecType *)malloc((size_t)n_cols * sizeof(VecType));
+    uint8_t *col_untyped = (uint8_t *)calloc((size_t)n_cols, sizeof(uint8_t));
     char **names = (char **)malloc((size_t)n_cols * sizeof(char *));
     for (int c = 0; c < n_cols; c++) {
-        col_types[c] = decltype_to_vectype(sqlfmt_reader_coltype(reader, c));
+        const char *decl = sqlfmt_reader_coltype(reader, c);
+        col_types[c] = decltype_to_vectype(decl);
+        /* A column with no declared type (BLOB affinity, e.g. CREATE TABLE t(x))
+           maps to VEC_STRING but usually stores numbers; mark it so numeric cells
+           are rendered as text instead of dropped to NA (which lost the column). */
+        col_untyped[c] = (!decl || decl[0] == '\0');
         const char *nm = sqlfmt_reader_colname(reader, c);
         names[c] = (char *)malloc(strlen(nm) + 1);
         strcpy(names[c], nm);
@@ -270,6 +324,7 @@ SqlScanNode *sql_scan_node_create(const char *path, const char *table,
     sn->reader = reader;
     sn->n_cols = n_cols;
     sn->col_types = col_types;
+    sn->col_untyped = col_untyped;
     sn->batch_size = batch_size > 0 ? batch_size : 65536;
     sn->exhausted = 0;
 
