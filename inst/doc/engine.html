@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-07-30" />
+<meta name="date" content="2026-09-09" />
 
 <title>vectra Engine Reference</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">vectra Engine Reference</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-07-30</h4>
+<h4 class="date">2026-09-09</h4>
 
 
 
@@ -1411,12 +1411,17 @@ order.</p>
 </div>
 <div id="index-format" class="section level3">
 <h3>Index format</h3>
-<p>The <code>.vtri</code> format is a chained hash table mapping key
-hashes to row group indices. One layout covers both cases: a header with
-the indexed column indices, a case-insensitive flag, and the row and
-row-group counts of the store at build time, followed by the hash
-entries, their row group entries, a bucket heads array, and a
-next-pointer chain.</p>
+<p>The <code>.vtri</code> format is a sorted array of (key hash, row
+group) entries. One layout covers both cases: a header with the indexed
+column indices, a case-insensitive flag, and the row and row-group
+counts of the store at build time, followed by the entries in ascending
+hash order and a directory giving the first entry for each range of
+leading hash bits.</p>
+<p>Sorting the entries rather than chaining them is what lets an index
+be built in one forward pass through a fixed memory budget, since a
+chained table has to know every entry’s bucket before it can write the
+first one. It also drops the per-entry chain pointer and the bucket
+array: 12 bytes an entry rather than about 36.</p>
 <p>Hashing uses FNV-1a on the raw column bytes; a case-insensitive index
 folds ASCII uppercase to lowercase before hashing. A composite key
 combines the per-column FNV-1a hashes by XOR and multiplication with the
