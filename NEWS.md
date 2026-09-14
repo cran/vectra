@@ -1,3 +1,45 @@
+# vectra 0.12.3
+
+## Tests
+
+* The BED interval-overlap test checks `interval_join()` against an all-pairs
+  overlap computed in base R instead of `GenomicRanges::findOverlaps()`, so
+  GenomicRanges, IRanges and S4Vectors are no longer suggested.
+
+# vectra 0.12.2
+
+## Bug fixes
+
+* The geometry expressions (`st_area()`, `st_intersects()`, ...), the streamed
+  spatial verbs and `spatial_overlay()` no longer trigger clang's
+  `-fsanitize=function` on every GEOS call. vectra calls the GEOS C API through
+  the function pointers libgeos hands out, declared in C with opaque struct
+  handles; GEOS defines the same functions in C++ with class handles. The types
+  are ABI-identical, so results were never affected, but the sanitizer compares
+  them by name. That one check is now turned off for the code calling GEOS, and
+  a clang job building libgeos and vectra under the sanitizer runs in CI.
+
+* A string column whose values are all empty no longer reaches pointer
+  arithmetic on a NULL buffer. Reading one from a `.vtr` store gave the column
+  no string data, which a fuzzy join then offset, and the tdc dictionary encoder
+  did the same when writing one. Both were undefined behaviour in C reported by
+  clang's UBSAN (`applying zero offset to null pointer`); results were not
+  affected.
+
+# vectra 0.12.1
+
+## Bug fixes
+
+* `filter()` on a sorted integer column no longer drops rows when the literal it
+  is compared with lies outside the integer range. The scan converted the
+  literal to a 64-bit integer to search the sorted row groups, and a value past
+  that range has no integer to convert to: `filter(k < 1e300)` returned zero
+  rows where every row matches. A double literal past 2^53, or `NaN`, now leaves
+  the search off and the filter decides every row. The composite-index probe
+  applies the same range check the single-column probe already did. The
+  conversion was reported by the clang-UBSAN check as
+  `1e+300 is outside the range of representable values of type 'long'`.
+
 # vectra 0.12.0
 
 ## Bug fixes

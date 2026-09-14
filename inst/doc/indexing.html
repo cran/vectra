@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-09" />
+<meta name="date" content="2026-09-14" />
 
 <title>Indexing and Query Optimization</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Indexing and Query Optimization</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-09</h4>
+<h4 class="date">2026-09-14</h4>
 
 
 
@@ -773,7 +773,7 @@ site, or sample ID.</p>
 <span id="cb14-7"><a href="#cb14-7" tabindex="-1"></a>})</span>
 <span id="cb14-8"><a href="#cb14-8" tabindex="-1"></a></span>
 <span id="cb14-9"><a href="#cb14-9" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;With index, %in% filter:&quot;</span>, t_in_no_idx[<span class="st">&quot;elapsed&quot;</span>], <span class="st">&quot;s</span><span class="sc">\n</span><span class="st">&quot;</span>)</span>
-<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; With index, %in% filter: 0.2 s</span></span></code></pre></div>
+<span id="cb14-10"><a href="#cb14-10" tabindex="-1"></a><span class="co">#&gt; With index, %in% filter: 0.19 s</span></span></code></pre></div>
 <p>Without an index, the same query reads all row groups and filters in
 memory. The difference grows with file size.</p>
 </div>
