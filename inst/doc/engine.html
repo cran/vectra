@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-14" />
+<meta name="date" content="2026-09-16" />
 
 <title>vectra Engine Reference</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">vectra Engine Reference</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-14</h4>
+<h4 class="date">2026-09-16</h4>
 
 
 
@@ -1413,10 +1413,10 @@ order.</p>
 <h3>Index format</h3>
 <p>The <code>.vtri</code> format is a sorted array of (key hash, row
 group) entries. One layout covers both cases: a header with the indexed
-column indices, a case-insensitive flag, and the row and row-group
-counts of the store at build time, followed by the entries in ascending
-hash order and a directory giving the first entry for each range of
-leading hash bits.</p>
+column indices, a case-insensitive flag, and the row count, row-group
+count and fingerprint of the store at build time, followed by the
+entries in ascending hash order and a directory giving the first entry
+for each range of leading hash bits.</p>
 <p>Sorting the entries rather than chaining them is what lets an index
 be built in one forward pass through a fixed memory budget, since a
 chained table has to know every entry’s bucket before it can write the
@@ -1426,12 +1426,20 @@ array: 12 bytes an entry rather than about 36.</p>
 folds ASCII uppercase to lowercase before hashing. A composite key
 combines the per-column FNV-1a hashes by XOR and multiplication with the
 FNV prime, giving one 64-bit hash per entry.</p>
-<p>The stored row and row-group counts are what make an index safe to
-leave on disk. <code>vtri_open()</code> compares them with the store
-being queried and reports no index when they disagree, so an index that
-no longer describes its store is ignored rather than used to prune row
-groups that have moved. Formats written before 0.11.8 lack the counts
-and read as absent; <code>create_index()</code> rebuilds them.</p>
+<p>The stored stamp is what makes an index safe to leave on disk.
+<code>vtri_open()</code> compares it with the store being queried and
+reports no index when any part disagrees, so an index that no longer
+describes its store is ignored rather than used to prune row groups that
+have moved or now hold other keys. The counts catch an append; the
+fingerprint catches a store replaced by another of the same shape,
+whether by <code>write_vtr()</code>, a download or a rename. It digests
+the store’s row-group index together with a digest of the store’s bytes,
+which the writers compute as they write and record in a 24-byte trailer
+after the container, so checking it costs the store’s metadata rather
+than its data. A store written before 0.12.4 has no trailer, and its
+fingerprint covers its layout only. Index formats written before 0.12.4
+lack the fingerprint and read as absent; <code>create_index()</code>
+rebuilds them.</p>
 </div>
 <div id="how-the-scan-uses-indexes" class="section level3">
 <h3>How the scan uses indexes</h3>
