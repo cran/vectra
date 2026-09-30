@@ -359,10 +359,10 @@ nrow(tbl(merged_vtr) |> collect())
 
 # Compare to:
 # tbl(huge.vtr) |>
-#   arrange(species)               -> external sort, up to 1 GB
-#   left_join(big_ref, by = "id")  -> build side = big_ref size
+#   arrange(species)               -> external sort, up to the budget
+#   left_join(big_ref, by = "id")  -> build side = big_ref, up to the budget
 #
-# Total peak: 1 GB (sort) + big_ref size
+# Peak bounded by the budget; anything beyond it goes to temporary files
 
 ## ----memory-pipeline----------------------------------------------------------
 final_path <- tempfile(fileext = ".vtr")

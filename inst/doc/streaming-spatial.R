@@ -124,6 +124,14 @@ plot(st_geometry(nc), border = "grey85", col = NA,
      main = "Points tagged with their county")
 plot(tagged_sf["NAME"], pch = 16, cex = 0.5, add = TRUE)
 
+## ----join-count---------------------------------------------------------------
+tbl(fp) |>
+  spatial_join(nc["NAME"], coords = c("x", "y"), crs = crs_nc,
+               keep_geom = FALSE) |>
+  count(NAME) |>
+  collect() |>
+  head()
+
 ## ----join-nearest-------------------------------------------------------------
 ncent <- st_sf(NAME = nc$NAME, geometry = st_centroid(st_geometry(nc)))
 nearest <- tbl(fp) |>

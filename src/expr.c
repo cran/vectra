@@ -61,7 +61,9 @@ static VecArray *make_scalar_i64(int64_t val, int64_t n) {
     VecArray *out = (VecArray *)malloc(sizeof(VecArray));
     *out = vec_array_alloc(VEC_INT64, n);
     vec_array_set_all_valid(out);
+    #ifdef _OPENMP
     #pragma omp parallel for if(n > VEC_OMP_THRESHOLD) schedule(static)
+    #endif
     for (int64_t i = 0; i < n; i++) out->buf.i64[i] = val;
     return out;
 }
@@ -70,7 +72,9 @@ static VecArray *make_scalar_dbl(double val, int64_t n) {
     VecArray *out = (VecArray *)malloc(sizeof(VecArray));
     *out = vec_array_alloc(VEC_DOUBLE, n);
     vec_array_set_all_valid(out);
+    #ifdef _OPENMP
     #pragma omp parallel for if(n > VEC_OMP_THRESHOLD) schedule(static)
+    #endif
     for (int64_t i = 0; i < n; i++) out->buf.dbl[i] = val;
     return out;
 }
@@ -79,7 +83,9 @@ static VecArray *make_scalar_bln(uint8_t val, int64_t n) {
     VecArray *out = (VecArray *)malloc(sizeof(VecArray));
     *out = vec_array_alloc(VEC_BOOL, n);
     vec_array_set_all_valid(out);
+    #ifdef _OPENMP
     #pragma omp parallel for if(n > VEC_OMP_THRESHOLD) schedule(static)
+    #endif
     for (int64_t i = 0; i < n; i++) out->buf.bln[i] = val;
     return out;
 }
@@ -201,46 +207,9 @@ VecArray *vec_expr_eval(const VecExpr *expr, const VecBatch *batch) {
         vec_array_free(o); free(o);
         return res;
     }
-    case EXPR_MATH_UNARY: {
-        VecArray *o = vec_expr_eval(expr->operand, batch);
-        /* Coerce to double if int; otherwise take ownership of the already-double
-           operand directly (no copy — copying and then free()ing only the wrapper
-           leaked the data+validity buffers on every batch). */
-        VecArray *d;
-        if (o->type != VEC_DOUBLE) {
-            /* Coerce any non-double operand (int64 AND bool). A bool operand is
-               a 1-byte-per-element buffer; reading it through buf.dbl[i] below
-               would over-read the allocation and return garbage. */
-            d = vec_coerce(o, VEC_DOUBLE);
-            vec_array_free(o); free(o);
-        } else {
-            d = o;
-        }
-        /* d is now VEC_DOUBLE */
-        VecArray *out = (VecArray *)malloc(sizeof(VecArray));
-        *out = vec_array_alloc(VEC_DOUBLE, d->length);
-        for (int64_t i = 0; i < d->length; i++) {
-            if (!vec_array_is_valid(d, i)) { vec_array_set_null(out, i); continue; }
-            vec_array_set_valid(out, i);
-            double v = d->buf.dbl[i];
-            switch (expr->math_fn) {
-            case 'a': out->buf.dbl[i] = fabs(v); break;
-            case 's': out->buf.dbl[i] = sqrt(v); break;
-            case 'l': out->buf.dbl[i] = log(v); break;
-            case 'e': out->buf.dbl[i] = exp(v); break;
-            case 'f': out->buf.dbl[i] = floor(v); break;
-            case 'c': out->buf.dbl[i] = ceil(v); break;
-            case 'r': out->buf.dbl[i] = rint(v); break; /* round half to even, like R */
-            case '2': out->buf.dbl[i] = log2(v); break;
-            case 't': out->buf.dbl[i] = log10(v); break;
-            case 'g': out->buf.dbl[i] = (v > 0) ? 1.0 : (v < 0) ? -1.0 : 0.0; break;
-            case 'u': out->buf.dbl[i] = trunc(v); break;
-            default: vectra_error("unknown math function: %c", expr->math_fn);
-            }
-        }
-        vec_array_free(d); free(d);
-        return out;
-    }
+    case EXPR_MATH_UNARY:
+    case EXPR_MATH_BINARY:
+        return vec_expr_eval_math(expr, batch);
     case EXPR_CAST: {
         VecArray *o = vec_expr_eval(expr->operand, batch);
         VecArray *res = vec_coerce(o, expr->cast_to);
@@ -450,8 +419,6 @@ VecArray *vec_expr_eval(const VecExpr *expr, const VecBatch *batch) {
         return out;
     }
     /* Datetime / extended operations — dispatched to expr_datetime.c */
-    case EXPR_PMIN:
-    case EXPR_PMAX:
     case EXPR_DATE_PART:
     case EXPR_AS_DATE:
     case EXPR_FLOOR_TIME:

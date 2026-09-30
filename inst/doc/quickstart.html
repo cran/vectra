@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-16" />
+<meta name="date" content="2026-09-29" />
 
 <title>Getting Started with vectra</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Getting Started with vectra</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-16</h4>
+<h4 class="date">2026-09-29</h4>
 
 
 
@@ -813,13 +813,7 @@ where predicate pushdown applies.</p>
 <span id="cb9-11"><a href="#cb9-11" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
 <span id="cb9-12"><a href="#cb9-12" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
 <span id="cb9-13"><a href="#cb9-13" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
-<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
-<span id="cb9-15"><a href="#cb9-15" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb9-16"><a href="#cb9-16" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: streaming scan&gt;</span></span>
-<span id="cb9-17"><a href="#cb9-17" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 per consumption (lazy)</span></span>
-<span id="cb9-18"><a href="#cb9-18" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(one batch)</span></span>
-<span id="cb9-19"><a href="#cb9-19" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n) per pass</span></span>
-<span id="cb9-20"><a href="#cb9-20" tabindex="-1"></a><span class="co">#&gt;   note             : plain query node; re-reading re-runs the upstream pipeline</span></span></code></pre></div>
+<span id="cb9-14"><a href="#cb9-14" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
 <p>The ProjectNode prunes columns before the data reaches R. The
 FilterNode sits below it, and the ScanNode reads from disk. When a hash
 index exists on the filter column, the scan node probes the
@@ -859,13 +853,19 @@ rows runs at C speed regardless of expression complexity.</p>
 <span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a><span class="co">#&gt; 5 18.7 7.950193 175 3.440  50.87209</span></span>
 <span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co">#&gt; 6 18.1 7.695106 105 3.460  30.34682</span></span></code></pre></div>
 <p>Math functions are evaluated natively in C: <code>abs()</code>,
-<code>sqrt()</code>, <code>log()</code>, <code>log2()</code>,
-<code>log10()</code>, <code>exp()</code>, <code>floor()</code>,
-<code>ceiling()</code>, <code>round()</code>, <code>sign()</code>,
-<code>trunc()</code>. For element-wise binary min/max,
-<code>pmin()</code> and <code>pmax()</code> take two arguments (columns
-or literals) and return the smaller or larger of each pair. These
-compose with arithmetic to build clamping expressions.</p>
+<code>sqrt()</code>, <code>exp()</code>, <code>expm1()</code>,
+<code>log()</code>, <code>log1p()</code>, <code>log2()</code>,
+<code>log10()</code>, <code>floor()</code>, <code>ceiling()</code>,
+<code>round()</code>, <code>sign()</code>, <code>trunc()</code>, the
+trigonometric <code>sin()</code>, <code>cos()</code>,
+<code>tan()</code>, <code>asin()</code>, <code>acos()</code>,
+<code>atan()</code>, <code>atan2()</code>, the hyperbolic
+<code>sinh()</code>, <code>cosh()</code>, <code>tanh()</code>,
+<code>asinh()</code>, <code>acosh()</code>, <code>atanh()</code>, and
+powers with <code>^</code>. For element-wise min/max,
+<code>pmin()</code> and <code>pmax()</code> take two or more arguments
+(columns or literals) and return the smallest or largest of each row.
+These compose with arithmetic to build clamping expressions.</p>
 <div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
 <span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
 <span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>    <span class="at">log_hp =</span> <span class="fu">log</span>(hp),</span>
@@ -1283,10 +1283,10 @@ equal sort keys preserve their original order.</p>
 <span id="cb31-13"><a href="#cb31-13" tabindex="-1"></a><span class="co">#&gt; 7 24.4   4  62</span></span>
 <span id="cb31-14"><a href="#cb31-14" tabindex="-1"></a><span class="co">#&gt; 8 22.8   4  93</span></span></code></pre></div>
 <p>Under the hood, <code>arrange()</code> uses an external merge sort
-with a 1 GB memory budget. When data exceeds that limit, sorted runs
-spill to temporary <code>.vtr</code> files and merge via a k-way
-min-heap. NAs sort last in ascending order and first in descending
-order.</p>
+bounded by the memory budget (<code>vectra_mem()</code>). When data
+exceeds it, sorted runs spill to temporary <code>.vtr</code> files and
+merge via a k-way min-heap. <code>NA</code>s sort last in both ascending
+and descending order.</p>
 <p><code>slice_head()</code> and <code>slice_tail()</code> return the
 first or last <code>n</code> rows. <code>slice_head()</code> is
 streaming (it creates a LimitNode that stops pulling after
@@ -2138,13 +2138,7 @@ output column schema at each level.</p>
 <span id="cb68-13"><a href="#cb68-13" tabindex="-1"></a><span class="co">#&gt; Output columns (3):</span></span>
 <span id="cb68-14"><a href="#cb68-14" tabindex="-1"></a><span class="co">#&gt;   mpg &lt;double&gt;</span></span>
 <span id="cb68-15"><a href="#cb68-15" tabindex="-1"></a><span class="co">#&gt;   cyl &lt;double&gt;</span></span>
-<span id="cb68-16"><a href="#cb68-16" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span>
-<span id="cb68-17"><a href="#cb68-17" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb68-18"><a href="#cb68-18" tabindex="-1"></a><span class="co">#&gt; &lt;offload grade: streaming scan&gt;</span></span>
-<span id="cb68-19"><a href="#cb68-19" tabindex="-1"></a><span class="co">#&gt;   passes over data : 1 per consumption (lazy)</span></span>
-<span id="cb68-20"><a href="#cb68-20" tabindex="-1"></a><span class="co">#&gt;   peak memory      : O(one batch)</span></span>
-<span id="cb68-21"><a href="#cb68-21" tabindex="-1"></a><span class="co">#&gt;   I/O cost         : O(n) per pass</span></span>
-<span id="cb68-22"><a href="#cb68-22" tabindex="-1"></a><span class="co">#&gt;   note             : plain query node; re-reading re-runs the upstream pipeline</span></span></code></pre></div>
+<span id="cb68-16"><a href="#cb68-16" tabindex="-1"></a><span class="co">#&gt;   hp &lt;double&gt;</span></span></code></pre></div>
 <p>Several things to look for in the plan:</p>
 <p><strong>Streaming vs. materializing.</strong> FilterNode and
 ProjectNode are streaming: they process one batch at a time in constant

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-16" />
+<meta name="date" content="2026-09-29" />
 
 <title>vectra Engine Reference</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">vectra Engine Reference</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-16</h4>
+<h4 class="date">2026-09-29</h4>
 
 
 
@@ -404,6 +404,11 @@ on a 100-column table) only read the columns they need from disk.</p>
 <div id="data-sources" class="section level2">
 <h2>Data sources</h2>
 <table>
+<colgroup>
+<col width="34%" />
+<col width="27%" />
+<col width="37%" />
+</colgroup>
 <thead>
 <tr class="header">
 <th align="left">Function</th>
@@ -423,14 +428,35 @@ on a 100-column table) only read the columns they need from disk.</p>
 <td align="left">yes, batch-at-a-time</td>
 </tr>
 <tr class="odd">
+<td align="left"><code>tbl_parquet(path)</code></td>
+<td align="left">Parquet (one file, several, or a directory)</td>
+<td align="left">yes, row-group-at-a-time</td>
+</tr>
+<tr class="even">
 <td align="left"><code>tbl_sqlite(path, table)</code></td>
 <td align="left">SQLite</td>
 <td align="left">yes, batch-at-a-time</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td align="left"><code>tbl_tiff(path)</code></td>
 <td align="left">GeoTIFF</td>
 <td align="left">yes, row-strip-at-a-time</td>
+</tr>
+<tr class="even">
+<td align="left"><code>tbl_fasta(path)</code>,
+<code>tbl_fastq(path)</code></td>
+<td align="left">FASTA / FASTQ (plain or gzipped)</td>
+<td align="left">yes, batch-at-a-time</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>tbl_bed(path)</code></td>
+<td align="left">BED</td>
+<td align="left">yes, batch-at-a-time</td>
+</tr>
+<tr class="even">
+<td align="left"><code>tbl_xlsx(path)</code></td>
+<td align="left">Excel <code>.xlsx</code></td>
+<td align="left">no, the sheet is read into memory via openxlsx2</td>
 </tr>
 </tbody>
 </table>
@@ -517,11 +543,17 @@ float64/float32/int16/int32/uint8/uint16</td>
 <td align="left">Arithmetic, comparison, boolean, <code>is.na()</code>,
 <code>nchar()</code>, <code>substr()</code>, <code>grepl()</code>, math
 (<code>abs</code>, <code>sqrt</code>, <code>log</code>,
-<code>exp</code>, <code>floor</code>, <code>ceiling</code>,
-<code>round</code>, <code>log2</code>, <code>log10</code>,
-<code>sign</code>, <code>trunc</code>), <code>if_else()</code>,
-<code>between()</code>, <code>%in%</code>, type casting
-(<code>as.numeric</code>), <code>tolower()</code>,
+<code>exp</code>, <code>log1p</code>, <code>expm1</code>,
+<code>floor</code>, <code>ceiling</code>, <code>round</code>,
+<code>log2</code>, <code>log10</code>, <code>sign</code>,
+<code>trunc</code>, <code>^</code>), trigonometric and hyperbolic
+functions (<code>sin</code>, <code>cos</code>, <code>tan</code>,
+<code>asin</code>, <code>acos</code>, <code>atan</code>,
+<code>atan2</code>, <code>sinh</code>, <code>cosh</code>,
+<code>tanh</code>, <code>asinh</code>, <code>acosh</code>,
+<code>atanh</code>), the constant <code>pi</code>,
+<code>if_else()</code>, <code>between()</code>, <code>%in%</code>, type
+casting (<code>as.numeric</code>), <code>tolower()</code>,
 <code>toupper()</code>, <code>trimws()</code>, <code>paste0()</code>,
 <code>gsub()</code>, <code>sub()</code>, <code>startsWith()</code>,
 <code>endsWith()</code>, <code>pmin()</code>, <code>pmax()</code>,
@@ -573,7 +605,8 @@ columns</td>
 <tr class="even">
 <td align="left"><code>summarise(...)</code></td>
 <td align="left"><strong>materializes</strong></td>
-<td align="left">Hash-based or sort-based aggregation</td>
+<td align="left">Hash aggregation; spills to disk when the groups
+outgrow the memory budget</td>
 </tr>
 <tr class="odd">
 <td align="left"><code>ungroup()</code></td>
@@ -619,7 +652,8 @@ All accept <code>na.rm = TRUE</code>.</p>
 <tr class="odd">
 <td align="left"><code>arrange(...)</code></td>
 <td align="left"><strong>materializes</strong></td>
-<td align="left">External merge sort with 1 GB spill budget</td>
+<td align="left">External merge sort; spills sorted runs past the memory
+budget</td>
 </tr>
 <tr class="even">
 <td align="left"><code>slice_head(n)</code></td>
@@ -658,7 +692,8 @@ negative indices)</td>
 <tr class="even">
 <td align="left"><code>distinct(...)</code></td>
 <td align="left"><strong>materializes</strong></td>
-<td align="left">Uses hash-based grouping</td>
+<td align="left">Grouped aggregation with no aggregates, so the same
+hash path and spill</td>
 </tr>
 </tbody>
 </table>
@@ -681,32 +716,33 @@ negative indices)</td>
 <tbody>
 <tr class="odd">
 <td align="left"><code>inner_join(x, y)</code></td>
-<td align="left"><strong>build materializes right</strong></td>
-<td align="left">Hash join; left streams</td>
+<td align="left"><strong>build side buffered</strong></td>
+<td align="left">Hash join; left streams, right is the build side and
+spills past the budget</td>
 </tr>
 <tr class="even">
 <td align="left"><code>left_join(x, y)</code></td>
-<td align="left"><strong>build materializes right</strong></td>
+<td align="left"><strong>build side buffered</strong></td>
 <td align="left">Hash join; left streams</td>
 </tr>
 <tr class="odd">
 <td align="left"><code>right_join(x, y)</code></td>
-<td align="left"><strong>build materializes left</strong></td>
+<td align="left"><strong>build side buffered</strong></td>
 <td align="left">Implemented as swapped left join</td>
 </tr>
 <tr class="even">
 <td align="left"><code>full_join(x, y)</code></td>
-<td align="left"><strong>build materializes right</strong></td>
+<td align="left"><strong>build side buffered</strong></td>
 <td align="left">Hash join + finalize pass</td>
 </tr>
 <tr class="odd">
 <td align="left"><code>semi_join(x, y)</code></td>
-<td align="left"><strong>build materializes right</strong></td>
+<td align="left"><strong>build side buffered</strong></td>
 <td align="left">Hash join; returns left rows only</td>
 </tr>
 <tr class="even">
 <td align="left"><code>anti_join(x, y)</code></td>
-<td align="left"><strong>build materializes right</strong></td>
+<td align="left"><strong>build side buffered</strong></td>
 <td align="left">Hash join; returns non-matching left rows</td>
 </tr>
 <tr class="odd">
@@ -787,8 +823,13 @@ current)</td>
 </tr>
 </tbody>
 </table>
-<p>Window functions respect <code>group_by()</code> partitions. They
-<strong>materialize</strong> all data within each partition.</p>
+<p>Window functions respect <code>group_by()</code> partitions. A
+grouped window sorts its input by the group keys through the external
+sort and then processes one group at a time, so its peak is the largest
+group. An ungrouped window streams the table in one forward pass; when
+its functions need different orderings (for example <code>lag()</code>
+next to <code>rank()</code>), it runs as a chain of single-function
+windows, each of which streams.</p>
 </div>
 <div id="other-verbs" class="section level3">
 <h3>Other verbs</h3>
@@ -858,6 +899,28 @@ current)</td>
 data.frame from the schema, giving tidyselect enough type information to
 evaluate predicates.</p>
 </div>
+<div id="programming-with-verbs" class="section level3">
+<h3>Programming with verbs</h3>
+<p>Every verb that takes expressions (<code>filter()</code>,
+<code>mutate()</code>, <code>transmute()</code>,
+<code>summarise()</code>, <code>arrange()</code>,
+<code>group_by()</code>, <code>count()</code>, <code>pull()</code>,
+<code>slice_min()</code>, <code>slice_max()</code>, and the others)
+captures its arguments with rlang, so the usual injection tools
+work:</p>
+<ul>
+<li><code>!!</code> and <code>!!!</code> inject a value, a symbol or a
+list of them (<code>group_by(!!sym(k))</code>,
+<code>summarise(!!!aggs)</code>)</li>
+<li><code>{{ }}</code> forwards an argument from a wrapper function</li>
+<li><code>!!name := expr</code> builds a column name</li>
+<li><code>.data[[k]]</code> and <code>.data$k</code> refer to a column
+by name, <code>.env$x</code> to a variable in the calling
+environment</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="st">&quot;species&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">group_by</span>(.data[[k]]) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>())</span></code></pre></div>
+</div>
 </div>
 <div id="supported-types" class="section level2">
 <h2>Supported types</h2>
@@ -907,8 +970,8 @@ evaluate predicates.</p>
 </div>
 <div id="annotated-types" class="section level3">
 <h3>Annotated types</h3>
-<p>The <code>.vtr</code> format version 2 stores per-column annotations
-that preserve R type metadata through the write/read cycle:</p>
+<p>The <code>.vtr</code> schema stores a per-column annotation that
+preserves R type metadata through the write/read cycle:</p>
 <table>
 <colgroup>
 <col width="21%" />
@@ -1030,10 +1093,11 @@ the validity bitmap.</p>
 preserve input order</p></li>
 <li><p><code>arrange()</code>: produces a total order (stable
 sort)</p></li>
-<li><p><code>group_by() |&gt; summarise()</code>: output order is
-<strong>not guaranteed</strong> (hash-based path) or sorted by key
-(sort-based path); do not depend on either</p></li>
-<li><p><code>distinct()</code>: output order is not guaranteed</p></li>
+<li><p><code>group_by() |&gt; summarise()</code>: groups come out sorted
+by key, with <code>NA</code> keys last, whether or not the aggregation
+spilled</p></li>
+<li><p><code>distinct()</code>: sorted by the distinct columns,
+<code>NA</code> last (it runs through the same aggregation)</p></li>
 <li><p>Joins: probe-side order is preserved within each batch;
 build-side order is not guaranteed</p></li>
 <li><p><code>bind_rows()</code>: child order is preserved (first child’s
@@ -1045,17 +1109,21 @@ rows, then second’s, etc.)</p></li>
 <div id="streaming-nodes-constant-memory-per-batch" class="section level3">
 <h3>Streaming nodes (constant memory per batch)</h3>
 <ul>
-<li><p>Scan (<code>.vtr</code>, CSV, SQLite, TIFF)</p></li>
+<li><p>Scans (<code>.vtr</code>, Parquet, CSV, SQLite, TIFF,
+FASTA/FASTQ, BED)</p></li>
 <li><p>Filter</p></li>
 <li><p>Project (select / mutate / rename / relocate /
 transmute)</p></li>
 <li><p>Limit (slice_head, head)</p></li>
 <li><p>Concat (bind_rows)</p></li>
+<li><p>Ungrouped windows (see Window functions above)</p></li>
 </ul>
 </div>
 <div id="materializing-nodes" class="section level3">
 <h3>Materializing nodes</h3>
-<p>These nodes buffer data in memory:</p>
+<p>These nodes buffer data. Every one of them is bounded: it either
+holds a fixed amount of state or spills to temporary files once its
+buffer reaches the memory budget.</p>
 <table>
 <colgroup>
 <col width="17%" />
@@ -1072,215 +1140,229 @@ transmute)</p></li>
 <tbody>
 <tr class="odd">
 <td align="left">Sort (arrange)</td>
-<td align="left">All input rows</td>
-<td align="left">1 GB memory budget, then spills to disk</td>
+<td align="left">Input rows</td>
+<td align="left">Memory budget, then sorted runs on disk</td>
 </tr>
 <tr class="even">
-<td align="left">GroupAgg (summarise)</td>
-<td align="left">Hash table of groups + accumulators</td>
-<td align="left">Number of distinct groups</td>
+<td align="left">GroupAgg (summarise, distinct, count)</td>
+<td align="left">Hash tables of groups + accumulators</td>
+<td align="left">Memory budget, then hash partitions on disk</td>
 </tr>
 <tr class="odd">
-<td align="left">TopN (slice_min/max)</td>
+<td align="left">TopN (slice_min/max,
+<code>with_ties = FALSE</code>)</td>
 <td align="left">Heap of n rows</td>
 <td align="left">Requested n</td>
 </tr>
 <tr class="even">
-<td align="left">Window</td>
-<td align="left">All rows per partition</td>
-<td align="left">Partition size</td>
+<td align="left">Window, grouped</td>
+<td align="left">One group at a time, after the external sort</td>
+<td align="left">Largest group</td>
 </tr>
 <tr class="odd">
-<td align="left">Join (build phase)</td>
-<td align="left">Right-side table in hash table</td>
-<td align="left">Right-side row count</td>
+<td align="left">Join (build side)</td>
+<td align="left">Right-side rows + hash table</td>
+<td align="left">Memory budget, then hash partitions on disk</td>
 </tr>
 </tbody>
 </table>
+<p>The memory budget is <code>vectra_mem()</code>, which defaults to
+half of physical RAM (at least 1 GB) and is set with
+<code>options(vectra.memory = &quot;4GB&quot;)</code>. It bounds the whole query,
+not each node. Before execution the optimizer creates one pool of
+<code>vectra_mem()</code> bytes for the plan and gives every buffering
+step (sort, join, grouped aggregate, fuzzy join, k-mer count) a claim on
+it. A step reserves the bytes it actually allocates as its buffers grow,
+releases them as it frees them, and spills to disk when the pool refuses
+a reservation. A step that needs little leaves the rest of the pool to
+the others. So that no step can be starved, each is guaranteed a floor
+of 1/(4 x number of buffering steps) of the budget; the other three
+quarters are shared, first come first served. The nodes a step creates
+internally, such as a grouped aggregate’s sorts or a grace-hash join’s
+sub-joins, draw on that step’s claim.</p>
+<p>Spill files (sort runs, join and aggregation partitions, fuzzy-join
+build runs, and the temporary file <code>diff_vtr()</code> collects
+added rows in) are written uncompressed, since each is written once and
+read once. They go to <code>tempdir()</code> and are deleted when the
+node that wrote them is freed.</p>
 </div>
 <div id="external-sort-spill-to-disk" class="section level3">
 <h3>External sort (spill-to-disk)</h3>
 <p><code>arrange()</code> accumulates incoming batches into column
-builders in memory. After each batch, the sort node estimates total
-memory usage across all builders. When the estimate exceeds the memory
-budget (default 1 GB, defined as <code>DEFAULT_MEM_BUDGET</code>), the
-node flushes the accumulated data as a sorted run:</p>
-<ol style="list-style-type: decimal">
-<li><p>The builders are finished into arrays.</p></li>
-<li><p>The arrays are sorted in-place using a parallel merge sort
-(OpenMP task spawning above 32,768 rows, sequential below).</p></li>
-<li><p>The sorted data is written to a temporary <code>.vtr</code> file
-in the system temp directory, split into row groups of 65,536 rows
-each.</p></li>
-<li><p>The builders are reset and accumulation continues.</p></li>
-</ol>
-<p>This spill cycle repeats as many times as needed. A 10 GB dataset
-with a 1 GB budget produces approximately 10 spill files.</p>
-<p>Once all input is consumed, the sort node enters the merge phase. It
-opens all spill files as <code>Vtr1File</code> readers and runs a k-way
-merge using a min-heap. Each heap entry holds a reference to one merge
-run (one spill file) and tracks the current row group and cursor
-position within that run. The merge emits batches of up to 65,536 rows,
-reading row groups from spill files on demand. Peak memory during the
-merge phase is proportional to k (number of runs) times the row group
-size, not the total dataset size.</p>
-<p>If all data fits within the 1 GB budget, no spill occurs. The node
-sorts in memory and emits the result directly. This is the common case
-for datasets under ~100 million rows (depending on column count and
-types).</p>
-<p>The sort-based <code>group_by() |&gt; summarise()</code> path (used
-internally when the engine detects it is advantageous) also benefits
-from this spill mechanism. Temporary spill files are deleted when the
-sort node is freed.</p>
+builders. Before taking a batch it reserves what the builders will hold
+after growing, plus 32 bytes per buffered row for the sort’s working
+space (the row permutation and the radix sort’s scratch). When the
+reservation is refused, the node sorts what it holds and writes it to a
+temporary <code>.vtr</code> file as one sorted run, in row groups of
+65,536 rows, then resets the builders and continues. Sorting in memory
+orders a row-index permutation: a radix sort for a single numeric key,
+otherwise a parallel merge sort (OpenMP tasks above 32,768 rows).</p>
+<p>Once the input is consumed, the node merges the runs with a min-heap.
+The number of runs merged at once (the fan-in) is capped: it is computed
+from the measured width of the spilled rows so that the rows held by an
+open merge stay within half the budget, and lies between 2 and 64. When
+there are more runs than the fan-in, groups of runs are first merged
+into fewer, longer runs, in as many passes as needed, before the final
+merge streams the result in batches of 65,536 rows. Merge memory
+therefore depends on the row width and the budget, not on the number of
+rows sorted.</p>
+<p>If the input fits within the budget, nothing is written to disk and
+the sort runs in memory. It then keeps only the buffered columns and the
+permutation, and emits the result in batches of 131,072 rows, gathering
+each batch’s fixed-width columns in one parallel pass.</p>
+</div>
+<div id="grouped-aggregation" class="section level3">
+<h3>Grouped aggregation</h3>
+<p><code>summarise()</code> of the scalar aggregates (<code>n()</code>,
+<code>sum()</code>, <code>mean()</code>, <code>min()</code>,
+<code>max()</code>, <code>sd()</code>, <code>var()</code>,
+<code>first()</code>, <code>last()</code>, <code>any()</code>,
+<code>all()</code>) aggregates in hash tables. The key space is split by
+hash into up to 64 shards, one hash table per shard, and the shards run
+in parallel; a group lives in exactly one shard, so nothing has to be
+merged afterwards. Hashing is FNV-1a on the key bytes, multi-key hashes
+are combined by rotating and XOR-ing the per-key hashes.</p>
+<p>When the tables reach their share of the budget they stop admitting
+new groups. Rows of groups already held keep aggregating in place; rows
+of any other group are written, by a salted hash of the key, to one of
+64 temporary partition files. Each partition is then aggregated on its
+own with a differently salted hash, recursively, and a partition still
+too large after three levels takes the sort-based path. Every group is
+either wholly in memory or wholly in one partition, so no partial result
+is ever combined with another.</p>
+<p><code>median()</code> and <code>n_distinct()</code> need every value
+of a group. With either of them in the <code>summarise()</code>, the
+input is sorted by the group keys through the external sort and the
+groups are aggregated one at a time; each group’s values go to a buffer
+that spills to disk and is reduced by an external merge, so a single
+very large group costs disk rather than memory.</p>
+<p>Groups are emitted sorted by key, <code>NA</code> last. When nothing
+spilled, the result table is sorted in memory; otherwise it passes
+through the external sort.</p>
 </div>
 <div id="join-memory-model" class="section level3">
 <h3>Join memory model</h3>
 <p>Joins use a <strong>build-right, probe-left</strong> hash join:</p>
 <ol style="list-style-type: decimal">
-<li><strong>Build phase</strong>: The entire right-side table is
-materialized into a hash table in memory. Key columns are hashed using
-FNV-1a. For single-key joins, the hash is computed directly on the key
-bytes. For multi-key joins, per-key hashes are combined via XOR and FNV
-prime multiplication. The hash table uses open addressing. Key hashing
-is OpenMP-parallelized for batches above 32,768 rows.</li>
+<li><strong>Build phase</strong>: The right side is read into memory and
+indexed by a hash table. Key columns are hashed with FNV-1a; multi-key
+hashes are combined per key. Build-side hashing is OpenMP-parallelized
+above 32,768 rows.</li>
 <li><strong>Probe phase</strong>: Left-side batches stream through one
-at a time, probing the hash table. For each left row, the engine
-computes the key hash, looks up the hash table, and verifies key
-equality (hash collisions are resolved by comparison). Probe-side
-hashing is also parallelized.</li>
-<li><strong>Finalize phase</strong> (full_join only): Unmatched
-right-side rows are emitted in chunks of 65,536 rows. A matched-flag
-array tracks which right-side rows participated in the join.</li>
+at a time. For each left row the engine computes the key hash, looks up
+the table, and checks key equality, so hash collisions never produce a
+false match. Probe-side hashing is also parallelized.</li>
+<li><strong>Finalize phase</strong> (full join): unmatched right-side
+rows are emitted from a matched-row bitset.</li>
 </ol>
-<p>The memory cost of a join is proportional to the right-side table
-size (data arrays plus hash table overhead). The left side streams and
-does not accumulate. For this reason, place the smaller table on the
-right side of the join. The <code>right_join</code> verb handles this
-automatically by swapping sides internally and remapping columns in the
-output.</p>
+<p>When the build side outgrows the memory budget, the join switches to
+a grace hash join: both sides are written by key hash into 64 partition
+files and the partitions are joined one at a time. A partition that is
+itself still too large is partitioned again with a hash salted by the
+recursion depth, so keys that collided at one level split at the next. A
+single key value repeated more times than fits in memory cannot be split
+by any hash; after three levels such a partition is joined by a block
+nested loop, reading the build side in blocks that fit the budget and
+rescanning the probe side once per block. At that level the join holds
+one build block, one probe batch, and bitsets of one bit per row.</p>
+<p>When both inputs are already sorted on the join keys, the join merges
+them instead of building a hash table. Which of the two it uses is
+decided before the build, because it sets what the build reserves: a
+hash join reserves the build columns plus the slot arrays (16 bytes per
+slot, with the slot count the next power of two at or above twice the
+build rows), a chain array and a temporary hash array (8 bytes per build
+row each), and for a full join a one-bit-per-row matched bitset. A merge
+join reserves only the columns and the bitset. The grace-hash partitions
+and block-nested-loop blocks check the same figure.</p>
+<p>The left side streams and does not accumulate, so put the smaller
+table on the right. <code>right_join()</code> does this by swapping the
+sides internally and remapping the output columns.</p>
 </div>
 </div>
 <div id="the-.vtr-file-format" class="section level2">
 <h2>The .vtr file format</h2>
 <p>The <code>.vtr</code> format is vectra’s native binary columnar
-format. It is designed for fast sequential reads with row-group-level
-granularity.</p>
+format, built on the tdc container (typed dimensional compression,
+vendored in <code>src/tdc/</code>).</p>
 <div id="layout" class="section level3">
 <h3>Layout</h3>
-<pre><code>Header:
-  magic bytes (&quot;VTR1&quot;)
-  version (uint16: 1–4)
-  n_cols, n_rowgroups
-  per-column: name + type byte [+ annotation string in v2+]
-  row group index (byte offsets)
-
-Row groups (repeated):
-  per-column:
-    validity bitmap (bit-packed)
-    [v4] encoding tag (1 byte) + compression tag (1 byte)
-    [v4] uncompressed_size (uint32)
-    typed data array (int64/double/bool/string)
-  [v3+] per-column statistics (min/max)</code></pre>
+<pre><code>tdc container:
+  header (64 bytes): &quot;TDC1&quot; magic, flags, section offsets
+  schema: per-column name, type and annotation
+  blocks: one self-describing block record per column per row group
+  row-group index: block offsets and sizes, plus per-column
+                   min / max / null count for every row group
+vectra trailer (24 bytes):
+  container length (u64), digest of the container bytes (u64),
+  trailer version (u32), &quot;VTRD&quot;</code></pre>
+<p>Each column of each row group is one block record: a header naming
+how the block was encoded, the encoded payload, and the column’s
+validity bitmap. The reader decodes each block from its own header, so
+files written with different compression settings are read the same
+way.</p>
+<p>The trailer records a digest of every byte written.
+<code>create_index()</code> stamps its sidecar with a fingerprint built
+from it, which is how an index notices that its store was replaced (see
+Hash indexes). A reader that does not know the trailer ignores it, since
+tdc never reads past the row-group index.</p>
+<p><code>append_vtr()</code> grows a store in place in either direction:
+new row groups (<code>along = &quot;rows&quot;</code>) or new columns
+(<code>along = &quot;cols&quot;</code>) are written after the old index together
+with a rebuilt index, and the header is patched last, so an interrupted
+append leaves the previous store readable.</p>
+<p>The format is not compatible with <code>.vtr</code> files written
+before the tdc container was adopted.</p>
 </div>
-<div id="version-history" class="section level3">
-<h3>Version history</h3>
+<div id="encoding-and-compression" class="section level3">
+<h3>Encoding and compression</h3>
+<p><code>write_vtr(compress = )</code> picks the encoding per column
+chunk:</p>
 <ul>
-<li><p><strong>Version 1</strong>: Base format with typed columns and
-validity bitmaps.</p></li>
-<li><p><strong>Version 2</strong>: Adds per-column annotation strings
-for Date, POSIXct, and factor roundtripping.</p></li>
-<li><p><strong>Version 3</strong>: Adds per-column per-rowgroup
-statistics (min/max) enabling zone-map predicate pushdown.</p></li>
-<li><p><strong>Version 4</strong> (current): Adds a two-layer encoding
-and compression stack. Writing always produces v4. All versions (v1–v4)
-are readable.</p></li>
+<li><code>&quot;fast&quot;</code> (default): numeric columns are byte-shuffled
+(the bytes of each value are regrouped by position, which exposes the
+redundancy in exponent and high-order bytes) and compressed with LZ; a
+non-decreasing integer column is delta-encoded first. String columns are
+dictionary-encoded: the distinct values once, then an index per row. The
+LZ runs at tdc’s fastest matching level.</li>
+<li><code>&quot;small&quot;</code>: for each column chunk, tries a set of
+candidate encodings and keeps the smallest. Candidates vary the model
+(raw, delta, second-order delta, floating-point prediction, numeric
+dictionary, sparse-zero) and the entropy coder (LZ at several parser
+levels, FSE, Huffman, per-lane coding), and always include the
+<code>&quot;fast&quot;</code> encoding, so <code>&quot;small&quot;</code> is never larger
+than <code>&quot;fast&quot;</code>. The trial encodes run in parallel, and the
+choice does not depend on the thread count.</li>
+<li><code>&quot;none&quot;</code>: no compression; strings are still stored as a
+dictionary.</li>
 </ul>
-</div>
-<div id="encoding-and-compression-v4" class="section level3">
-<h3>Encoding and compression (v4)</h3>
-<p>v4 applies two transformations to each column chunk (one column in
-one row group), in order: an <strong>encoding</strong> step and a
-<strong>compression</strong> step.</p>
-<p>Encoding transforms data logically to expose redundancy. The encoder
-picks the best encoding per column per row group automatically:</p>
-<table>
-<colgroup>
-<col width="22%" />
-<col width="27%" />
-<col width="25%" />
-<col width="25%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th align="left">Encoding</th>
-<th align="left">Applies to</th>
-<th align="left">Condition</th>
-<th align="left">Mechanism</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">PLAIN</td>
-<td align="left">all types</td>
-<td align="left">default</td>
-<td align="left">Raw bytes, no transformation</td>
-</tr>
-<tr class="even">
-<td align="left">DICTIONARY</td>
-<td align="left">string</td>
-<td align="left">unique ratio &lt; 50%</td>
-<td align="left">Builds a string dictionary; stores indices as RLE
-(run-length encoded)</td>
-</tr>
-<tr class="odd">
-<td align="left">DELTA</td>
-<td align="left">int64</td>
-<td align="left">monotonically increasing</td>
-<td align="left">Stores first value + deltas (all &gt;= 0)</td>
-</tr>
-</tbody>
-</table>
-<p>DICTIONARY encoding is the most impactful for typical categorical
-string columns. The encoder counts distinct values in a single pass
-using an open-addressing hash table (70% load factor, dynamic resizing).
-If fewer than half the values are unique, it emits a dictionary (offset
-array + packed strings) followed by RLE-encoded indices. The RLE step
-collapses runs of repeated indices into (value, count) pairs, which is
-effective when rows with the same category are clustered (e.g. after a
-sort). If more than half the values are unique, the encoder aborts
-dictionary encoding and falls back to PLAIN with zero overhead.</p>
-<p>DELTA encoding stores an initial value followed by the difference
-between consecutive values. It targets auto-increment IDs, timestamps,
-and other monotonic integer sequences where the deltas are small and
-compress well.</p>
-<p>Compression squeezes bytes physically after encoding. vectra uses a
-built-in LZ77 compressor (LZ-VTR), approximately 120 lines of C with no
-external dependencies. The compressor uses a 3-byte minimum match,
-256-byte maximum offset, and a hash table for match finding. It skips
-column chunks smaller than 64 bytes (not worth the overhead). If
-compression does not reduce size, the chunk is stored uncompressed.
-There is no configuration knob; the format always attempts compression
-on eligible chunks.</p>
-<p>The two-layer design is intentional. Encoding and compression solve
-different problems. DICTIONARY and DELTA reduce the entropy of the data
-(fewer distinct byte patterns, smaller integer ranges). LZ-VTR then
-exploits the reduced entropy at the byte level. Applying both layers
-yields better ratios than either layer alone, particularly for
-RLE-encoded dictionary indices where long runs of identical small
-integers compress to near zero.</p>
+<p>Columns written with <code>write_vtr(quantize = )</code> or
+<code>write_vtr(spatial = )</code> use tdc’s quantizing and 2-D
+predictive models instead.</p>
+<p>Because string columns are dictionary-encoded, <code>collect()</code>
+converts each distinct string to an R string once and fills the column
+by index.</p>
 </div>
 </div>
 <div id="query-optimizer" class="section level2">
 <h2>Query optimizer</h2>
 <p><code>explain()</code> runs the optimizer before printing so you see
-the actual execution plan. Two optimization passes run
-automatically:</p>
+the actual execution plan. The optimizer rewrites the plan so the order
+in which the verbs were written does not change how much is read.</p>
 <div id="predicate-pushdown" class="section level3">
 <h3>Predicate pushdown</h3>
-<p>When a <code>FilterNode</code> sits above a <code>ScanNode</code>
-reading a <code>.vtr</code> file (v3+), the filter predicate is attached
-to the scan. The scan then applies up to three pruning strategies on its
-first <code>next_batch()</code> call, in priority order:</p>
+<p>A filter stays where it was written and still checks every row. In
+addition, the optimizer hands a copy of its predicate down to every scan
+it can reach, where the copy is used only to skip row groups. The copy
+passes through <code>mutate()</code>, <code>select()</code>,
+<code>rename()</code> (following renamed columns), other filters,
+<code>arrange()</code>, and into every input of <code>bind_rows()</code>
+whose column types match. A condition on a column computed or
+overwritten by a <code>mutate()</code> is dropped from the copy, which
+is safe because the filter above still evaluates it. The copy never
+passes a limit, top-n, window, aggregate or join, since removing rows
+before those would change the result.</p>
+<p>A <code>.vtr</code> scan applies up to three pruning strategies on
+its first batch:</p>
 <ol style="list-style-type: decimal">
 <li><p><strong>Hash index pushdown</strong> (highest priority). If a
 <code>.vtri</code> sidecar index exists for the predicate column(s), the
@@ -1290,51 +1372,41 @@ bitmap are skipped entirely. This handles <code>==</code> and
 equality predicates on the indexed columns are matched and probed as a
 single composite key. See the Hash indexes section below for
 details.</p></li>
-<li><p><strong>Binary search on sorted columns</strong>. If the
-<code>.vtr</code> file records that a column is sorted and the predicate
-is a simple comparison (<code>==</code>, <code>&lt;</code>,
-<code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>) against a
-literal, the scan binary-searches the row group stats to find the first
-and last row groups that could contain matching rows. The scan range is
-narrowed to <code>[first_rg, last_rg)</code>. For AND-combined
-predicates on the same sorted column
-(e.g. <code>x &gt;= 10 &amp; x &lt; 100</code>), both bounds are
-applied. For OR-combined predicates, the union of both ranges is
-used.</p></li>
-<li><p><strong>Zone-map pruning</strong> (applied per row group during
-iteration). Each row group in a v3+ file stores per-column min/max
-statistics. Before reading a row group’s data from disk, the scan
-evaluates the pushed-down predicate against the row group’s stats. If
-the predicate is provably false for the entire row group
-(e.g. <code>filter(x &gt; 100)</code> on a row group where max(x) = 50),
-that row group is skipped entirely without touching the underlying
-bytes. Zone-map pruning handles comparison operators on numeric and
-string columns, AND/OR combinations, and <code>%in%</code> predicates
-(checking whether any set value falls within the row group’s min/max
-range). String zone maps use a packed 8-byte prefix representation for
-efficient comparison.</p></li>
+<li><p><strong>Binary search on sorted columns</strong>. If a column’s
+values are sorted across row groups and the predicate is a simple
+comparison (<code>==</code>, <code>&lt;</code>, <code>&lt;=</code>,
+<code>&gt;</code>, <code>&gt;=</code>) against a literal, the scan
+binary-searches the row-group statistics for the first and last row
+groups that could contain matching rows. For AND-combined predicates on
+the same sorted column (e.g. <code>x &gt;= 10 &amp; x &lt; 100</code>),
+both bounds are applied. For OR-combined predicates, the union of both
+ranges is used.</p></li>
+<li><p><strong>Zone-map pruning</strong> (per row group). Each row group
+stores per-column min/max and null counts. Before reading a row group,
+the scan evaluates the predicate against these statistics and skips the
+row group when no row can match (e.g. <code>filter(x &gt; 100)</code>
+where the row group’s max(x) is 50). This covers comparisons, AND/OR
+combinations and <code>%in%</code> on numeric, logical and date columns.
+A comparison on a column that is entirely <code>NA</code> in a row group
+also skips it. String columns carry only the null count, so string
+predicates prune through a hash index rather than zone maps.</p></li>
 </ol>
-<p>These three strategies compose. The scan first applies hash index and
-binary search to narrow the set of candidate row groups, then checks
-zone-map stats on each candidate before reading data. In
-<code>explain()</code> output, predicate pushdown appears as
-<code>predicate pushdown</code> and <code>v3 stats</code> annotations on
-the ScanNode.</p>
+<p>These strategies compose: hash index and binary search narrow the
+candidate row groups, then zone maps are checked on each candidate
+before its bytes are read. A Parquet scan uses the same zone-map check
+against the min/max and null counts in the Parquet footer.</p>
 </div>
 <div id="column-pruning" class="section level3">
 <h3>Column pruning</h3>
-<p>The optimizer walks the plan tree top-down and determines which
-columns each node actually needs from its child. The required column set
-at each node is the union of: columns referenced in the node’s own
-expressions (filter predicates, mutate expressions, aggregation
-functions), columns passed through to the parent, and join key columns.
-At scan nodes, unneeded columns are excluded from disk reads by setting
-a column mask. For a 100-column <code>.vtr</code> file where only 3
-columns are needed, this means 97 columns are never deserialized, never
-decompressed, and never decoded. This is visible in
-<code>explain()</code> as <code>3/100 cols (pruned)</code>. Column
-pruning applies to all <code>.vtr</code> scans regardless of format
-version.</p>
+<p>The optimizer walks the plan top-down and determines which columns
+each node needs from its child: the columns referenced in its own
+expressions (filter predicates, mutate expressions, aggregation inputs,
+join keys) plus the columns its parent needs. A <code>mutate()</code>
+drops the passed-through columns nothing above it uses, so pruning
+continues below it. At scan nodes, unneeded columns are never read,
+decompressed or decoded. For a 100-column <code>.vtr</code> file where 3
+columns are needed, this shows in <code>explain()</code> as
+<code>3/100 cols (pruned)</code>.</p>
 </div>
 <div id="hidden-mutate-insertion" class="section level3">
 <h3>Hidden mutate insertion</h3>
@@ -1359,23 +1431,26 @@ executing it. The output shows:</p>
 <ul>
 <li><p>Node types in execution order (leaf to root)</p></li>
 <li><p>Per-node annotations: streaming/materializing, column pruning,
-predicate pushdown, v3 stats, hidden mutate</p></li>
+predicate pushdown, row-group statistics (<code>tdc stats</code>), a
+hash index when one will be used, hidden mutate</p></li>
 <li><p>Grouping columns if present</p></li>
 <li><p>Output schema (column names and types)</p></li>
+<li><p>For an offloaded node or partition (see <code>offload()</code>),
+its cost grade</p></li>
 </ul>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>  <span class="fu">filter</span>(x <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
-<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>  <span class="fu">select</span>(id, x) <span class="sc">|&gt;</span></span>
-<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
-<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
-<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a><span class="co">#&gt;</span></span>
-<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="co">#&gt; ProjectNode [streaming]</span></span>
-<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt;   FilterNode [streaming]</span></span>
-<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a><span class="co">#&gt;     ScanNode [streaming, 2/5 cols (pruned), predicate pushdown, v3 stats]</span></span>
-<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co">#&gt;</span></span>
-<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a><span class="co">#&gt; Output columns (2):</span></span>
-<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a><span class="co">#&gt;   id &lt;int64&gt;</span></span>
-<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="co">#&gt;   x &lt;double&gt;</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">filter</span>(x <span class="sc">&gt;</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>  <span class="fu">select</span>(id, x) <span class="sc">|&gt;</span></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  <span class="fu">explain</span>()</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="co">#&gt; vectra execution plan</span></span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a><span class="co">#&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co">#&gt; ProjectNode [streaming]</span></span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="co">#&gt;   FilterNode [streaming]</span></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a><span class="co">#&gt;     ScanNode [streaming, 2/5 cols (pruned), predicate pushdown, tdc stats]</span></span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co">#&gt;</span></span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="co">#&gt; Output columns (2):</span></span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;   id &lt;int64&gt;</span></span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt;   x &lt;double&gt;</span></span></code></pre></div>
 <p>The plan tree is a description of what will happen, not a guarantee
 of how it will happen internally. Node ordering and naming may change
 between versions.</p>
@@ -1389,17 +1464,17 @@ predicate reads those groups and skips the rest.</p>
 <div id="creating-indexes" class="section level3">
 <h3>Creating indexes</h3>
 <p>Both functions take the path of the <code>.vtr</code> file:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a><span class="co"># Single-column index</span></span>
-<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span>
-<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
-<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Case-insensitive index</span></span>
-<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>, <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a></span>
-<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a><span class="co"># Composite (multi-column) index</span></span>
-<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;country&quot;</span>, <span class="st">&quot;year&quot;</span>))</span>
-<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a></span>
-<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a><span class="co"># Check whether a usable index exists</span></span>
-<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a><span class="fu">has_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># Single-column index</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="co"># Case-insensitive index</span></span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>, <span class="at">ci =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a><span class="co"># Composite (multi-column) index</span></span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a><span class="fu">create_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="fu">c</span>(<span class="st">&quot;country&quot;</span>, <span class="st">&quot;year&quot;</span>))</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a><span class="co"># Check whether a usable index exists</span></span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a><span class="fu">has_index</span>(<span class="st">&quot;data.vtr&quot;</span>, <span class="st">&quot;species&quot;</span>)</span></code></pre></div>
 <p><code>create_index()</code> reads the indexed column(s) of the
 <code>.vtr</code> file one row group at a time and writes a
 <code>.vtri</code> file holding one entry per distinct key per row
@@ -1458,11 +1533,13 @@ binary search and zone-map checks.</p>
 </div>
 <div id="performance-characteristics" class="section level3">
 <h3>Performance characteristics</h3>
-<p>A probe is a hash computation plus one chain walk, repeated per query
-key (once for <code>==</code>, n times for <code>%in%</code>). Opening
-the index reads the whole sidecar into memory once per
-<code>tbl()</code>, and that read is what the entry-per-distinct-key
-layout keeps small: an index over a column of few distinct values stays
+<p>A probe is a hash computation, one directory lookup, and a binary
+search over the few entries that directory slot covers (the directory
+holds one slot per four entries, up to 2^22 slots), repeated per query
+key (once for <code>==</code>, n times for <code>%in%</code>). A sidecar
+of up to 4 MB is read into memory when the scan opens it; a larger one
+is memory-mapped read-only and probed in place, so opening it does not
+read the whole file. An index over a column of few distinct values stays
 the same size as the store grows, so the cost of a lookup does not
 follow the size of the store. For tables with many row groups and
 selective equality predicates, index pushdown can reduce I/O by orders
@@ -1475,9 +1552,9 @@ of magnitude compared to zone-map pruning alone.</p>
 result as a persistent in-memory columnar block. Unlike nodes, which are
 consumed on <code>collect()</code> and cannot be reused, blocks persist
 and support repeated lookups.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>blk <span class="ot">&lt;-</span> <span class="fu">tbl</span>(<span class="st">&quot;backbone.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
-<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>  <span class="fu">select</span>(taxonID, canonicalName, genus) <span class="sc">|&gt;</span></span>
-<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>  <span class="fu">materialize</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>blk <span class="ot">&lt;-</span> <span class="fu">tbl</span>(<span class="st">&quot;backbone.vtr&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>  <span class="fu">select</span>(taxonID, canonicalName, genus) <span class="sc">|&gt;</span></span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">materialize</span>()</span></code></pre></div>
 <div id="exact-lookups" class="section level3">
 <h3>Exact lookups</h3>
 <p><code>block_lookup()</code> performs hash-based lookups on a string
@@ -1485,12 +1562,12 @@ column. Hash indices are built lazily on first use and cached for
 subsequent calls. The return value is a data.frame with a
 <code>query_idx</code> column (1-based position in the input keys
 vector) plus all columns from the block.</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
-<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>))</span>
-<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a></span>
-<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a><span class="co"># Case-insensitive</span></span>
-<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
-<span id="cb7-6"><a href="#cb7-6" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;quercus robur&quot;</span>), <span class="at">ci =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;Quercus robur&quot;</span>, <span class="st">&quot;Pinus sylvestris&quot;</span>))</span>
+<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a><span class="co"># Case-insensitive</span></span>
+<span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a>hits <span class="ot">&lt;-</span> <span class="fu">block_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a>                     <span class="fu">c</span>(<span class="st">&quot;quercus robur&quot;</span>), <span class="at">ci =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 </div>
 <div id="fuzzy-lookups" class="section level3">
 <h3>Fuzzy lookups</h3>
@@ -1500,17 +1577,17 @@ Damerau-Levenshtein (<code>&quot;dl&quot;</code>, default), Levenshtein
 (<code>&quot;levenshtein&quot;</code>), and Jaro-Winkler (<code>&quot;jw&quot;</code>).
 Results are filtered by a maximum normalized distance threshold (default
 0.2).</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
-<span id="cb8-2"><a href="#cb8-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>, <span class="st">&quot;Pinus silvestris&quot;</span>),</span>
-<span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a>                            <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>, <span class="at">max_dist =</span> <span class="fl">0.2</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>, <span class="st">&quot;Pinus silvestris&quot;</span>),</span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>                            <span class="at">method =</span> <span class="st">&quot;dl&quot;</span>, <span class="at">max_dist =</span> <span class="fl">0.2</span>)</span></code></pre></div>
 <p>An optional blocking column reduces the search space by requiring
 exact matches on a second column before computing distances. This is
 useful for taxonomic lookups where genus is known:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
-<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>),</span>
-<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>                            <span class="at">block_col =</span> <span class="st">&quot;genus&quot;</span>,</span>
-<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a>                            <span class="at">block_keys =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>),</span>
-<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a>                            <span class="at">n_threads =</span> <span class="dv">4</span><span class="dt">L</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a>fuzzy <span class="ot">&lt;-</span> <span class="fu">block_fuzzy_lookup</span>(blk, <span class="st">&quot;canonicalName&quot;</span>,</span>
+<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a>                            <span class="fu">c</span>(<span class="st">&quot;Quercus robar&quot;</span>),</span>
+<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a>                            <span class="at">block_col =</span> <span class="st">&quot;genus&quot;</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>                            <span class="at">block_keys =</span> <span class="fu">c</span>(<span class="st">&quot;Quercus&quot;</span>),</span>
+<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a>                            <span class="at">n_threads =</span> <span class="dv">4</span><span class="dt">L</span>)</span></code></pre></div>
 <p>Fuzzy lookups are OpenMP-parallelized. The <code>n_threads</code>
 parameter controls the thread count (default 4).</p>
 </div>
@@ -1572,13 +1649,15 @@ offsets</td>
 <td align="left">Sort (merge sort)</td>
 <td align="left">32,768 rows</td>
 <td align="left"><code>task</code></td>
-<td align="left">Recursive task spawning for parallel merge sort</td>
+<td align="left">Recursive task spawning for parallel merge sort; a
+single numeric key uses a radix sort instead</td>
 </tr>
 <tr class="odd">
-<td align="left">Sort (key extraction)</td>
-<td align="left">32,768 rows</td>
+<td align="left">Sort (emit gather)</td>
+<td align="left">32,768 rows x columns</td>
 <td align="left"><code>static</code></td>
-<td align="left">Parallel extraction of sort keys into index arrays</td>
+<td align="left">Fixed-width columns of each emitted batch gathered in
+one parallel loop</td>
 </tr>
 <tr class="even">
 <td align="left">Join (build-side hashing)</td>
@@ -1591,6 +1670,18 @@ offsets</td>
 <td align="left">32,768 rows</td>
 <td align="left"><code>static</code></td>
 <td align="left">Parallel hash computation for probe-side keys</td>
+</tr>
+<tr class="even">
+<td align="left">Grouped aggregation (key hashing)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>static</code></td>
+<td align="left">Hash and shard assignment per row</td>
+</tr>
+<tr class="odd">
+<td align="left">Grouped aggregation (shards)</td>
+<td align="left">32,768 rows</td>
+<td align="left"><code>dynamic, 1</code></td>
+<td align="left">One hash-table shard per thread</td>
 </tr>
 <tr class="even">
 <td align="left">Window (data copy)</td>
@@ -1611,10 +1702,24 @@ offsets</td>
 <td align="left">Parallel column-by-column append to R vectors</td>
 </tr>
 <tr class="odd">
-<td align="left">Zone-map stat computation</td>
-<td align="left">32,768 rows</td>
-<td align="left"><code>static</code> with <code>reduction</code></td>
-<td align="left">Parallel min/max scan during write</td>
+<td align="left"><code>collect()</code> of a plain <code>.vtr</code>
+scan</td>
+<td align="left">always</td>
+<td align="left"><code>dynamic</code></td>
+<td align="left">Row groups decoded in parallel straight into the R
+vectors</td>
+</tr>
+<tr class="even">
+<td align="left"><code>write_vtr(compress = &quot;small&quot;)</code></td>
+<td align="left">32,768 values</td>
+<td align="left"><code>dynamic</code></td>
+<td align="left">Candidate encodings tried in parallel</td>
+</tr>
+<tr class="odd">
+<td align="left">Parquet read (columns)</td>
+<td align="left">32,768 values</td>
+<td align="left"><code>dynamic, 1</code></td>
+<td align="left">Column chunks of a row group decoded in parallel</td>
 </tr>
 <tr class="even">
 <td align="left">Block fuzzy lookup</td>
@@ -1656,18 +1761,26 @@ selected indices at its computed offset.</p>
 reverse-scan optimization.</p></li>
 <li><p><strong>distinct with .keep_all</strong>: Falls back to R when
 <code>.keep_all = TRUE</code> with a column subset.</p></li>
-<li><p><strong>Predicate pushdown is .vtr only</strong>: CSV, SQLite,
-and TIFF scans do not benefit from predicate pushdown, column pruning,
-or hash index acceleration.</p></li>
+<li><p><strong>Predicate pushdown covers .vtr and Parquet only</strong>:
+CSV, SQLite, TIFF, FASTA/FASTQ and BED scans do not benefit from
+predicate pushdown, column pruning, or hash index acceleration. Parquet
+scans get column pruning and row-group pruning from footer statistics,
+but no hash indexes.</p></li>
+<li><p><strong>Joins are not rewritten by the optimizer</strong>: a join
+reads every column of both inputs, and filters above a join are not
+pushed into its inputs. Filter and select before the join to limit what
+it reads.</p></li>
 <li><p><strong>No SIMD</strong>: Arithmetic and comparison operations
 use scalar loops. The compiler may auto-vectorize some patterns, but
 there are no explicit SIMD intrinsics.</p></li>
-<li><p><strong>OpenMP availability varies</strong>: On macOS, R ships
-without OpenMP by default. Users must install <code>libomp</code>
-(e.g. via Homebrew) and configure the compiler flags. On Windows
-(rtools) and Linux, OpenMP is typically available out of the box. When
-OpenMP is not available, all operations run single-threaded with no
-functional difference.</p></li>
+<li><p><strong>OpenMP availability varies</strong>: when vectra is built
+from source, <code>configure</code> compiles, loads and runs a small
+OpenMP test for each candidate set of compiler flags and uses the first
+that works. On macOS it tries the OpenMP runtime that CRAN’s R ships in
+<code>R_HOME/lib</code> first, then a Homebrew <code>libomp</code>. If
+none works, vectra is built single-threaded, which changes speed but not
+results. On Windows (Rtools) and Linux, OpenMP is typically available
+out of the box.</p></li>
 </ul>
 </div>
 <div id="fallback-behavior" class="section level2">

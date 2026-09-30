@@ -1,4 +1,5 @@
 #include "window.h"
+#include "plan_budget.h"
 #include "vec_omp.h"
 #include "hash.h"
 #include "array.h"
@@ -331,7 +332,9 @@ static void win_eval_shift(const VecArray *input, int64_t start, int64_t end,
         }
     }
     /* Parallel data copy */
+    #ifdef _OPENMP
     #pragma omp parallel for if((end - start) > VEC_OMP_THRESHOLD) schedule(static)
+    #endif
     for (int64_t i = start; i < end; i++) {
         int64_t src_row = i + direction * offset;
         if (src_row < start || src_row >= end) {
@@ -1948,6 +1951,8 @@ static int win_spec_sort_desc(const WinSpec *ws) {
    R, so it is never visible. */
 #define WIN_ROWID_COL "__vtr_window_rowid"
 
+VEC_ONE_CHILD_FN(window_children, WindowNode, child)
+
 VecNode *window_node_create(VecNode *child,
                             int n_keys, char **key_names,
                             int n_wins, WinSpec *win_specs,
@@ -2147,6 +2152,7 @@ VecNode *window_node_create(VecNode *child,
 
     wn->base.next_batch = window_next_batch;
     wn->base.kind = "WindowNode";
+    wn->base.children = window_children;
     wn->base.free_node = window_free;
     wn->base.static_rows = window_static_rows;
     wn->base.row_count_hint = src->row_count_hint;

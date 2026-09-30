@@ -5,6 +5,10 @@
 # Every subsystem that buffers rows before spilling or flushing -- the external
 # sort, self-overlay tiling, spatial run-file flushes, partition routing, and the
 # spilling hash join -- derives its working budget from one number: vectra_mem().
+# Within one query plan the budget is one pool: before execution the C engine
+# (plan_budget.c) gives each budgeted node a grant on it, and each node reserves
+# what it actually allocates (buffer capacity, sort permutation and scratch,
+# hash table) as it grows, spilling when the pool refuses.
 # Set it for the session with options(vectra.memory = "8GB") (a string with a
 # K/M/G/T suffix) or options(vectra.memory = 8e9) (a byte count). Row-group size
 # (batch_size) is a separate, orthogonal cache-locality knob, not a memory cap.
@@ -33,8 +37,20 @@
 #'
 #' The single memory ceiling every buffering subsystem derives its working budget
 #' from: the external sort's spill threshold, the self-overlay tile cap, spatial
-#' run-file flushes, partition routing, and the spilling hash join. Resolution
-#' order is an explicit `limit`, then `getOption("vectra.memory")`, then a default
+#' run-file flushes, partition routing, and the spilling hash join.
+#'
+#' The budget bounds a whole query, not each step of it. When a query holds
+#' several buffering steps at once (a join feeding a grouped `summarise()`,
+#' an `arrange()` over a join), they draw on one shared pool of this size. A
+#' step reserves what it actually allocates as it grows (buffered rows at their
+#' allocated capacity, the permutation and scratch a sort needs, the hash table
+#' a join builds) and spills when the pool refuses. A step that needs little
+#' leaves the rest to the others; each step is always guaranteed
+#' `1 / (4 * steps)` of the budget, so none is starved. The process peak is
+#' then about the budget plus a fixed allowance for R itself, the batches in
+#' flight and the collected result.
+#'
+#' Resolution order is an explicit `limit`, then `getOption("vectra.memory")`, then a default
 #' of half the detected system RAM. The auto-detected default is floored at 1 GB;
 #' an explicit `limit` or option is honored as given (down to 1 KB), so a smaller
 #' budget can be requested deliberately.
@@ -46,7 +62,8 @@
 #' @param limit Optional per-call override: a byte count or a string such as
 #'   `"8GB"`. `NULL` (the default) falls back to the option, then to
 #'   auto-detection.
-#' @return The budget in bytes, as a numeric scalar, never below 1 GB.
+#' @return The budget in bytes, as a numeric scalar: at least 1 GB when
+#'   auto-detected, and as given (down to 1 KB) when set explicitly.
 #' @export
 #' @examples
 #' vectra_mem()
@@ -79,3 +96,8 @@ vectra_mem <- function(limit = NULL) {
 # vectra_mem(); scales with the one knob. A run-file buffer flushes once its
 # accumulated bytes cross this.
 .stream_bytes <- function() vectra_mem() / 8
+
+# Peak resident set size of this R process in bytes (peak working set on
+# Windows), or -1 where the platform does not report it. Used by the tests
+# that check vectra_mem() is a bound.
+.peak_rss <- function() .Call(C_peak_rss)

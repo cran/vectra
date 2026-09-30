@@ -2,6 +2,7 @@
 #define VECTRA_SORT_H
 
 #include "types.h"
+#include "plan_budget.h"
 
 typedef struct {
     int   col_index;
@@ -21,14 +22,18 @@ typedef struct {
     SortKey  *keys;
     int       phase;        /* internal: init / memory / merging / done */
 
-    int64_t   mem_budget;   /* spill threshold in bytes; 0 = unlimited */
+    int64_t   mem_budget;   /* budget requested at creation; 0 = unlimited */
+    VecMemAcct mem;         /* reservation on the plan's memory pool */
     char     *temp_dir;     /* directory for spill files; NULL = no spill */
 
     int       n_runs;       /* number of spilled runs */
     int       runs_cap;
     char    **run_paths;    /* temp file paths (for cleanup) */
 
-    VecBatch *mem_result;   /* in-memory sorted result (single-run path) */
+    VecArray *mem_cols;     /* in-memory path: the buffered (unsorted) columns */
+    int64_t  *mem_perm;     /* in-memory path: sorted row permutation */
+    int64_t   mem_n;        /* in-memory path: buffered row count */
+    int64_t   mem_pos;      /* in-memory path: next permutation index to emit */
     void     *merge;        /* opaque MergeState* for multi-run merge */
 
     int64_t   total_rows;   /* exact row count, set once input is consumed;
@@ -58,5 +63,9 @@ SortNode *sort_node_create(VecNode *child, int n_keys, SortKey *keys,
    before that. Used by streaming consumers that need the partition size up
    front (window ntile/percent_rank/cume_dist). */
 int64_t sort_node_total_rows(const SortNode *sn);
+
+/* Reserve through `grant` (a composite node's grant the sort is internal to)
+   instead of registering as a budgeted node of its own. */
+void sort_node_share_grant(SortNode *sn, VecMemGrant *grant);
 
 #endif /* VECTRA_SORT_H */

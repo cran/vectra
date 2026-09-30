@@ -1,4 +1,5 @@
 #include "join.h"
+#include "plan_budget.h"
 #include "vec_omp.h"
 #include "hash.h"
 #include "array.h"
@@ -13,6 +14,7 @@
 #include "vtr1_tdc.h"
 #include "vtr_codec.h"
 #include "error.h"
+#include "part_spill.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,10 +37,16 @@ static int child_sorted_on_keys(VecNode *child, const int *key_idx, int n_keys);
 /*  JoinHT: hash table for build side                                  */
 /* ------------------------------------------------------------------ */
 
-static JoinHT jht_create(int64_t n_build_rows) {
-    JoinHT jht;
+/* Slot count for n build rows: a power of two at <= 50% load. */
+static int64_t jht_slots(int64_t n_build_rows) {
     int64_t n_slots = 64;
     while (n_slots < n_build_rows * 2) n_slots *= 2;
+    return n_slots;
+}
+
+static JoinHT jht_create(int64_t n_build_rows) {
+    JoinHT jht;
+    int64_t n_slots = jht_slots(n_build_rows);
     /* n_build must be the true build-row count (0 for an empty build side, e.g.
        a full-join partition whose keys appear only on the probe side). The chain
        array needs at least one slot to avoid malloc(0); n_build stays accurate
@@ -342,7 +350,9 @@ static void jht_build_from_rcols(JoinNode *jn, int64_t r_nrows) {
     uint64_t *build_hashes = (uint64_t *)malloc(
         (size_t)(r_nrows > 0 ? r_nrows : 1) * sizeof(uint64_t));
     if (!build_hashes) vectra_error("alloc failed for build hash array");
+    #ifdef _OPENMP
     #pragma omp parallel for if(r_nrows > VEC_OMP_THRESHOLD) schedule(static)
+    #endif
     for (int64_t r = 0; r < r_nrows; r++)
         build_hashes[r] = hash_join_key(jn->r_cols, jn->rkey_idx,
                                          jn->n_keys, r);
@@ -366,32 +376,46 @@ static void jht_build_from_rcols(JoinNode *jn, int64_t r_nrows) {
    more than any multi-key skew needs, so BNL fires only for a true hot key. */
 #define JOIN_MAX_SPILL_DEPTH 3
 
-/* Depth salt for the partition hash. A constant XOR before `% K` is only a
-   fixed bucket permutation (keys that collide stay collided), so mix the salt
-   in multiplicatively (murmur3 fmix): a different depth reshuffles which keys
-   share a partition, so a multi-key oversized partition actually splits when
-   its sub-join re-partitions. salt 0 (the top level) is the identity. */
-static inline uint64_t join_salt_mix(uint64_t h, uint64_t salt) {
-    if (salt == 0) return h;
-    h ^= salt * 0x9E3779B97F4A7C15ULL;
-    h ^= h >> 33; h *= 0xFF51AFD7ED558CCDULL;
-    h ^= h >> 33; h *= 0xC4CEB9FE1A85EC53ULL;
-    h ^= h >> 33;
-    return h;
+/* Bytes a resident build of n rows allocates beyond its columns: for a hash
+   join the slot arrays (head + slot_hash), the chain array and the transient
+   per-row hash array jht_build_from_rcols fills before inserting (a merge
+   join builds none of them); full_join's matched bitset either way. */
+static int64_t jht_resident_bytes(const JoinNode *jn, int64_t n) {
+    int64_t bytes = jn->kind == JOIN_FULL ? (n + 7) / 8 : 0;
+    if (!jn->use_merge)
+        bytes += jht_slots(n) * (int64_t)(sizeof(int64_t) + sizeof(uint64_t))
+               + (n > 0 ? n : 1) * (int64_t)sizeof(int64_t)
+               + n * (int64_t)sizeof(uint64_t);
+    return bytes;
 }
 
-/* Rough in-memory byte size of a batch's logical rows: string payload plus a
-   flat 8 bytes/value. Only a trigger heuristic, so exactness is not needed. */
-static int64_t join_batch_bytes(const VecBatch *b, int n_cols) {
-    int64_t n = vec_batch_logical_rows((VecBatch *)b);
-    int64_t bytes = 0;
-    for (int c = 0; c < n_cols; c++) {
-        const VecArray *a = &b->columns[c];
-        if (a->type == VEC_STRING && a->length > 0)
-            bytes += a->buf.str.offsets[a->length];
-        bytes += n * 8;
+/* Bytes the build side will have allocated once `batch` is appended to the
+   builders and a hash table is built over the result: builder capacity after
+   growth plus jht_resident_bytes. The one figure the resident build, the
+   grace-hash partitions (sub-joins) and the BNL blocks all spill on. */
+static int64_t join_build_bytes_after(const JoinNode *jn,
+                                      const VecArrayBuilder *builders,
+                                      int n_cols, const VecBatch *batch) {
+    int64_t n = builders[0].length + vec_batch_logical_rows(batch);
+    return vec_builders_bytes_after_batch(builders, n_cols, batch)
+         + jht_resident_bytes(jn, n);
+}
+
+/* Append every logical row of batch to the builders. */
+static void join_append_batch(VecArrayBuilder *builders, int n_cols,
+                              const VecBatch *batch) {
+    if (!batch->sel) {
+        for (int c = 0; c < n_cols; c++)
+            vec_builder_append_array(&builders[c], &batch->columns[c]);
+        return;
     }
-    return bytes;
+    int64_t nl = vec_batch_logical_rows(batch);
+    for (int c = 0; c < n_cols; c++) vec_builder_reserve(&builders[c], nl);
+    for (int64_t li = 0; li < nl; li++) {
+        int64_t pi = vec_batch_physical_row(batch, li);
+        for (int c = 0; c < n_cols; c++)
+            vec_builder_append_one(&builders[c], &batch->columns[c], pi);
+    }
 }
 
 static char *make_spill_path(const char *temp_dir, char side, int p) {
@@ -405,77 +429,66 @@ static char *make_spill_path(const char *temp_dir, char side, int p) {
     return path;
 }
 
-/* Route a batch into K partition writers by the hash of the key columns coerced
-   to `common` types, so equal keys on both sides land in the same partition (the
-   sub-join re-coerces from the original stored rows). `writers` may hold NULL
-   slots: a slot is opened from paths[p] on first use, so a partition that never
-   receives a row creates no file (a hot key leaves 63 of 64 empty each level).
-   paths may be NULL only when every writer is pre-opened (K=1 BNL). */
-static void spill_write_batch(VecBatch *batch, const VecSchema *schema,
-                              const int *key_col, const VecType *common,
-                              int n_keys, Vtr1TdcWriter **writers,
-                              char **paths, int K, uint64_t salt) {
-    int n_cols = schema->n_cols;
+/* Reserve the per-partition buffers while a side is partitioned: nothing else
+   of the join is resident then, so a quarter of what the pool would give it.
+   Returns the buffer budget. */
+static int64_t join_spill_buf_reserve(JoinNode *jn) {
+    vec_mem_set(&jn->mem, 0);
+    int64_t allow = vec_mem_allowance(&jn->mem);
+    int64_t buf = allow == INT64_MAX ? ((int64_t)64 << 20) : allow / 4;
+    vec_mem_set(&jn->mem, buf);
+    return buf;
+}
+
+/* 1 when the build side may grow to `bytes`: reserves them on the pool. A join
+   with no temp directory cannot spill, so it takes them regardless. */
+static int join_reserve_build(JoinNode *jn, int64_t bytes) {
+    if (vec_mem_try(&jn->mem, bytes)) return 1;
+    if (!jn->temp_dir) { vec_mem_set(&jn->mem, bytes); return 1; }
+    return 0;
+}
+
+/* Route every logical row of batch into ps by the hash of its key columns
+   coerced to `common` types, so equal keys on both sides land in the same
+   partition (the sub-join re-coerces from the original stored rows). */
+static void join_route(PartSpill *ps, const VecBatch *batch, int K,
+                       const int *key_col, const VecType *common, int n_keys,
+                       uint64_t salt) {
     int64_t n = vec_batch_logical_rows(batch);
     if (n == 0) return;
+    if (K == 1) { part_spill_route(ps, batch, NULL); return; }
 
     VecArray ckeys[16];
     int       need_free[16];
     int       key_id[16];
     for (int k = 0; k < n_keys; k++) {
         key_id[k] = k;
-        VecArray *src = &batch->columns[key_col[k]];
+        const VecArray *src = &batch->columns[key_col[k]];
         if (src->type != common[k]) {
             VecArray *co = vec_coerce(src, common[k]);
             ckeys[k] = *co; free(co); need_free[k] = 1;
         } else { ckeys[k] = *src; need_free[k] = 0; }
     }
-
     int *pid = (int *)malloc((size_t)n * sizeof(int));
+    if (!pid) vectra_error("alloc failed for partition ids");
     for (int64_t li = 0; li < n; li++) {
         int64_t pr = vec_batch_physical_row(batch, li);
-        uint64_t h = join_salt_mix(hash_join_key(ckeys, key_id, n_keys, pr),
-                                   salt);
+        uint64_t h = part_spill_salt(hash_join_key(ckeys, key_id, n_keys, pr),
+                                     salt);
         pid[li] = (int)(h % (uint64_t)K);
     }
-
-    for (int p = 0; p < K; p++) {
-        int64_t m = 0;
-        for (int64_t li = 0; li < n; li++) if (pid[li] == p) m++;
-        if (m == 0) continue;
-        VecArrayBuilder *bld = (VecArrayBuilder *)calloc(
-            (size_t)n_cols, sizeof(VecArrayBuilder));
-        for (int c = 0; c < n_cols; c++) {
-            bld[c] = vec_builder_init(schema->col_types[c]);
-            vec_builder_reserve(&bld[c], m);
-        }
-        for (int64_t li = 0; li < n; li++) {
-            if (pid[li] != p) continue;
-            int64_t pr = vec_batch_physical_row(batch, li);
-            for (int c = 0; c < n_cols; c++)
-                vec_builder_append_one(&bld[c], &batch->columns[c], pr);
-        }
-        VecBatch *ob = vec_batch_alloc(n_cols, m);
-        for (int c = 0; c < n_cols; c++) {
-            ob->columns[c] = vec_builder_finish(&bld[c]);
-            ob->col_names[c] = (char *)malloc(strlen(schema->col_names[c]) + 1);
-            strcpy(ob->col_names[c], schema->col_names[c]);
-        }
-        free(bld);
-        if (writers[p] == NULL)
-            writers[p] = vtr1_open_tdc_writer(paths[p], schema);
-        vtr1_write_rowgroup_tdc(writers[p], ob, VTR_COMPRESS_FAST, NULL, NULL);
-        vec_batch_free(ob);
-    }
-    free(pid);
     for (int k = 0; k < n_keys; k++)
         if (need_free[k]) vec_array_free(&ckeys[k]);
+    part_spill_route(ps, batch, pid);
+    free(pid);
 }
 
-/* Switch to spill mode: partition the already-materialized build rows plus the
+/* Switch to spill mode: partition the already-materialized build rows, the
+   build batch that would have crossed the budget (`pending`, consumed), the
    rest of the build stream, and the whole probe stream, into K run-files per
    side. Consumes r_builders (finishes them). */
-static void join_spill(JoinNode *jn, VecArrayBuilder *r_builders) {
+static void join_spill(JoinNode *jn, VecArrayBuilder *r_builders,
+                       VecBatch *pending) {
     int K = JOIN_SPILL_PARTS;
     /* Reshuffle the partition assignment per recursion level so a partition a
        sub-join re-spills does not route every key back to one child. */
@@ -497,12 +510,12 @@ static void join_spill(JoinNode *jn, VecArrayBuilder *r_builders) {
     jn->n_parts = K;
     jn->right_parts = (char **)calloc((size_t)K, sizeof(char *));
     jn->left_parts  = (char **)calloc((size_t)K, sizeof(char *));
-    Vtr1TdcWriter **rw = (Vtr1TdcWriter **)calloc((size_t)K, sizeof(Vtr1TdcWriter *));
-    Vtr1TdcWriter **lw = (Vtr1TdcWriter **)calloc((size_t)K, sizeof(Vtr1TdcWriter *));
     for (int p = 0; p < K; p++) {
         jn->right_parts[p] = make_spill_path(jn->temp_dir, 'r', p);
         jn->left_parts[p]  = make_spill_path(jn->temp_dir, 'l', p);
     }
+    int64_t buf = join_spill_buf_reserve(jn);
+    PartSpill *rps = part_spill_create(rs, NULL, K, jn->right_parts, buf);
 
     /* Route the already-materialized build partial. */
     int64_t nrp = r_builders[0].length;
@@ -513,8 +526,7 @@ static void join_spill(JoinNode *jn, VecArrayBuilder *r_builders) {
             pb->col_names[c] = (char *)malloc(strlen(rs->col_names[c]) + 1);
             strcpy(pb->col_names[c], rs->col_names[c]);
         }
-        spill_write_batch(pb, rs, rkey, common, jn->n_keys, rw,
-                          jn->right_parts, K, salt);
+        join_route(rps, pb, K, rkey, common, jn->n_keys, salt);
         vec_batch_free(pb);
     } else {
         for (int c = 0; c < r_ncols; c++) {
@@ -523,36 +535,45 @@ static void join_spill(JoinNode *jn, VecArrayBuilder *r_builders) {
         }
     }
 
-    /* Route the rest of the build stream, then the whole probe stream. */
+    if (pending) {
+        join_route(rps, pending, K, rkey, common, jn->n_keys, salt);
+        vec_batch_free(pending);
+    }
+
+    /* Route the rest of the build stream, then the whole probe stream (one
+       side's buffers at a time). */
     VecBatch *b;
     while ((b = jn->right->next_batch(jn->right)) != NULL) {
-        spill_write_batch(b, rs, rkey, common, jn->n_keys, rw,
-                          jn->right_parts, K, salt);
+        join_route(rps, b, K, rkey, common, jn->n_keys, salt);
         vec_batch_free(b);
     }
+    PartSpill *lps = part_spill_create(ls, NULL, K, jn->left_parts, buf);
     while ((b = jn->left->next_batch(jn->left)) != NULL) {
-        spill_write_batch(b, ls, lkey, common, jn->n_keys, lw,
-                          jn->left_parts, K, salt);
+        join_route(lps, b, K, lkey, common, jn->n_keys, salt);
         vec_batch_free(b);
     }
 
-    /* Close opened writers. A partition empty on BOTH sides is dropped (no files
-       created); one empty on a single side still needs a valid empty run-file so
-       the sub-join's scan can open it (unmatched rows there still matter for
+    /* A partition empty on BOTH sides is dropped (no files created); one empty
+       on a single side still needs a valid empty run-file so the sub-join's
+       scan can open it (unmatched rows there still matter for
        left/right/full). */
+    uint8_t *keep = (uint8_t *)calloc((size_t)K, 1);
+    if (!keep) vectra_error("alloc failed for partition flags");
     for (int p = 0; p < K; p++) {
-        int ro = (rw[p] != NULL), lo = (lw[p] != NULL);
-        if (!ro && !lo) {
-            free(jn->right_parts[p]); jn->right_parts[p] = NULL;
-            free(jn->left_parts[p]);  jn->left_parts[p]  = NULL;
-            continue;
-        }
-        if (!ro) rw[p] = vtr1_open_tdc_writer(jn->right_parts[p], rs);
-        if (!lo) lw[p] = vtr1_open_tdc_writer(jn->left_parts[p], ls);
-        vtr1_close_tdc_writer(rw[p]);
-        vtr1_close_tdc_writer(lw[p]);
+        keep[p] = part_spill_used(rps, p) || part_spill_used(lps, p);
+        if (!keep[p]) continue;
+        part_spill_touch(rps, p);
+        part_spill_touch(lps, p);
     }
-    free(rw); free(lw);
+    part_spill_close(rps);
+    part_spill_close(lps);
+    for (int p = 0; p < K; p++) {
+        if (keep[p]) continue;
+        free(jn->right_parts[p]); jn->right_parts[p] = NULL;
+        free(jn->left_parts[p]);  jn->left_parts[p]  = NULL;
+    }
+    free(keep);
+    vec_mem_set(&jn->mem, 0);
 
     jn->spill = 1;
     jn->cur_part = 0;
@@ -572,6 +593,8 @@ static VecNode *make_partition_join(JoinNode *jn, int p) {
                                     jn->n_keys, keys, jn->suffix_x, jn->suffix_y,
                                     jn->mem_budget, jn->temp_dir);
     sj->na_matches = jn->na_matches;   /* inherit NA-matching in re-partition */
+    vec_node_clear_budgeted(&sj->base);
+    vec_mem_acct_rebind(&sj->mem, jn->mem.grant);
     sj->spill_depth = jn->spill_depth + 1;
     return (VecNode *)sj;
 }
@@ -583,7 +606,7 @@ static VecNode *make_partition_join(JoinNode *jn, int p) {
 /* A partition that survives JOIN_MAX_SPILL_DEPTH re-partitions is dominated by
    one key value that hashing cannot split. Rather than materialize it resident,
    consolidate each side to a single run-file and block-nested-loop: read the
-   build file in <= mem_budget blocks; for each block, re-scan the whole probe
+   build file in blocks the memory pool grants; for each block, re-scan the whole probe
    file and emit matches. Peak = one build block + one probe batch + 1-bit/row
    matched bitsets, independent of key skew. Non-inner kinds defer unmatched /
    matched emission to a final scan driven by the bitsets. */
@@ -598,35 +621,40 @@ static char *bnl_make_path(const char *temp_dir, char side) {
     return path;
 }
 
-/* Stream `partial` (may be NULL) then all of `child` into one run-file,
-   compacting selection vectors via the tested spill_write_batch (K=1). Returns
-   the logical row count written. */
+/* Stream `partial` then `pending` (either may be NULL) then all of `child`
+   into one run-file (a one-partition spill, which also compacts selection
+   vectors). Returns the logical row count written. */
 static int64_t bnl_consolidate(JoinNode *jn, VecNode *child,
                                const VecSchema *schema, const int *key_col,
-                               VecBatch *partial, const char *path) {
-    Vtr1TdcWriter *w = vtr1_open_tdc_writer(path, schema);
-    Vtr1TdcWriter *ws[1] = { w };
-    VecType common[16];
-    for (int k = 0; k < jn->n_keys; k++)
-        common[k] = schema->col_types[key_col[k]];  /* K=1: identity, no coerce */
+                               VecBatch *partial, VecBatch *pending,
+                               const char *path) {
+    char *paths[1] = { (char *)path };
+    PartSpill *ps = part_spill_create(schema, NULL, 1, paths,
+                                      join_spill_buf_reserve(jn));
+    part_spill_touch(ps, 0);
     int64_t rows = 0;
     if (partial) {
         rows += vec_batch_logical_rows(partial);
-        spill_write_batch(partial, schema, key_col, common, jn->n_keys, ws,
-                          NULL, 1, 0);
+        part_spill_route(ps, partial, NULL);
+    }
+    if (pending) {
+        rows += vec_batch_logical_rows(pending);
+        part_spill_route(ps, pending, NULL);
     }
     VecBatch *b;
     while ((b = child->next_batch(child)) != NULL) {
         rows += vec_batch_logical_rows(b);
-        spill_write_batch(b, schema, key_col, common, jn->n_keys, ws, NULL, 1, 0);
+        part_spill_route(ps, b, NULL);
         vec_batch_free(b);
     }
-    vtr1_close_tdc_writer(w);
+    part_spill_close(ps);
     return rows;
 }
 
-/* Consumes r_builders. Consolidates both sides and arms BNL mode. */
-static void join_spill_bnl(JoinNode *jn, VecArrayBuilder *r_builders) {
+/* Consumes r_builders and `pending`. Consolidates both sides and arms BNL
+   mode. */
+static void join_spill_bnl(JoinNode *jn, VecArrayBuilder *r_builders,
+                           VecBatch *pending) {
     const VecSchema *rs = &jn->right->output_schema;
     const VecSchema *ls = &jn->left->output_schema;
     int r_ncols = rs->n_cols;
@@ -642,10 +670,12 @@ static void join_spill_bnl(JoinNode *jn, VecArrayBuilder *r_builders) {
     jn->bnl_rpath = bnl_make_path(jn->temp_dir, 'r');
     jn->bnl_lpath = bnl_make_path(jn->temp_dir, 'l');
     jn->bnl_rrows = bnl_consolidate(jn, jn->right, rs, jn->rkey_idx,
-                                    pb, jn->bnl_rpath);
+                                    pb, pending, jn->bnl_rpath);
     vec_batch_free(pb);
+    if (pending) vec_batch_free(pending);
     jn->bnl_lrows = bnl_consolidate(jn, jn->left, ls, jn->lkey_idx,
-                                    NULL, jn->bnl_lpath);
+                                    NULL, NULL, jn->bnl_lpath);
+    vec_mem_set(&jn->mem, 0);
 
     if (jn->kind != JOIN_INNER) {
         int64_t nb = (jn->bnl_lrows + 7) / 8;
@@ -672,10 +702,14 @@ static void bnl_free_block(JoinNode *jn) {
         jn->r_cols = NULL;
     }
     if (jn->jht.head) jht_free(&jn->jht);
+    vec_mem_set(&jn->mem, 0);
 }
 
-/* Load up to mem_budget bytes of the next build block into jn->r_cols and build
-   its hash table. Returns rows loaded, 0 when the build file is exhausted. */
+/* Load the next build block into jn->r_cols and build its hash table, sized
+   so the block's columns plus its hash table fit what the memory pool grants (a block
+   always takes at least one batch). A batch that would cross the budget is
+   held in bnl_rpending and opens the next block. Returns rows loaded, 0 when
+   the build file is exhausted. */
 static int64_t bnl_load_block(JoinNode *jn) {
     const VecSchema *rs = &jn->right->output_schema;
     int r_ncols = rs->n_cols;
@@ -683,23 +717,20 @@ static int64_t bnl_load_block(JoinNode *jn) {
         (size_t)r_ncols, sizeof(VecArrayBuilder));
     for (int c = 0; c < r_ncols; c++) rb[c] = vec_builder_init(rs->col_types[c]);
 
-    int64_t acc = 0;
-    VecBatch *b;
-    while (acc <= jn->mem_budget &&
-           (b = jn->bnl_rscan->next_batch(jn->bnl_rscan)) != NULL) {
-        if (!b->sel) {
-            for (int c = 0; c < r_ncols; c++)
-                vec_builder_append_array(&rb[c], &b->columns[c]);
-        } else {
-            int64_t nl = vec_batch_logical_rows(b);
-            for (int c = 0; c < r_ncols; c++) vec_builder_reserve(&rb[c], nl);
-            for (int64_t li = 0; li < nl; li++) {
-                int64_t pi = vec_batch_physical_row(b, li);
-                for (int c = 0; c < r_ncols; c++)
-                    vec_builder_append_one(&rb[c], &b->columns[c], pi);
+    for (;;) {
+        VecBatch *b = jn->bnl_rpending;
+        jn->bnl_rpending = NULL;
+        if (!b) b = jn->bnl_rscan->next_batch(jn->bnl_rscan);
+        if (!b) break;
+        int64_t need = join_build_bytes_after(jn, rb, r_ncols, b);
+        if (!vec_mem_try(&jn->mem, need)) {
+            if (rb[0].length > 0) {
+                jn->bnl_rpending = b;
+                break;
             }
+            vec_mem_set(&jn->mem, need);
         }
-        acc += join_batch_bytes(b, r_ncols);
+        join_append_batch(rb, r_ncols, b);
         vec_batch_free(b);
     }
 
@@ -921,44 +952,45 @@ static void join_build(JoinNode *jn) {
     const VecSchema *rschema = &jn->right->output_schema;
     jn->r_ncols = rschema->n_cols;
 
+    /* Both sides sorted on the join keys: merge join, which needs no hash
+       table. Decided from the children's metadata before the build, so the
+       build reserves only what it will allocate. */
+    if (child_sorted_on_keys(jn->left, jn->lkey_idx, jn->n_keys) &&
+        child_sorted_on_keys(jn->right, jn->rkey_idx, jn->n_keys)) {
+        jn->use_merge = 1;
+    }
+
     VecArrayBuilder *r_builders = (VecArrayBuilder *)calloc(
         (size_t)jn->r_ncols, sizeof(VecArrayBuilder));
     for (int c = 0; c < jn->r_ncols; c++)
         r_builders[c] = vec_builder_init(rschema->col_types[c]);
+    /* A build side whose row count is known from metadata is sized exactly,
+       so its buffers (and their reservation) are not up to twice the rows. */
+    int64_t exact = vec_node_static_rows(jn->right);
+    if (exact > 0)
+        for (int c = 0; c < jn->r_ncols; c++)
+            vec_builder_reserve(&r_builders[c], exact);
 
-    int64_t acc_bytes = 0;
     VecBatch *batch;
     while ((batch = jn->right->next_batch(jn->right)) != NULL) {
-        if (!batch->sel) {
-            for (int c = 0; c < jn->r_ncols; c++)
-                vec_builder_append_array(&r_builders[c], &batch->columns[c]);
-        } else {
-            int64_t n_logical = vec_batch_logical_rows(batch);
-            for (int c = 0; c < jn->r_ncols; c++)
-                vec_builder_reserve(&r_builders[c], n_logical);
-            for (int64_t li = 0; li < n_logical; li++) {
-                int64_t pi = vec_batch_physical_row(batch, li);
-                for (int c = 0; c < jn->r_ncols; c++)
-                    vec_builder_append_one(&r_builders[c],
-                                           &batch->columns[c], pi);
-            }
-        }
-        acc_bytes += join_batch_bytes(batch, jn->r_ncols);
-        vec_batch_free(batch);
-        /* Build side outgrew the budget. Below the depth cap, hash-partition
-           both sides and join one partition at a time (sub-joins re-spill as
-           needed). At the cap the partition is un-splittable by hashing (a
-           single hot key), so fall back to a block-nested-loop that blocks the
-           build under budget and re-scans the probe per block. Either way peak
-           stays bounded. */
-        if (jn->mem_budget > 0 && acc_bytes > jn->mem_budget) {
+        /* Appending this batch and hashing the result would outgrow the
+           budget. Below the depth cap, hash-partition both sides and join one
+           partition at a time (sub-joins re-spill as needed). At the cap the
+           partition is un-splittable by hashing (a single hot key), so fall
+           back to a block-nested-loop that blocks the build under budget and
+           re-scans the probe per block. Either way peak stays bounded. */
+        if (!join_reserve_build(jn, join_build_bytes_after(
+                jn, r_builders, jn->r_ncols, batch))) {
+            jn->use_merge = 0;   /* partitions and BNL blocks hash-join */
             if (jn->spill_depth < JOIN_MAX_SPILL_DEPTH)
-                join_spill(jn, r_builders);
+                join_spill(jn, r_builders, batch);
             else
-                join_spill_bnl(jn, r_builders);
+                join_spill_bnl(jn, r_builders, batch);
             free(r_builders);
             return;
         }
+        join_append_batch(r_builders, jn->r_ncols, batch);
+        vec_batch_free(batch);
     }
 
     int64_t r_nrows = r_builders[0].length;
@@ -969,12 +1001,6 @@ static void join_build(JoinNode *jn) {
 
     /* Coerce build-side key columns to match probe-side types */
     join_coerce_build_keys(jn);
-
-    /* Check if both sides are sorted on join keys — use merge join if so */
-    if (child_sorted_on_keys(jn->left, jn->lkey_idx, jn->n_keys) &&
-        child_sorted_on_keys(jn->right, jn->rkey_idx, jn->n_keys)) {
-        jn->use_merge = 1;
-    }
 
     if (jn->use_merge) {
         /* Merge join: skip hash table, just store row count for cursor bounds */
@@ -1065,7 +1091,9 @@ static int join_probe_load(JoinNode *jn) {
         const VecArray *pkey = &probe_cols[jn->lkey_idx[0]];
         switch (pkey->type) {
         case VEC_INT64:
+            #ifdef _OPENMP
             #pragma omp parallel for if(p_logical > VEC_OMP_THRESHOLD) schedule(static)
+            #endif
             for (int64_t li = 0; li < p_logical; li++) {
                 int64_t pi = vec_batch_physical_row(pbatch, li);
                 phash[li] = vec_array_is_valid(pkey, pi)
@@ -1074,7 +1102,9 @@ static int join_probe_load(JoinNode *jn) {
             }
             break;
         case VEC_DOUBLE:
+            #ifdef _OPENMP
             #pragma omp parallel for if(p_logical > VEC_OMP_THRESHOLD) schedule(static)
+            #endif
             for (int64_t li = 0; li < p_logical; li++) {
                 int64_t pi = vec_batch_physical_row(pbatch, li);
                 phash[li] = vec_array_is_valid(pkey, pi)
@@ -1083,7 +1113,9 @@ static int join_probe_load(JoinNode *jn) {
             }
             break;
         case VEC_STRING:
+            #ifdef _OPENMP
             #pragma omp parallel for if(p_logical > VEC_OMP_THRESHOLD) schedule(static)
+            #endif
             for (int64_t li = 0; li < p_logical; li++) {
                 int64_t pi = vec_batch_physical_row(pbatch, li);
                 phash[li] = vec_array_is_valid(pkey, pi)
@@ -1094,7 +1126,9 @@ static int join_probe_load(JoinNode *jn) {
             }
             break;
         default:
+            #ifdef _OPENMP
             #pragma omp parallel for if(p_logical > VEC_OMP_THRESHOLD) schedule(static)
+            #endif
             for (int64_t li = 0; li < p_logical; li++) {
                 int64_t pi = vec_batch_physical_row(pbatch, li);
                 phash[li] = hash_join_key(probe_cols, jn->lkey_idx,
@@ -1104,7 +1138,9 @@ static int join_probe_load(JoinNode *jn) {
         }
     } else {
         /* Generic composite key hash */
+        #ifdef _OPENMP
         #pragma omp parallel for if(p_logical > VEC_OMP_THRESHOLD) schedule(static)
+        #endif
         for (int64_t li = 0; li < p_logical; li++) {
             int64_t pi = vec_batch_physical_row(pbatch, li);
             phash[li] = hash_join_key(probe_cols, jn->lkey_idx,
@@ -1692,6 +1728,7 @@ static void join_free(VecNode *self) {
     free(jn->rkey_idx);
     free(jn->r_non_key_idx);
     free(jn->build_matched);
+    vec_mem_acct_free(&jn->mem);
     if (jn->r_cols) {
         for (int c = 0; c < jn->r_ncols; c++)
             vec_array_free(&jn->r_cols[c]);
@@ -1713,6 +1750,7 @@ static void join_free(VecNode *self) {
     }
     /* Block-nested-loop teardown: active scans, then the consolidated files. */
     if (jn->bnl_rscan) jn->bnl_rscan->free_node(jn->bnl_rscan);
+    if (jn->bnl_rpending) vec_batch_free(jn->bnl_rpending);
     if (jn->bnl_pscan) jn->bnl_pscan->free_node(jn->bnl_pscan);
     if (jn->bnl_rpath) { remove(jn->bnl_rpath); free(jn->bnl_rpath); }
     if (jn->bnl_lpath) { remove(jn->bnl_lpath); free(jn->bnl_lpath); }
@@ -1726,6 +1764,9 @@ static void join_free(VecNode *self) {
 /* ------------------------------------------------------------------ */
 /*  Constructor                                                        */
 /* ------------------------------------------------------------------ */
+
+VEC_TWO_CHILDREN_FN(join_children, JoinNode, left, right)
+VEC_BUDGET_ACCT_FN(join_set_grant, JoinNode, mem)
 
 JoinNode *join_node_create(VecNode *left, VecNode *right,
                            JoinKind kind, int n_keys, JoinKey *keys,
@@ -1745,6 +1786,7 @@ JoinNode *join_node_create(VecNode *left, VecNode *right,
     jn->na_matches = 1;   /* dplyr default; the bridge overrides from R */
     jn->keys = keys;
     jn->mem_budget = mem_budget;
+    jn->mem = vec_mem_acct(NULL, mem_budget);
     if (temp_dir) {
         jn->temp_dir = (char *)malloc(strlen(temp_dir) + 1);
         strcpy(jn->temp_dir, temp_dir);
@@ -1887,6 +1929,8 @@ JoinNode *join_node_create(VecNode *left, VecNode *right,
 
     jn->base.next_batch = join_next_batch;
     jn->base.kind = "JoinNode";
+    jn->base.children = join_children;
+    vec_node_set_budgeted(&jn->base, jn->mem_budget, join_set_grant);
     jn->base.free_node = join_free;
 
     return jn;

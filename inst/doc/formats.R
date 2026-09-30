@@ -84,6 +84,14 @@ tbl(f) |>
 # Read it back through vectra
 tbl_sqlite(db, "v8_cars") |> collect()
 
+## ----parquet------------------------------------------------------------------
+pq <- system.file("extdata", "example.parquet", package = "vectra")
+tbl_parquet(pq) |>
+  filter(dbh_cm > 60) |>
+  select(id, species, dbh_cm) |>
+  collect() |>
+  head()
+
 ## ----convert-csv-vtr----------------------------------------------------------
 csv <- tempfile(fileext = ".csv")
 write.csv(mtcars, csv, row.names = FALSE)

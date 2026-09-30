@@ -1,0 +1,42 @@
+# Makevars.in — vectra (configure writes src/Makevars from this file)
+#
+# configure fills PKG_CFLAGS / PKG_LIBS below with the OpenMP flags it
+# verified by compiling, loading and running a parallel loop, plus any
+# PKG_CFLAGS / PKG_LIBS set in the environment. They carry no OpenMP flags
+# when no variant worked, and the package then builds serial.
+#
+# Vendored libraries:
+#   src/tdc/    typed dimensional compression engine; owns the .vtr codec
+#   src/miniz/  single-file deflate library; powers TIFF deflate strips,
+#               gzip-compressed CSV input and GZIP Parquet pages
+#   src/zstd/   zstd's single-file decoder (zstddeclib.c); ZSTD Parquet
+#               pages
+#
+# Vendoring them keeps the package self-contained: no system zlib link,
+# no SystemRequirements beyond GNU make. Requires GNU make for the
+# wildcard expansion (declared in DESCRIPTION SystemRequirements).
+#
+# tdc's optional deflate backend (TDC_HAVE_ZLIB) stays undefined; tdc
+# does not link miniz, the dependency relationship is purely vectra
+# source files (tiff_format.c, byte_reader.c) -> miniz.
+
+PKG_CFLAGS = @PKG_CFLAGS@ -I./tdc/include
+PKG_LIBS = @PKG_LIBS@
+
+TDC_SOURCES = \
+	$(wildcard tdc/src/api/*.c) \
+	$(wildcard tdc/src/core/*.c) \
+	$(wildcard tdc/src/entropy/*.c) \
+	$(wildcard tdc/src/format/*.c) \
+	$(wildcard tdc/src/layout/*.c) \
+	$(wildcard tdc/src/model/*.c) \
+	$(wildcard tdc/src/symbols/*.c) \
+	$(wildcard tdc/src/transform/*.c)
+
+MINIZ_SOURCES = $(wildcard miniz/*.c)
+
+ZSTD_SOURCES = $(wildcard zstd/*.c)
+
+VECTRA_SOURCES = $(wildcard *.c)
+
+OBJECTS = $(VECTRA_SOURCES:.c=.o) $(TDC_SOURCES:.c=.o) $(MINIZ_SOURCES:.c=.o) $(ZSTD_SOURCES:.c=.o)

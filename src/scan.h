@@ -18,8 +18,7 @@ typedef struct {
     uint32_t       last_rg;        /* exclusive upper bound when last_rg_set */
     int            last_rg_set;    /* 1 = last_rg is authoritative (0 is a valid bound) */
     int            rg_range_set;   /* 1 = binary search narrowed the range */
-    VecExpr       *predicate;      /* pushed-down filter predicate (NULL = none) */
-    int            pred_borrowed;  /* 1 = don't free predicate (owned by filter node) */
+    VecExpr       *predicate;      /* owned row-group pruning predicate (NULL = none) */
     TombstoneSet  *tombstone;      /* deleted rows (NULL = no deletions) */
     int64_t        rg_row_base;    /* physical row index of first row in current rg */
     VtrIndex      *index;          /* persistent hash index (NULL = none) */
@@ -34,6 +33,12 @@ typedef struct {
    col_indices: NULL = all columns, otherwise array of col indices to read
    n_selected: number of entries in col_indices (ignored if col_indices is NULL) */
 ScanNode *scan_node_create(const char *path, int *col_indices, int n_selected);
+
+/* Zone-map check shared by every scan with per-row-group statistics: 0 when
+   stats (indexed like schema) prove no row of a group of rg_n_rows rows can
+   satisfy pred, 1 when some might. */
+int predicate_might_match(const VecExpr *pred, const Vtr1ColStat *stats,
+                          const VecSchema *schema, int64_t rg_n_rows);
 
 /* Parallel I/O eligibility: returns 1 if this is a plain scan with no
    predicate, tombstone, index bitmap, or binary-search range narrowing. */

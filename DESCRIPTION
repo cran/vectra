@@ -1,9 +1,26 @@
 Package: vectra
 Title: Columnar Query Engine for Larger-than-RAM Data
-Version: 0.12.4
-Authors@R: person("Gilles", "Colling", email = "gilles.colling051@gmail.com",
-    role = c("aut", "cre", "cph"),
-    comment = c(ORCID = "0000-0003-3070-6066"))
+Version: 0.13.0
+Authors@R: c(
+    person("Gilles", "Colling", email = "gilles.colling051@gmail.com",
+      role = c("aut", "cre", "cph"),
+      comment = c(ORCID = "0000-0003-3070-6066")),
+    person("Yann", "Collet", role = c("ctb", "cph"),
+      comment = "zstd decoder and xxHash in src/zstd"),
+    person("Meta Platforms, Inc. and affiliates", role = "cph",
+      comment = "zstd decoder in src/zstd"),
+    person("Rich", "Geldreich", role = "ctb",
+      comment = "miniz in src/miniz"),
+    person("Martin", "Raiber", role = c("ctb", "cph"),
+      comment = "miniz in src/miniz"),
+    person("Alistair", "Moffat", role = "ctb",
+      comment = "minimum-redundancy code routine in src/miniz"),
+    person("Jyrki", "Katajainen", role = "ctb",
+      comment = "minimum-redundancy code routine in src/miniz"),
+    person("RAD Game Tools and Valve Software", role = "cph",
+      comment = "miniz in src/miniz"),
+    person("Rich Geldreich and Tenacious Software LLC", role = "cph",
+      comment = "miniz in src/miniz"))
 Description: A minimal columnar query engine with lazy execution on datasets
     larger than RAM. Provides 'dplyr'-like verbs (filter(), select(), mutate(),
     group_by(), summarise(), joins, window functions) and common aggregations
@@ -26,8 +43,8 @@ Encoding: UTF-8
 Imports: tidyselect, rlang, libgeos, parallel
 LinkingTo: libgeos
 Suggests: biglm, Biostrings, bit64, DBI, igraph, knitr, openxlsx2,
-        rmarkdown, RSQLite, sf, ShortRead, stringdist, terra, testthat
-        (>= 3.0.0)
+        rmarkdown, RSQLite, s2, sf, ShortRead, stringdist, terra,
+        testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 URL: https://gillescolling.com/vectra/,
@@ -35,9 +52,17 @@ URL: https://gillescolling.com/vectra/,
 BugReports: https://github.com/gcol33/vectra/issues
 Config/roxygen2/version: 8.1.0
 NeedsCompilation: yes
-Packaged: 2026-09-16 20:37:26 UTC; Gilles Colling
+Packaged: 2026-09-29 13:08:16 UTC; Gilles Colling
 Author: Gilles Colling [aut, cre, cph] (ORCID:
-    <https://orcid.org/0000-0003-3070-6066>)
+    <https://orcid.org/0000-0003-3070-6066>),
+  Yann Collet [ctb, cph] (zstd decoder and xxHash in src/zstd),
+  Meta Platforms, Inc. and affiliates [cph] (zstd decoder in src/zstd),
+  Rich Geldreich [ctb] (miniz in src/miniz),
+  Martin Raiber [ctb, cph] (miniz in src/miniz),
+  Alistair Moffat [ctb] (minimum-redundancy code routine in src/miniz),
+  Jyrki Katajainen [ctb] (minimum-redundancy code routine in src/miniz),
+  RAD Game Tools and Valve Software [cph] (miniz in src/miniz),
+  Rich Geldreich and Tenacious Software LLC [cph] (miniz in src/miniz)
 Maintainer: Gilles Colling <gilles.colling051@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-09-16 23:50:02 UTC
+Date/Publication: 2026-09-30 22:50:02 UTC

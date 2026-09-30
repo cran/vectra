@@ -1,5 +1,6 @@
 ## ----setup, include = FALSE---------------------------------------------------
-has_sf <- requireNamespace("sf", quietly = TRUE)
+has_sf <- requireNamespace("sf", quietly = TRUE) &&
+  requireNamespace("s2", quietly = TRUE)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",

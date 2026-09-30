@@ -2,6 +2,7 @@
 #define VECTRA_JOIN_H
 
 #include "types.h"
+#include "plan_budget.h"
 
 typedef enum {
     JOIN_INNER,
@@ -54,15 +55,16 @@ typedef struct {
     char     *suffix_x;
     char     *suffix_y;
 
-    /* Grace-hash spill: when the materialized build side exceeds mem_budget
-       bytes, both sides are hash-partitioned to run-files and joined one
+    /* Grace-hash spill: when the plan's memory pool refuses the materialized
+       build side (columns plus hash table), both sides are hash-partitioned to run-files and joined one
        partition at a time. mem_budget <= 0 disables spilling (unbounded).
        A partition still over budget is re-partitioned by its sub-join with a
        depth-salted hash (so colliding keys redistribute across levels); a
        partition a single hot key makes un-splittable falls back to a
        block-nested-loop at JOIN_MAX_SPILL_DEPTH. Peak stays bounded regardless
        of key skew. */
-    int64_t   mem_budget;
+    int64_t   mem_budget;     /* budget requested at creation */
+    VecMemAcct mem;           /* reservation on the plan's memory pool */
     char     *temp_dir;       /* directory for partition spill files */
     int       spill_depth;    /* grace-hash recursion depth (0 at the top) */
 
@@ -74,7 +76,7 @@ typedef struct {
     VecNode   *sub_join;      /* active sub-join over cur_part (owns its scans) */
 
     /* Block-nested-loop terminal fallback (single-hot-key partition). The build
-       side is streamed in <= mem_budget blocks; the probe side is re-scanned
+       side is streamed in blocks the memory pool grants; the probe side is re-scanned
        once per block. Peak = one build block + one probe batch, plus 1-bit/row
        matched bitsets. */
     int        bnl;           /* 1 = block-nested-loop mode active */
@@ -90,6 +92,8 @@ typedef struct {
     int        bnl_fin_side;  /* finalize sub-stage: 0 = probe scan, 1 = build */
     uint8_t   *bnl_pmatched;  /* bitset over probe rows (non-inner kinds) */
     uint8_t   *bnl_bmatched;  /* bitset over build rows (full only) */
+    VecBatch  *bnl_rpending;  /* build batch read past a full block, owned;
+                                 it opens the next block */
     /* Resumable cursor over one BNL probe batch (bounds the many-to-many emit
        against a build block, the same way the resident probe path does). */
     VecBatch  *bnl_pb;           /* active probe batch (owned); NULL = none */

@@ -55,7 +55,7 @@ static int str_in_might_match(const VecExpr *pred, const Vtr1ColStat *stats,
  * Returns 0 if the predicate is definitely false for all rows in this row group,
  * 1 if it might be true (or we can't determine). rg_n_rows is the row count of
  * this group, used for all-null pruning against null_count. */
-static int predicate_might_match(const VecExpr *pred, const Vtr1ColStat *stats,
+int predicate_might_match(const VecExpr *pred, const Vtr1ColStat *stats,
                                   const VecSchema *schema, int64_t rg_n_rows) {
     if (!pred || !stats) return 1;
 
@@ -1005,8 +1005,7 @@ static int64_t scan_static_rows(const VecNode *self) {
 
 static void scan_free(VecNode *self) {
     ScanNode *sn = (ScanNode *)self;
-    if (sn->predicate && !sn->pred_borrowed)
-        vec_expr_free(sn->predicate);
+    vec_expr_free(sn->predicate);
     tombstone_free(sn->tombstone);
     vtr1_close_tdc(sn->file);
     free(sn->col_mask);
