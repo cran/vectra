@@ -434,17 +434,30 @@ write_vtr.data.frame <- function(x, path, compress = c("fast", "small", "none"),
 #' valid across a column append: it is restamped for the grown store without
 #' being rebuilt.
 #'
+#' # File size
+#'
+#' Either direction writes from the end of the store's data, where its
+#' row-group index starts, and writes a new index after the appended data, so the file holds one index
+#' however many appends built it. A store built by appending batch after batch
+#' is about as large as the same rows written by [write_vtr()] with the same
+#' row-group sizes. A store grown by appends in vectra 0.13.4 or earlier holds
+#' one superseded index per append; it reads and appends as usual, and
+#' writing it out with [write_vtr()] to a new file drops them.
+#'
 #' # Interruption
 #'
-#' Either direction writes everything past the end of the existing data and
-#' rewrites the file header last, so an interruption -- a crash, a full disk,
-#' a killed process -- leaves the store readable exactly as it was before the
-#' call. The appended bytes are referenced by nothing and the next append
-#' writes over them.
+#' The index the file header points to is never overwritten while an append
+#' runs: before the appended data would reach it, a copy is written further
+#' along the file and the header is pointed at the copy, and the header is
+#' pointed at the new index only once that index is complete. So an
+#' interruption -- a crash, a full disk, a killed process -- at any point
+#' leaves the store readable either as it was before the call or as it is
+#' after it. The bytes an interrupted append wrote are referenced by nothing,
+#' and the next append writes over them.
 #'
-#' The trade is that a store grown in place is stamped so that readers
-#' predating this format refuse it rather than misread it, and is
-#' random-access only, which is how vectra reads a `.vtr` anyway.
+#' A store grown in place is stamped so that readers predating this format
+#' refuse it rather than misread it, and is random-access only, which is how
+#' vectra reads a `.vtr` anyway.
 #'
 #' @param x A `vectra_node` (lazy query) or a `data.frame`.
 #' @param path File path of an existing `.vtr` file to append to.
@@ -479,33 +492,38 @@ append_vtr <- function(x, path, along = c("rows", "cols"),
 #' @export
 append_vtr.vectra_node <- function(x, path, along = c("rows", "cols"),
                                    compress = c("fast", "small", "none"), ...) {
-  check_scalar_string(path)
   along <- match.arg(along)
-  path <- normalizePath(path, mustWork = TRUE)
-  # Force GC so any lingering tbl()-owned file handles on `path` are closed
-  # before we write to it. On Windows the rename at the end of C_append_vtr,
-  # and the r+b open in the column path, otherwise fail with a sharing
-  # violation.
-  gc(verbose = FALSE)
-  indexed <- length(.index_files(path)) > 0L
-  pre <- if (indexed) .store_fingerprint(path)
-  if (along == "cols") {
-    .Call(C_append_cols_vtr, x$.node, path, .check_compress(compress))
-  } else {
-    .Call(C_append_vtr, x$.node, path, .check_compress(compress))
-  }
-  # The existing row groups have not moved, so each index still maps its keys
-  # to the row groups they sit in; what it does not yet cover is the row groups
-  # just appended, and the store's new fingerprint. Take those in rather than
-  # rebuilding from the whole store, so an indexed store's append stays off the
-  # store's size.
-  if (indexed) .extend_indexes(path, pre)
-  invisible(NULL)
+  compress <- .check_compress(compress)
+  .append_to(path, function(path) {
+    if (along == "cols") .Call(C_append_cols_vtr, x$.node, path, compress)
+    else .Call(C_append_vtr, x$.node, path, compress)
+  })
 }
 
 #' @export
 append_vtr.data.frame <- function(x, path, along = c("rows", "cols"),
                                   compress = c("fast", "small", "none"), ...) {
-  append_vtr.vectra_node(df_to_node(x), path, along = along,
-                         compress = compress, ...)
+  along <- match.arg(along)
+  if (along == "cols")
+    return(append_vtr.vectra_node(df_to_node(x), path, along = along, compress = compress, ...))
+  compress <- .check_compress(compress)
+  # Rows go from the R columns straight into row groups of the store's column
+  # types, as write_vtr() cuts a data.frame.
+  .append_to(path, function(path) .Call(C_append_vtr_df, x, path, compress, 131072L))
+}
+
+# Run append(path) on an existing store and bring its indexes up to date. The
+# existing row groups have not moved, so each index still maps its keys to the
+# row groups they sit in; what it does not yet cover is the row groups just
+# appended, and the store's new fingerprint. Take those in rather than
+# rebuilding from the whole store, so an indexed store's append stays off the
+# store's size.
+.append_to <- function(path, append) {
+  check_scalar_string(path)
+  path <- normalizePath(path, mustWork = TRUE)
+  indexed <- length(.index_files(path)) > 0L
+  pre <- if (indexed) .store_fingerprint(path)
+  append(path)
+  if (indexed) .extend_indexes(path, pre)
+  invisible(NULL)
 }

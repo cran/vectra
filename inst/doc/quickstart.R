@@ -4,6 +4,12 @@ knitr::opts_chunk$set(
   comment = "#>"
 )
 
+## ----eval = FALSE-------------------------------------------------------------
+# install.packages("vectra")            # CRAN
+# 
+# # install.packages("pak")             # development version
+# pak::pak("gcol33/vectra")
+
 ## ----va-engine, echo = FALSE, results = "asis", eval = TRUE-------------------
 cat("<script>\n", paste(readLines("va-engine.js"), collapse = "\n"), "\n</script>\n", sep = "")
 

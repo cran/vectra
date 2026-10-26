@@ -87,15 +87,25 @@ test_that("append_vtr rejects a column-type mismatch", {
 # ── append_vtr(along = "cols") ────────────────────────────────────────────────
 
 # Helper: the bytes of a .vtr between the 64-byte container header and the
-# 24-byte trailer. A column append must leave every one of them exactly where it
-# found them -- that is the property that makes the operation cost the appended
-# columns rather than the size of the store. The header and the trailer are the
-# two parts an append rewrites.
+# 24-byte trailer.
 vtr_trailer_bytes <- 24L
 vtr_body <- function(path) {
   n <- file.size(path)
   raw_all <- readBin(path, "raw", n = n)
   raw_all[65:(n - vtr_trailer_bytes)]
+}
+
+# Helper: the bytes of a .vtr between the 64-byte container header and its
+# row-group index, whose offset is the u64 at byte 16 of the header. An append
+# in either direction must leave every one of them exactly where it found them
+# -- that is the property that makes it cost what is appended rather than the
+# size of the store. It writes from the start of the index on.
+vtr_before_index <- function(path) {
+  raw_all <- readBin(path, "raw", n = file.size(path))
+  w <- readBin(raw_all[17:24], "integer", n = 2L, size = 4L, endian = "little")
+  w[w < 0] <- w[w < 0] + 2^32
+  index_offset <- w[1] + w[2] * 2^32
+  raw_all[65:index_offset]
 }
 
 test_that("append_vtr(along = 'cols') attaches columns without touching existing bytes", {
@@ -110,7 +120,7 @@ test_that("append_vtr(along = 'cols') attaches columns without touching existing
                      stringsAsFactors = FALSE)
   write_vtr(base, f, batch_size = 64L)   # 8 row groups
 
-  body_before <- vtr_body(f)
+  body_before <- vtr_before_index(f)
 
   extra <- data.frame(w = rnorm(n),
                       lab = paste0("r", seq_len(n)),
@@ -118,8 +128,8 @@ test_that("append_vtr(along = 'cols') attaches columns without touching existing
                       stringsAsFactors = FALSE)
   append_vtr(extra, f, along = "cols")
 
-  # The original body is a strict prefix of the widened one.
-  body_after <- vtr_body(f)
+  # The original body up to its index is a strict prefix of the widened one.
+  body_after <- vtr_before_index(f)
   expect_gt(length(body_after), length(body_before))
   expect_identical(body_after[seq_along(body_before)], body_before)
 
@@ -233,8 +243,9 @@ test_that("append_vtr(along = 'cols') rejects a row-count mismatch and leaves th
                "row count mismatch")
   expect_identical(tbl(f) |> collect(), before)
 
-  # An aborted append truncates what it wrote, so repeated failures cannot
-  # grow the file, and puts back the trailer the appended bytes overwrote.
+  # An aborted append puts the original index and header back, truncates what
+  # it wrote, so repeated failures cannot grow the file, and puts back the
+  # trailer the appended bytes overwrote.
   expect_identical(vtr_body(f), body_before)
   expect_identical(readBin(f, "raw", file.size(f)), file_before)
 })
@@ -492,21 +503,20 @@ test_that("a row append leaves the bytes already written where they are", {
   # The claim the in-place append rests on: existing row groups are neither
   # read nor moved, so the call costs the rows being appended rather than the
   # size of the store. Everything between the 64-byte container header and the
-  # 24-byte trailer must therefore survive verbatim -- only the header is
-  # rewritten, last, and the trailer moves to the new end.
+  # row-group index must therefore survive verbatim -- the append writes from
+  # the index on, and rewrites the header last.
   f <- tempfile(fileext = ".vtr")
   on.exit(unlink(f))
 
   write_vtr(data.frame(x = 1:1000, y = as.double(1:1000)), f)
-  before <- readBin(f, "raw", file.size(f))
+  before <- vtr_before_index(f)
+  size_before <- file.size(f)
 
   append_vtr(data.frame(x = 1001:1100, y = as.double(1001:1100)), f)
   after <- readBin(f, "raw", file.size(f))
 
-  hdr <- 64L
-  kept <- length(before) - vtr_trailer_bytes
-  expect_gt(length(after), length(before))
-  expect_identical(after[(hdr + 1L):kept], before[(hdr + 1L):kept])
+  expect_gt(length(after), size_before)
+  expect_identical(after[65L:(64L + length(before))], before)
 
   result <- tbl(f) |> collect()
   expect_equal(nrow(result), 1100L)
@@ -522,18 +532,62 @@ test_that("repeated row appends never move the rows already written", {
   on.exit(unlink(f))
 
   write_vtr(data.frame(x = 1:100), f)
-  base <- readBin(f, "raw", file.size(f))
+  base <- vtr_before_index(f)
 
   for (i in 1:10)
     append_vtr(data.frame(x = (100L * i + 1L):(100L * i + 100L)), f)
 
   after <- readBin(f, "raw", file.size(f))
-  hdr <- 64L
-  kept <- length(base) - vtr_trailer_bytes
-  expect_identical(after[(hdr + 1L):kept], base[(hdr + 1L):kept])
+  expect_identical(after[65L:(64L + length(base))], base)
 
   expect_equal(tbl(f) |> collect() |> nrow(), 1100L)
   expect_equal(tbl(f) |> collect() |> getElement("x"), as.double(1:1100))
+})
+
+test_that("a data.frame row append reads the same back as write_vtr() of the whole", {
+  f <- tempfile(fileext = ".vtr"); g <- tempfile(fileext = ".vtr")
+  on.exit(unlink(c(f, g)))
+  mk <- function(i) data.frame(
+    i = c(i, NA, i + 1L), d = c(i / 3, NA, Inf), b = c(TRUE, NA, FALSE),
+    s = c(paste0("s", i), NA, ""), k = factor(c("a", NA, "b"), levels = c("b", "a")),
+    stringsAsFactors = FALSE)
+  write_vtr(mk(1L), f)
+  for (i in 2:4) append_vtr(mk(i), f)
+  write_vtr(do.call(rbind, lapply(1:4, mk)), g)
+  expect_identical(collect(tbl(f)), collect(tbl(g)))
+})
+
+test_that("a data.frame row append is cut into row groups and fills narrow integer columns", {
+  f <- tempfile(fileext = ".vtr")
+  on.exit(unlink(f))
+  write_vtr(data.frame(x = 1:3, y = 0.5), f, col_types = c(x = "int32"))
+  n <- 300000L
+  append_vtr(data.frame(x = seq_len(n), y = 1), f)
+  r <- collect(tbl(f))
+  expect_equal(nrow(r), n + 3L)
+  expect_equal(r$x, as.double(c(1:3, seq_len(n))))
+  expect_error(append_vtr(data.frame(x = "a", y = 1), f), "type mismatch at column 'x'")
+  expect_error(append_vtr(data.frame(y = 1, x = 1L), f), "name mismatch")
+  expect_equal(nrow(collect(tbl(f))), n + 3L)
+})
+
+test_that("appends succeed while tbl() maps of the same file are open", {
+  # Readers map a file with every share mode, so an append in place (rows or
+  # columns) needs no collection of the maps a session still holds, whether
+  # they are referenced or garbage.
+  f <- tempfile(fileext = ".vtr")
+  on.exit(unlink(f))
+  write_vtr(data.frame(x = 1:100), f)
+  live <- tbl(f)
+  for (i in 1:5) {
+    invisible(tbl(f) |> collect())
+    append_vtr(data.frame(x = (100L * i + 1L):(100L * i + 100L)), f)
+  }
+  expect_equal(tbl(f) |> collect() |> getElement("x"), as.double(1:600))
+  append_vtr(data.frame(y = 600:1), f, along = "cols")
+  wide <- tbl(f) |> collect()
+  expect_equal(wide$y, as.double(600:1))
+  expect_s3_class(live, "vectra_node")
 })
 
 test_that("a row append honours compress", {

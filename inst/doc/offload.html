@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-29" />
+<meta name="date" content="2026-10-25" />
 
 <title>Offloading: streaming, monoids, and out-of-core fits</title>
 
@@ -342,7 +342,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">Offloading: streaming, monoids, and
 out-of-core fits</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-29</h4>
+<h4 class="date">2026-10-25</h4>
 
 
 
@@ -353,6 +353,8 @@ exposes it through two pieces: <code>collect_chunked()</code> for
 bounded folds, and <code>offload()</code> for spilling a query to disk
 (or, with a key, splitting one into shards). Along the way the same
 principle explains both what streams cheaply and what needs a sort.</p>
+<p>Installation is covered in <a href="quickstart.html">Get
+started</a>.</p>
 <div id="two-cost-models" class="section level2">
 <h2>Two cost models</h2>
 <p>There are two distinct settings, and conflating them causes most of

@@ -16,6 +16,8 @@ knitr::opts_chunk$set(
 )
 ```
 
+Installation is covered in [Get started](quickstart.html).
+
 ## Introduction
 
 When a dataset has millions of rows spread across hundreds of row groups, a naive

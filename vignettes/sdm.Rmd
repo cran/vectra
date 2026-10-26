@@ -19,6 +19,8 @@ has_biglm <- requireNamespace("biglm", quietly = TRUE)
 library(vectra)
 ```
 
+Installation is covered in [Get started](quickstart.html).
+
 ## What vectra does for a distribution model
 
 A species distribution model relates occurrence records to environmental

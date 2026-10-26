@@ -16,6 +16,8 @@ knitr::opts_chunk$set(
 )
 ```
 
+Installation is covered in [Get started](quickstart.html).
+
 ## Introduction
 
 vectra reads its native `.vtr`, Parquet, CSV, SQLite, Excel and GeoTIFF, and

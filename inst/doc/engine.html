@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-29" />
+<meta name="date" content="2026-10-25" />
 
 <title>vectra Engine Reference</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">vectra Engine Reference</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-29</h4>
+<h4 class="date">2026-10-25</h4>
 
 
 
@@ -351,6 +351,8 @@ materializes, and where guarantees stop. It is the reference for what
 vectra promises.</p>
 <p>See <code>?tbl</code>, <code>?filter</code>, <code>?left_join</code>,
 and <code>?explain</code> for function-level documentation.</p>
+<p>Installation is covered in <a href="quickstart.html">Get
+started</a>.</p>
 <div id="what-vectra-is" class="section level2">
 <h2>What vectra is</h2>
 <p>vectra is an R-native columnar query engine for datasets that don’t
@@ -909,14 +911,15 @@ evaluate predicates.</p>
 captures its arguments with rlang, so the usual injection tools
 work:</p>
 <ul>
-<li><code>!!</code> and <code>!!!</code> inject a value, a symbol or a
-list of them (<code>group_by(!!sym(k))</code>,
-<code>summarise(!!!aggs)</code>)</li>
-<li><code>{{ }}</code> forwards an argument from a wrapper function</li>
-<li><code>!!name := expr</code> builds a column name</li>
-<li><code>.data[[k]]</code> and <code>.data$k</code> refer to a column
-by name, <code>.env$x</code> to a variable in the calling
-environment</li>
+<li><p><code>!!</code> and <code>!!!</code> inject a value, a symbol or
+a list of them (<code>group_by(!!sym(k))</code>,
+<code>summarise(!!!aggs)</code>)</p></li>
+<li><p><code>{{ }}</code> forwards an argument from a wrapper
+function</p></li>
+<li><p><code>!!name := expr</code> builds a column name</p></li>
+<li><p><code>.data[[k]]</code> and <code>.data$k</code> refer to a
+column by name, <code>.env$x</code> to a variable in the calling
+environment</p></li>
 </ul>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>k <span class="ot">&lt;-</span> <span class="st">&quot;species&quot;</span></span>
 <span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a><span class="fu">tbl</span>(<span class="st">&quot;data.vtr&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">group_by</span>(.data[[k]]) <span class="sc">|&gt;</span> <span class="fu">summarise</span>(<span class="at">n =</span> <span class="fu">n</span>())</span></code></pre></div>

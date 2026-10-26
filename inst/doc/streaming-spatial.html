@@ -12,7 +12,7 @@
 
 <meta name="author" content="Gilles Colling" />
 
-<meta name="date" content="2026-09-29" />
+<meta name="date" content="2026-10-25" />
 
 <title>Streaming spatial operations</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Streaming spatial operations</h1>
 <h4 class="author">Gilles Colling</h4>
-<h4 class="date">2026-09-29</h4>
+<h4 class="date">2026-10-25</h4>
 
 
 
@@ -352,8 +352,11 @@ It needs the optional <a href="https://r-spatial.github.io/sf/">sf</a>
 package, which the spatial verbs use to take layers and coordinate
 reference systems as arguments, and which runs the operations vectra has
 no native path for.</p>
+<p>Installation is covered in <a href="quickstart.html">Get
+started</a>.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(vectra)</span>
-<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(sf)</span></code></pre></div>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="co">#&gt; Warning: package &#39;sf&#39; was built under R version 4.6.1</span></span></code></pre></div>
 <div id="the-problem" class="section level2">
 <h2>The problem</h2>
 <p>A desktop GIS holds one layer in memory, runs a tool, and writes the
@@ -421,8 +424,8 @@ here it is 100 counties standing in for the billion-row case.</p>
 <p><code>tbl(f_poly)</code> now opens a lazy node over that file.
 Nothing is read until a verb pulls it. Two functions bring a streamed
 result back to R: <code>collect()</code> returns the underlying
-data.frame, geometry still a WKB string; <code>collect_sf()</code>
-decodes that string and reattaches the node’s CRS, giving an ordinary
+data.frame, geometry still a WKB string; <code>collect()</code> decodes
+that string and reattaches the node’s CRS, giving an ordinary
 <code>sf</code> object ready to plot or hand to any sf function.</p>
 </div>
 <div id="per-feature-transforms-with-spatial_map" class="section level2">
@@ -450,9 +453,9 @@ centroid layer on disk, the second streams a buffer over it.</p>
 <span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a><span class="co">#&gt;   NAME &lt;string&gt;</span></span>
 <span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a><span class="co">#&gt;   geometry &lt;string&gt;</span></span></code></pre></div>
 <p><code>buffered</code> is a lazy node, not a materialized layer: the
-buffer has not run yet. <code>collect_sf()</code> pulls it through and
+buffer has not run yet. <code>collect()</code> pulls it through and
 decodes the geometry.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>b_sf <span class="ot">&lt;-</span> <span class="fu">collect_sf</span>(buffered)</span>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a>b_sf <span class="ot">&lt;-</span> <span class="fu">collect</span>(buffered)</span>
 <span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">st_geometry</span>(nc), <span class="at">border =</span> <span class="st">&quot;grey80&quot;</span>, <span class="at">col =</span> <span class="cn">NA</span>,</span>
 <span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a>     <span class="at">main =</span> <span class="st">&quot;County centroids buffered by 15 km&quot;</span>)</span>
 <span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a><span class="fu">plot</span>(<span class="fu">st_geometry</span>(b_sf), <span class="at">border =</span> <span class="st">&quot;#3366cc&quot;</span>, <span class="at">col =</span> <span class="st">&quot;#3366cc22&quot;</span>, <span class="at">add =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
@@ -497,7 +500,7 @@ coordinates with no GEOS call, and open lines keep their endpoints.</p>
 <span id="cb8-3"><a href="#cb8-3" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
 <span id="cb8-4"><a href="#cb8-4" tabindex="-1"></a>  <span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(zig), <span class="at">hex =</span> <span class="cn">TRUE</span>)), f_zig)</span>
 <span id="cb8-5"><a href="#cb8-5" tabindex="-1"></a></span>
-<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="fu">tbl</span>(f_zig) <span class="sc">|&gt;</span> <span class="fu">spatial_smooth</span>(<span class="at">iterations =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span> <span class="fu">collect_sf</span>()</span>
+<span id="cb8-6"><a href="#cb8-6" tabindex="-1"></a><span class="fu">tbl</span>(f_zig) <span class="sc">|&gt;</span> <span class="fu">spatial_smooth</span>(<span class="at">iterations =</span> <span class="dv">3</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
 <span id="cb8-7"><a href="#cb8-7" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 1 field</span></span>
 <span id="cb8-8"><a href="#cb8-8" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
 <span id="cb8-9"><a href="#cb8-9" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
@@ -572,7 +575,7 @@ boundary. <code>erase = TRUE</code> keeps the part outside instead.</p>
 <div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>mask_region <span class="ot">&lt;-</span> <span class="fu">st_union</span>(<span class="fu">st_geometry</span>(region))</span>
 <span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a></span>
 <span id="cb13-3"><a href="#cb13-3" tabindex="-1"></a>clipped <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f_poly) <span class="sc">|&gt;</span> <span class="fu">spatial_clip</span>(mask_region, <span class="at">crs =</span> crs_nc)</span>
-<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>c_sf <span class="ot">&lt;-</span> <span class="fu">collect_sf</span>(clipped)</span>
+<span id="cb13-4"><a href="#cb13-4" tabindex="-1"></a>c_sf <span class="ot">&lt;-</span> <span class="fu">collect</span>(clipped)</span>
 <span id="cb13-5"><a href="#cb13-5" tabindex="-1"></a><span class="fu">nrow</span>(c_sf)</span>
 <span id="cb13-6"><a href="#cb13-6" tabindex="-1"></a><span class="co">#&gt; [1] 12</span></span></code></pre></div>
 <p>Twelve counties have area inside the region’s bounding shape, and
@@ -608,7 +611,7 @@ crossing points instead.</p>
 <span id="cb15-5"><a href="#cb15-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
 <span id="cb15-6"><a href="#cb15-6" tabindex="-1"></a>  <span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(square), <span class="at">hex =</span> <span class="cn">TRUE</span>)), f_sq)</span>
 <span id="cb15-7"><a href="#cb15-7" tabindex="-1"></a></span>
-<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="fu">tbl</span>(f_sq) <span class="sc">|&gt;</span> <span class="fu">spatial_split</span>(blade) <span class="sc">|&gt;</span> <span class="fu">collect_sf</span>()</span>
+<span id="cb15-8"><a href="#cb15-8" tabindex="-1"></a><span class="fu">tbl</span>(f_sq) <span class="sc">|&gt;</span> <span class="fu">spatial_split</span>(blade) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
 <span id="cb15-9"><a href="#cb15-9" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 1 field</span></span>
 <span id="cb15-10"><a href="#cb15-10" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
 <span id="cb15-11"><a href="#cb15-11" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
@@ -635,13 +638,18 @@ spilled first.</p>
 <span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="fu">spatial_join</span>(nc[<span class="st">&quot;NAME&quot;</span>], <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">crs =</span> crs_nc)</span>
 <span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a>tdf <span class="ot">&lt;-</span> <span class="fu">collect</span>(tagged)</span>
 <span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="fu">head</span>(tdf[, <span class="fu">c</span>(<span class="st">&quot;id&quot;</span>, <span class="st">&quot;NAME&quot;</span>)])</span>
-<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="co">#&gt;   id       NAME</span></span>
-<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="co">#&gt; 1  1       Hoke</span></span>
-<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co">#&gt; 2  2 Pasquotank</span></span>
-<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; 3  3    Tyrrell</span></span>
-<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="co">#&gt; 4  4   Johnston</span></span>
-<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt; 5  5 Cumberland</span></span>
-<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; 6  6  Brunswick</span></span></code></pre></div>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 6 features and 2 fields</span></span>
+<span id="cb16-6"><a href="#cb16-6" tabindex="-1"></a><span class="co">#&gt; Geometry type: POINT</span></span>
+<span id="cb16-7"><a href="#cb16-7" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb16-8"><a href="#cb16-8" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 585944.2 ymin: 22100.77 xmax: 856470.9 ymax: 285752.2</span></span>
+<span id="cb16-9"><a href="#cb16-9" tabindex="-1"></a><span class="co">#&gt; Projected CRS: NAD83 / North Carolina</span></span>
+<span id="cb16-10"><a href="#cb16-10" tabindex="-1"></a><span class="co">#&gt;   id       NAME                  geometry</span></span>
+<span id="cb16-11"><a href="#cb16-11" tabindex="-1"></a><span class="co">#&gt; 1  1       Hoke POINT (585944.2 123589.7)</span></span>
+<span id="cb16-12"><a href="#cb16-12" tabindex="-1"></a><span class="co">#&gt; 2  2 Pasquotank POINT (856470.9 285752.2)</span></span>
+<span id="cb16-13"><a href="#cb16-13" tabindex="-1"></a><span class="co">#&gt; 3  3    Tyrrell POINT (848550.7 237041.2)</span></span>
+<span id="cb16-14"><a href="#cb16-14" tabindex="-1"></a><span class="co">#&gt; 4  4   Johnston   POINT (656888 178574.5)</span></span>
+<span id="cb16-15"><a href="#cb16-15" tabindex="-1"></a><span class="co">#&gt; 5  5 Cumberland POINT (631329.1 146405.6)</span></span>
+<span id="cb16-16"><a href="#cb16-16" tabindex="-1"></a><span class="co">#&gt; 6  6  Brunswick POINT (678043.5 22100.77)</span></span></code></pre></div>
 <p>Every point now carries the <code>NAME</code> of its county. The
 default predicate is <code>st_intersects</code> and the default is a
 left join, so an unmatched left row is kept once with NA in the right
@@ -782,21 +790,19 @@ resident while the points stream.</p>
 <span id="cb24-9"><a href="#cb24-9" tabindex="-1"></a><span class="fu">tbl</span>(f_pts) <span class="sc">|&gt;</span></span>
 <span id="cb24-10"><a href="#cb24-10" tabindex="-1"></a>  <span class="fu">spatial_knn</span>(towns, <span class="at">k =</span> <span class="dv">2</span>, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">crs =</span> crs_nc, <span class="at">y_id =</span> <span class="st">&quot;town&quot;</span>) <span class="sc">|&gt;</span></span>
 <span id="cb24-11"><a href="#cb24-11" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span> <span class="fu">head</span>()</span>
-<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt;   id        x         y rank    neighbor distance</span></span>
-<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; 1  1 585944.2 193988.16    1       Surry 163726.1</span></span>
-<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; 2  1 585944.2 193988.16    2 Northampton 195894.6</span></span>
-<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="co">#&gt; 3  2 656888.0  95932.95    1 Northampton 223065.3</span></span>
-<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a><span class="co">#&gt; 4  2 656888.0  95932.95    2       Surry 282285.8</span></span>
-<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a><span class="co">#&gt; 5  3 631329.1  81102.29    1 Northampton 247961.5</span></span>
-<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a><span class="co">#&gt; 6  3 631329.1  81102.29    2       Surry 276346.2</span></span>
-<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a><span class="co">#&gt;                                     geometry</span></span>
-<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a><span class="co">#&gt; 1 010100000054a8e56bb0e1214162e33d4321ae0741</span></span>
-<span id="cb24-21"><a href="#cb24-21" tabindex="-1"></a><span class="co">#&gt; 2 010100000054a8e56bb0e1214162e33d4321ae0741</span></span>
-<span id="cb24-22"><a href="#cb24-22" tabindex="-1"></a><span class="co">#&gt; 3 0101000000bcf0a5feef0b244177a04720cf6bf740</span></span>
-<span id="cb24-23"><a href="#cb24-23" tabindex="-1"></a><span class="co">#&gt; 4 0101000000bcf0a5feef0b244177a04720cf6bf740</span></span>
-<span id="cb24-24"><a href="#cb24-24" tabindex="-1"></a><span class="co">#&gt; 5 01010000007f67de2442442341cd80edace4ccf340</span></span>
-<span id="cb24-25"><a href="#cb24-25" tabindex="-1"></a><span class="co">#&gt; 6 01010000007f67de2442442341cd80edace4ccf340</span></span>
-<span id="cb24-26"><a href="#cb24-26" tabindex="-1"></a><span class="fu">unlink</span>(f_pts)</span></code></pre></div>
+<span id="cb24-12"><a href="#cb24-12" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 6 features and 6 fields</span></span>
+<span id="cb24-13"><a href="#cb24-13" tabindex="-1"></a><span class="co">#&gt; Geometry type: POINT</span></span>
+<span id="cb24-14"><a href="#cb24-14" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb24-15"><a href="#cb24-15" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 585944.2 ymin: 81102.29 xmax: 656888 ymax: 193988.2</span></span>
+<span id="cb24-16"><a href="#cb24-16" tabindex="-1"></a><span class="co">#&gt; Projected CRS: NAD83 / North Carolina</span></span>
+<span id="cb24-17"><a href="#cb24-17" tabindex="-1"></a><span class="co">#&gt;   id        x         y rank    neighbor distance                  geometry</span></span>
+<span id="cb24-18"><a href="#cb24-18" tabindex="-1"></a><span class="co">#&gt; 1  1 585944.2 193988.16    1       Surry 163726.1 POINT (585944.2 193988.2)</span></span>
+<span id="cb24-19"><a href="#cb24-19" tabindex="-1"></a><span class="co">#&gt; 2  1 585944.2 193988.16    2 Northampton 195894.6 POINT (585944.2 193988.2)</span></span>
+<span id="cb24-20"><a href="#cb24-20" tabindex="-1"></a><span class="co">#&gt; 3  2 656888.0  95932.95    1 Northampton 223065.3   POINT (656888 95932.95)</span></span>
+<span id="cb24-21"><a href="#cb24-21" tabindex="-1"></a><span class="co">#&gt; 4  2 656888.0  95932.95    2       Surry 282285.8   POINT (656888 95932.95)</span></span>
+<span id="cb24-22"><a href="#cb24-22" tabindex="-1"></a><span class="co">#&gt; 5  3 631329.1  81102.29    1 Northampton 247961.5 POINT (631329.1 81102.29)</span></span>
+<span id="cb24-23"><a href="#cb24-23" tabindex="-1"></a><span class="co">#&gt; 6  3 631329.1  81102.29    2       Surry 276346.2 POINT (631329.1 81102.29)</span></span>
+<span id="cb24-24"><a href="#cb24-24" tabindex="-1"></a><span class="fu">unlink</span>(f_pts)</span></code></pre></div>
 </div>
 <div id="merge-geometries-with-spatial_dissolve" class="section level2">
 <h2>Merge geometries with spatial_dissolve</h2>
@@ -820,7 +826,7 @@ each band into a single feature, summing births along the way.</p>
 <span id="cb25-8"><a href="#cb25-8" tabindex="-1"></a>merged <span class="ot">&lt;-</span> <span class="fu">tbl</span>(fb) <span class="sc">|&gt;</span></span>
 <span id="cb25-9"><a href="#cb25-9" tabindex="-1"></a>  <span class="fu">spatial_dissolve</span>(<span class="at">by =</span> <span class="st">&quot;band&quot;</span>, <span class="at">crs =</span> crs_nc,</span>
 <span id="cb25-10"><a href="#cb25-10" tabindex="-1"></a>                   <span class="at">.fun =</span> <span class="fu">list</span>(<span class="at">births =</span> <span class="cf">function</span>(d) <span class="fu">sum</span>(d<span class="sc">$</span>BIR74)))</span>
-<span id="cb25-11"><a href="#cb25-11" tabindex="-1"></a>m_sf <span class="ot">&lt;-</span> <span class="fu">collect_sf</span>(merged)</span>
+<span id="cb25-11"><a href="#cb25-11" tabindex="-1"></a>m_sf <span class="ot">&lt;-</span> <span class="fu">collect</span>(merged)</span>
 <span id="cb25-12"><a href="#cb25-12" tabindex="-1"></a>m_sf</span>
 <span id="cb25-13"><a href="#cb25-13" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 2 fields</span></span>
 <span id="cb25-14"><a href="#cb25-14" tabindex="-1"></a><span class="co">#&gt; Geometry type: MULTIPOLYGON</span></span>
@@ -862,7 +868,7 @@ smallest meaningful example.</p>
 <span id="cb27-3"><a href="#cb27-3" tabindex="-1"></a>polys <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(<span class="at">year =</span> <span class="fu">c</span>(<span class="dv">1990</span><span class="dt">L</span>, <span class="dv">2010</span><span class="dt">L</span>, <span class="dv">2000</span><span class="dt">L</span>),</span>
 <span id="cb27-4"><a href="#cb27-4" tabindex="-1"></a>               <span class="at">geometry =</span> <span class="fu">st_sfc</span>(<span class="fu">sq</span>(<span class="dv">0</span>, <span class="dv">2</span>), <span class="fu">sq</span>(<span class="dv">1</span>, <span class="dv">3</span>), <span class="fu">sq</span>(<span class="fl">1.5</span>, <span class="fl">3.5</span>)))</span>
 <span id="cb27-5"><a href="#cb27-5" tabindex="-1"></a></span>
-<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>pieces <span class="ot">&lt;-</span> <span class="fu">collect_sf</span>(<span class="fu">spatial_overlay</span>(polys))</span>
+<span id="cb27-6"><a href="#cb27-6" tabindex="-1"></a>pieces <span class="ot">&lt;-</span> <span class="fu">collect</span>(<span class="fu">spatial_overlay</span>(polys))</span>
 <span id="cb27-7"><a href="#cb27-7" tabindex="-1"></a><span class="fu">nrow</span>(pieces)</span>
 <span id="cb27-8"><a href="#cb27-8" tabindex="-1"></a><span class="co">#&gt; [1] 9</span></span>
 <span id="cb27-9"><a href="#cb27-9" tabindex="-1"></a><span class="fu">length</span>(<span class="fu">unique</span>(pieces<span class="sc">$</span>piece_id))</span>
@@ -876,7 +882,7 @@ wins:</p>
 <div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>first <span class="ot">&lt;-</span> <span class="fu">spatial_overlay</span>(polys) <span class="sc">|&gt;</span></span>
 <span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="fu">group_by</span>(piece_id) <span class="sc">|&gt;</span></span>
 <span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a>  <span class="fu">slice_min</span>(year, <span class="at">n =</span> <span class="dv">1</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>  <span class="fu">collect_sf</span>()</span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
 <span id="cb28-5"><a href="#cb28-5" tabindex="-1"></a><span class="fu">nrow</span>(first)</span>
 <span id="cb28-6"><a href="#cb28-6" tabindex="-1"></a><span class="co">#&gt; [1] 5</span></span>
 <span id="cb28-7"><a href="#cb28-7" tabindex="-1"></a></span>
@@ -921,7 +927,7 @@ layer).</p>
 <div class="sourceCode" id="cb29"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" tabindex="-1"></a>zones <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(<span class="at">zone =</span> <span class="fu">c</span>(<span class="st">&quot;A&quot;</span>, <span class="st">&quot;B&quot;</span>),</span>
 <span id="cb29-2"><a href="#cb29-2" tabindex="-1"></a>               <span class="at">geometry =</span> <span class="fu">st_sfc</span>(<span class="fu">sq</span>(<span class="dv">0</span>, <span class="fl">1.5</span>), <span class="fu">sq</span>(<span class="fl">1.5</span>, <span class="dv">3</span>)))</span>
 <span id="cb29-3"><a href="#cb29-3" tabindex="-1"></a></span>
-<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a>inter <span class="ot">&lt;-</span> <span class="fu">spatial_overlay</span>(polys, zones, <span class="at">how =</span> <span class="st">&quot;intersection&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect_sf</span>()</span>
+<span id="cb29-4"><a href="#cb29-4" tabindex="-1"></a>inter <span class="ot">&lt;-</span> <span class="fu">spatial_overlay</span>(polys, zones, <span class="at">how =</span> <span class="st">&quot;intersection&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
 <span id="cb29-5"><a href="#cb29-5" tabindex="-1"></a>inter</span>
 <span id="cb29-6"><a href="#cb29-6" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 8 features and 3 fields</span></span>
 <span id="cb29-7"><a href="#cb29-7" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
@@ -951,7 +957,7 @@ with <code>layer_y</code> / <code>query_y</code>, the same way
 <p>Three exits bring a streamed result out. <code>collect()</code>
 returns the data.frame with geometry still a WKB string, useful when the
 next step is a non-spatial verb or another <code>.vtr</code> write.
-<code>collect_sf()</code> decodes the WKB and reattaches the node’s CRS,
+<code>collect()</code> decodes the WKB and reattaches the node’s CRS,
 giving an <code>sf</code> object. <code>write_vtr()</code> on a node
 streams the result straight to a new <code>.vtr</code> file without ever
 holding it whole, so a multi-step spatial pipeline can land its output
@@ -967,8 +973,754 @@ projected data, maps, filters, and joins keeps the projection because
 each verb carries it forward; you state <code>crs =</code> once at the
 first step that needs it, or let it inherit from the upstream node. The
 <code>.vtr</code> file itself stores only the WKB bytes, so reopening a
-written file and calling <code>collect_sf()</code> needs the CRS
-supplied again if you want it labelled.</p>
+written file and calling <code>collect()</code> needs the CRS supplied
+again if you want it labelled.</p>
+</div>
+<div id="geometry-functions-in-expressions" class="section level2">
+<h2>Geometry functions in expressions</h2>
+<p>vectra carries geometry through the engine as hex-encoded WKB in an
+ordinary string column. The verbs above wrap whole sf operations around
+that column. This section covers the other half of the spatial surface:
+a family of <code>st_*</code> functions that work inside the expression
+verbs themselves, so a measure, a predicate, or a geometry transform is
+just another term in <code>mutate()</code>, <code>filter()</code>, or
+<code>summarise()</code>.</p>
+<p>These functions run on the GEOS C library straight off the WKB
+column, one row at a time, with no per-batch round-trip through sf.
+<code>filter(st_area(geometry) &gt; 1e6)</code> prunes the stream in C,
+and <code>mutate(here = st_centroid(geometry))</code> adds a new WKB
+geometry column that any later verb can read. The per-row decode is
+parallelised with OpenMP, so a measure over a large layer uses every
+core.</p>
+<div id="a-layer-to-work-on" class="section level3">
+<h3>A layer to work on</h3>
+<p>The examples use the North Carolina counties shipped with sf. Writing
+the layer to a <code>.vtr</code> is the usual first step: the geometry
+becomes a hex-WKB string column (named <code>geometry</code> by
+convention), and the attributes ride alongside it.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" tabindex="-1"></a>nc <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">system.file</span>(<span class="st">&quot;shape/nc.shp&quot;</span>, <span class="at">package =</span> <span class="st">&quot;sf&quot;</span>), <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb31-2"><a href="#cb31-2" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb31-4"><a href="#cb31-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb31-5"><a href="#cb31-5" tabindex="-1"></a>  <span class="at">NAME     =</span> nc<span class="sc">$</span>NAME,</span>
+<span id="cb31-6"><a href="#cb31-6" tabindex="-1"></a>  <span class="at">BIR74    =</span> nc<span class="sc">$</span>BIR74,</span>
+<span id="cb31-7"><a href="#cb31-7" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_geometry</span>(nc), <span class="at">hex =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb31-8"><a href="#cb31-8" tabindex="-1"></a>), f)</span>
+<span id="cb31-9"><a href="#cb31-9" tabindex="-1"></a></span>
+<span id="cb31-10"><a href="#cb31-10" tabindex="-1"></a><span class="fu">tbl</span>(f)</span>
+<span id="cb31-11"><a href="#cb31-11" tabindex="-1"></a><span class="co">#&gt; vectra query node</span></span>
+<span id="cb31-12"><a href="#cb31-12" tabindex="-1"></a><span class="co">#&gt; Columns (3):</span></span>
+<span id="cb31-13"><a href="#cb31-13" tabindex="-1"></a><span class="co">#&gt;   NAME &lt;string&gt;</span></span>
+<span id="cb31-14"><a href="#cb31-14" tabindex="-1"></a><span class="co">#&gt;   BIR74 &lt;double&gt;</span></span>
+<span id="cb31-15"><a href="#cb31-15" tabindex="-1"></a><span class="co">#&gt;   geometry &lt;string&gt;</span></span></code></pre></div>
+<p>The counties are stored in longitude and latitude, so every measure
+below is planar in those units, the same convention the streaming verbs
+follow. Project the layer first if you need metric areas or
+distances.</p>
+</div>
+<div id="measures" class="section level3">
+<h3>Measures</h3>
+<p>A measure reads a geometry and returns a number, so it drops into
+<code>mutate()</code> as an ordinary column.</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area   =</span> <span class="fu">st_area</span>(geometry),</span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a>         <span class="at">perim  =</span> <span class="fu">st_perimeter</span>(geometry),</span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a>         <span class="at">nverts =</span> <span class="fu">st_npoints</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a>  <span class="fu">select</span>(NAME, area, perim, nverts) <span class="sc">|&gt;</span></span>
+<span id="cb32-6"><a href="#cb32-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb32-7"><a href="#cb32-7" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb32-8"><a href="#cb32-8" tabindex="-1"></a><span class="co">#&gt;          NAME       area    perim nverts</span></span>
+<span id="cb32-9"><a href="#cb32-9" tabindex="-1"></a><span class="co">#&gt; 1        Ashe 0.11428350 1.442087     27</span></span>
+<span id="cb32-10"><a href="#cb32-10" tabindex="-1"></a><span class="co">#&gt; 2   Alleghany 0.06139976 1.231197     26</span></span>
+<span id="cb32-11"><a href="#cb32-11" tabindex="-1"></a><span class="co">#&gt; 3       Surry 0.14301628 1.630283     28</span></span>
+<span id="cb32-12"><a href="#cb32-12" tabindex="-1"></a><span class="co">#&gt; 4   Currituck 0.06977098 2.967975     38</span></span>
+<span id="cb32-13"><a href="#cb32-13" tabindex="-1"></a><span class="co">#&gt; 5 Northampton 0.15275930 2.206482     34</span></span>
+<span id="cb32-14"><a href="#cb32-14" tabindex="-1"></a><span class="co">#&gt; 6    Hertford 0.09715756 1.669527     22</span></span></code></pre></div>
+<p><code>st_length()</code> returns the boundary length of a polygon (an
+alias of <code>st_perimeter()</code>) and the line length of a
+linestring. <code>st_ngeometries()</code> counts the parts of a
+multi-geometry. <code>st_x()</code> and <code>st_y()</code> read the
+coordinate of a point and return <code>NA</code> for anything that is
+not a point, which makes them most useful on a centroid:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb33-2"><a href="#cb33-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">centroid =</span> <span class="fu">st_centroid</span>(geometry),</span>
+<span id="cb33-3"><a href="#cb33-3" tabindex="-1"></a>         <span class="at">cx =</span> <span class="fu">st_x</span>(centroid),</span>
+<span id="cb33-4"><a href="#cb33-4" tabindex="-1"></a>         <span class="at">cy =</span> <span class="fu">st_y</span>(centroid)) <span class="sc">|&gt;</span></span>
+<span id="cb33-5"><a href="#cb33-5" tabindex="-1"></a>  <span class="fu">select</span>(NAME, cx, cy) <span class="sc">|&gt;</span></span>
+<span id="cb33-6"><a href="#cb33-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb33-7"><a href="#cb33-7" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb33-8"><a href="#cb33-8" tabindex="-1"></a><span class="co">#&gt;          NAME        cx       cy</span></span>
+<span id="cb33-9"><a href="#cb33-9" tabindex="-1"></a><span class="co">#&gt; 1        Ashe -81.49826 36.43140</span></span>
+<span id="cb33-10"><a href="#cb33-10" tabindex="-1"></a><span class="co">#&gt; 2   Alleghany -81.12515 36.49101</span></span>
+<span id="cb33-11"><a href="#cb33-11" tabindex="-1"></a><span class="co">#&gt; 3       Surry -80.68575 36.41252</span></span>
+<span id="cb33-12"><a href="#cb33-12" tabindex="-1"></a><span class="co">#&gt; 4   Currituck -76.02750 36.40728</span></span>
+<span id="cb33-13"><a href="#cb33-13" tabindex="-1"></a><span class="co">#&gt; 5 Northampton -77.41056 36.42228</span></span>
+<span id="cb33-14"><a href="#cb33-14" tabindex="-1"></a><span class="co">#&gt; 6    Hertford -76.99478 36.36145</span></span></code></pre></div>
+<p>A geometry-valued function such as <code>st_centroid()</code>
+produces a new WKB column (<code>centroid</code> above), and the next
+term reads it like any other column. That is the whole mechanism:
+geometry in, geometry or a scalar out, all as columns.</p>
+</div>
+<div id="predicates" class="section level3">
+<h3>Predicates</h3>
+<p>A unary predicate tests one geometry: <code>st_is_valid()</code>,
+<code>st_is_empty()</code>, <code>st_is_simple()</code>. A binary
+predicate tests a topological relation against a second geometry:
+<code>st_intersects()</code>, <code>st_within()</code>,
+<code>st_contains()</code>, <code>st_overlaps()</code>,
+<code>st_touches()</code>, <code>st_crosses()</code>,
+<code>st_equals()</code>, <code>st_disjoint()</code>,
+<code>st_covers()</code>, <code>st_covered_by()</code>.</p>
+<p>In <code>filter()</code> a predicate keeps the rows where the
+relation holds, the geometry-expression form of select-by-location:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a>aoi <span class="ot">&lt;-</span> <span class="fu">st_as_sfc</span>(<span class="fu">st_bbox</span>(<span class="fu">c</span>(<span class="at">xmin =</span> <span class="sc">-</span><span class="dv">80</span>, <span class="at">ymin =</span> <span class="dv">35</span>, <span class="at">xmax =</span> <span class="sc">-</span><span class="dv">78</span>, <span class="at">ymax =</span> <span class="fl">36.5</span>)),</span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a>                 <span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a></span>
+<span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">st_intersects</span>(geometry, aoi)) <span class="sc">|&gt;</span></span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a>  <span class="fu">nrow</span>()</span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a><span class="co">#&gt; [1] 30</span></span></code></pre></div>
+<p>The second geometry here is a constant <code>sf</code> object. It is
+parsed once and shared read-only across every row, so testing a whole
+stream against one area of interest stays cheap. A multi-feature object
+is unioned to a single geometry first.</p>
+<p>In <code>mutate()</code> the same call returns a logical column,
+ready for a later verb:</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb35-2"><a href="#cb35-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">near_raleigh =</span> <span class="fu">st_intersects</span>(geometry, aoi)) <span class="sc">|&gt;</span></span>
+<span id="cb35-3"><a href="#cb35-3" tabindex="-1"></a>  <span class="fu">filter</span>(near_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb35-4"><a href="#cb35-4" tabindex="-1"></a>  <span class="fu">select</span>(NAME) <span class="sc">|&gt;</span></span>
+<span id="cb35-5"><a href="#cb35-5" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb35-6"><a href="#cb35-6" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb35-7"><a href="#cb35-7" tabindex="-1"></a><span class="co">#&gt;         NAME</span></span>
+<span id="cb35-8"><a href="#cb35-8" tabindex="-1"></a><span class="co">#&gt; 1     Warren</span></span>
+<span id="cb35-9"><a href="#cb35-9" tabindex="-1"></a><span class="co">#&gt; 2    Caswell</span></span>
+<span id="cb35-10"><a href="#cb35-10" tabindex="-1"></a><span class="co">#&gt; 3 Rockingham</span></span>
+<span id="cb35-11"><a href="#cb35-11" tabindex="-1"></a><span class="co">#&gt; 4  Granville</span></span>
+<span id="cb35-12"><a href="#cb35-12" tabindex="-1"></a><span class="co">#&gt; 5     Person</span></span>
+<span id="cb35-13"><a href="#cb35-13" tabindex="-1"></a><span class="co">#&gt; 6      Vance</span></span></code></pre></div>
+</div>
+<div id="distance" class="section level3">
+<h3>Distance</h3>
+<p><code>st_distance()</code> returns the shortest planar distance to a
+second geometry, again a constant or another column:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>raleigh <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">st_point</span>(<span class="fu">c</span>(<span class="sc">-</span><span class="fl">78.64</span>, <span class="fl">35.78</span>)), <span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a></span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">centroid   =</span> <span class="fu">st_centroid</span>(geometry),</span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>         <span class="at">d_raleigh  =</span> <span class="fu">st_distance</span>(centroid, raleigh)) <span class="sc">|&gt;</span></span>
+<span id="cb36-6"><a href="#cb36-6" tabindex="-1"></a>  <span class="fu">select</span>(NAME, d_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb36-7"><a href="#cb36-7" tabindex="-1"></a>  <span class="fu">arrange</span>(d_raleigh) <span class="sc">|&gt;</span></span>
+<span id="cb36-8"><a href="#cb36-8" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb36-9"><a href="#cb36-9" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb36-10"><a href="#cb36-10" tabindex="-1"></a><span class="co">#&gt;        NAME  d_raleigh</span></span>
+<span id="cb36-11"><a href="#cb36-11" tabindex="-1"></a><span class="co">#&gt; 1      Wake 0.01352946</span></span>
+<span id="cb36-12"><a href="#cb36-12" tabindex="-1"></a><span class="co">#&gt; 2    Durham 0.34428008</span></span>
+<span id="cb36-13"><a href="#cb36-13" tabindex="-1"></a><span class="co">#&gt; 3  Johnston 0.38179328</span></span>
+<span id="cb36-14"><a href="#cb36-14" tabindex="-1"></a><span class="co">#&gt; 4  Franklin 0.46173171</span></span>
+<span id="cb36-15"><a href="#cb36-15" tabindex="-1"></a><span class="co">#&gt; 5   Harnett 0.47354352</span></span>
+<span id="cb36-16"><a href="#cb36-16" tabindex="-1"></a><span class="co">#&gt; 6 Granville 0.52039217</span></span></code></pre></div>
+<p>When the second argument is a geometry column instead of a constant,
+the distance is computed row by row between the two columns.</p>
+</div>
+<div id="aggregating-a-measure" class="section level3">
+<h3>Aggregating a measure</h3>
+<p>Because a measure is an ordinary numeric column, it aggregates like
+one. A grouped <code>summarise()</code> over a measure is a zonal total
+computed entirely in the stream:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb37-2"><a href="#cb37-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area =</span> <span class="fu">st_area</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb37-3"><a href="#cb37-3" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">total_area =</span> <span class="fu">sum</span>(area), <span class="at">counties =</span> <span class="fu">n</span>()) <span class="sc">|&gt;</span></span>
+<span id="cb37-4"><a href="#cb37-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb37-5"><a href="#cb37-5" tabindex="-1"></a><span class="co">#&gt;   total_area counties</span></span>
+<span id="cb37-6"><a href="#cb37-6" tabindex="-1"></a><span class="co">#&gt; 1    12.6278      100</span></span></code></pre></div>
+</div>
+<div id="transforms" class="section level3">
+<h3>Transforms</h3>
+<p>A transform returns a geometry, so it builds a new WKB column.
+Materialise it with <code>collect()</code>, which reads the WKB column
+back into an <code>sf</code> object (point it at the column with
+<code>geom =</code>, and pass the <code>crs</code> the layer was stored
+in).</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a>hulls <span class="ot">&lt;-</span> <span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb38-2"><a href="#cb38-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">geometry =</span> <span class="fu">st_convex_hull</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" tabindex="-1"></a>  <span class="fu">select</span>(NAME, geometry) <span class="sc">|&gt;</span></span>
+<span id="cb38-4"><a href="#cb38-4" tabindex="-1"></a>  <span class="fu">collect</span>(<span class="at">geom =</span> <span class="st">&quot;geometry&quot;</span>, <span class="at">crs =</span> <span class="fu">st_crs</span>(nc))</span>
+<span id="cb38-5"><a href="#cb38-5" tabindex="-1"></a></span>
+<span id="cb38-6"><a href="#cb38-6" tabindex="-1"></a>hulls</span>
+<span id="cb38-7"><a href="#cb38-7" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 100 features and 1 field</span></span>
+<span id="cb38-8"><a href="#cb38-8" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb38-9"><a href="#cb38-9" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb38-10"><a href="#cb38-10" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: -84.32385 ymin: 33.88199 xmax: -75.45698 ymax: 36.58965</span></span>
+<span id="cb38-11"><a href="#cb38-11" tabindex="-1"></a><span class="co">#&gt; Geodetic CRS:  NAD27</span></span>
+<span id="cb38-12"><a href="#cb38-12" tabindex="-1"></a><span class="co">#&gt; First 10 features:</span></span>
+<span id="cb38-13"><a href="#cb38-13" tabindex="-1"></a><span class="co">#&gt;           NAME                       geometry</span></span>
+<span id="cb38-14"><a href="#cb38-14" tabindex="-1"></a><span class="co">#&gt; 1         Ashe POLYGON ((-81.47276 36.2343...</span></span>
+<span id="cb38-15"><a href="#cb38-15" tabindex="-1"></a><span class="co">#&gt; 2    Alleghany POLYGON ((-81.23989 36.3653...</span></span>
+<span id="cb38-16"><a href="#cb38-16" tabindex="-1"></a><span class="co">#&gt; 3        Surry POLYGON ((-80.87438 36.2338...</span></span>
+<span id="cb38-17"><a href="#cb38-17" tabindex="-1"></a><span class="co">#&gt; 4    Currituck POLYGON ((-75.79885 36.0728...</span></span>
+<span id="cb38-18"><a href="#cb38-18" tabindex="-1"></a><span class="co">#&gt; 5  Northampton POLYGON ((-77.30948 36.1627...</span></span>
+<span id="cb38-19"><a href="#cb38-19" tabindex="-1"></a><span class="co">#&gt; 6     Hertford POLYGON ((-76.98069 36.2302...</span></span>
+<span id="cb38-20"><a href="#cb38-20" tabindex="-1"></a><span class="co">#&gt; 7       Camden POLYGON ((-75.98134 36.1697...</span></span>
+<span id="cb38-21"><a href="#cb38-21" tabindex="-1"></a><span class="co">#&gt; 8        Gates POLYGON ((-76.68874 36.2945...</span></span>
+<span id="cb38-22"><a href="#cb38-22" tabindex="-1"></a><span class="co">#&gt; 9       Warren POLYGON ((-78.00629 36.1959...</span></span>
+<span id="cb38-23"><a href="#cb38-23" tabindex="-1"></a><span class="co">#&gt; 10      Stokes POLYGON ((-80.02567 36.2502...</span></span></code></pre></div>
+<p>The transform set is <code>st_centroid()</code>,
+<code>st_point_on_surface()</code> (a point guaranteed to lie on the
+geometry), <code>st_boundary()</code>, <code>st_envelope()</code> (the
+bounding rectangle), <code>st_convex_hull()</code>,
+<code>st_make_valid()</code> (repair an invalid geometry), and two
+parameterised forms: <code>st_buffer(g, dist)</code> and
+<code>st_simplify(g, tol)</code>. Buffering each county and reading the
+areas back:</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb39-2"><a href="#cb39-2" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">geometry =</span> <span class="fu">st_buffer</span>(geometry, <span class="fl">0.1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb39-3"><a href="#cb39-3" tabindex="-1"></a>  <span class="fu">select</span>(NAME, geometry) <span class="sc">|&gt;</span></span>
+<span id="cb39-4"><a href="#cb39-4" tabindex="-1"></a>  <span class="fu">collect</span>(<span class="at">geom =</span> <span class="st">&quot;geometry&quot;</span>, <span class="at">crs =</span> <span class="fu">st_crs</span>(nc)) <span class="sc">|&gt;</span></span>
+<span id="cb39-5"><a href="#cb39-5" tabindex="-1"></a>  <span class="fu">st_area</span>() <span class="sc">|&gt;</span></span>
+<span id="cb39-6"><a href="#cb39-6" tabindex="-1"></a>  <span class="fu">head</span>()</span>
+<span id="cb39-7"><a href="#cb39-7" tabindex="-1"></a><span class="co">#&gt; Units: [m^2]</span></span>
+<span id="cb39-8"><a href="#cb39-8" tabindex="-1"></a><span class="co">#&gt; [1] 2843204836 2123154372 3334381567 3098502995 3953811907 2852194601</span></span></code></pre></div>
+<p><code>st_geometry_type()</code> returns the GEOS type name
+(<code>&quot;Point&quot;</code>, <code>&quot;Polygon&quot;</code>,
+<code>&quot;MultiPolygon&quot;</code>, and so on) as a string column.</p>
+</div>
+<div id="the-second-geometry-of-a-binary-op" class="section level3">
+<h3>The second geometry of a binary op</h3>
+<p>For <code>st_distance()</code> and the binary predicates, the second
+argument can be:</p>
+<ul>
+<li><p>another geometry column, compared row by row;</p></li>
+<li><p>a constant <code>sf</code> or <code>sfc</code> object, parsed
+once and reused across the stream (a multi-feature object is unioned to
+one geometry);</p></li>
+<li><p>a hex-WKB string.</p></li>
+</ul>
+</div>
+<div id="missing-geometry" class="section level3">
+<h3>Missing geometry</h3>
+<p>A missing (<code>NA</code>) or unparseable geometry, or an operation
+with no answer (the coordinate of a non-point, the distance to a missing
+geometry), yields <code>NA</code> for that row rather than stopping the
+query:</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a>  <span class="at">id =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">4</span>,</span>
+<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">c</span>(<span class="fu">st_as_binary</span>(<span class="fu">st_geometry</span>(nc)[<span class="dv">1</span><span class="sc">:</span><span class="dv">3</span>], <span class="at">hex =</span> <span class="cn">TRUE</span>), <span class="cn">NA</span>)</span>
+<span id="cb40-5"><a href="#cb40-5" tabindex="-1"></a>), g)</span>
+<span id="cb40-6"><a href="#cb40-6" tabindex="-1"></a></span>
+<span id="cb40-7"><a href="#cb40-7" tabindex="-1"></a><span class="fu">tbl</span>(g) <span class="sc">|&gt;</span></span>
+<span id="cb40-8"><a href="#cb40-8" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">area =</span> <span class="fu">st_area</span>(geometry)) <span class="sc">|&gt;</span></span>
+<span id="cb40-9"><a href="#cb40-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb40-10"><a href="#cb40-10" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 4 features and 2 fields (with 1 geometry empty)</span></span>
+<span id="cb40-11"><a href="#cb40-11" tabindex="-1"></a><span class="co">#&gt; Geometry type: GEOMETRY</span></span>
+<span id="cb40-12"><a href="#cb40-12" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb40-13"><a href="#cb40-13" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: -81.74107 ymin: 36.23388 xmax: -80.43531 ymax: 36.58965</span></span>
+<span id="cb40-14"><a href="#cb40-14" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb40-15"><a href="#cb40-15" tabindex="-1"></a><span class="co">#&gt;   id       area                       geometry</span></span>
+<span id="cb40-16"><a href="#cb40-16" tabindex="-1"></a><span class="co">#&gt; 1  1 0.11428350 MULTIPOLYGON (((-81.47276 3...</span></span>
+<span id="cb40-17"><a href="#cb40-17" tabindex="-1"></a><span class="co">#&gt; 2  2 0.06139976 MULTIPOLYGON (((-81.23989 3...</span></span>
+<span id="cb40-18"><a href="#cb40-18" tabindex="-1"></a><span class="co">#&gt; 3  3 0.14301628 MULTIPOLYGON (((-80.45634 3...</span></span>
+<span id="cb40-19"><a href="#cb40-19" tabindex="-1"></a><span class="co">#&gt; 4  4         NA       GEOMETRYCOLLECTION EMPTY</span></span></code></pre></div>
+</div>
+<div id="where-this-fits" class="section level3">
+<h3>Where this fits</h3>
+<p>The <code>st_*</code> expressions are the scalar, per-row layer of
+vectra’s spatial surface. They cover measures, predicates, and the
+common single-geometry transforms at the price of a column term, with no
+sf object built per batch. For an arbitrary per-feature transform that
+has no <code>st_*</code> form, reach for <code>spatial_map()</code>,
+which runs any sf-in, sf-out function over each feature. For
+constructions that read a whole feature set at once (dissolves,
+overlays, hulls of a group, planar topology), the set-wise
+<code>spatial_*</code> verbs above and <a href="#coverage-and-topology">Coverage and topology</a> are the
+tools.</p>
+</div>
+</div>
+<div id="coverage-and-topology" class="section level2">
+<h2>Coverage and topology</h2>
+<p>The per-feature verbs above treat each geometry on its own. A second
+family of verbs reads a whole feature set at once: the constructions and
+topology operations that need every feature in a group together, not one
+row at a time. These ride a shared partition tier. A <code>by</code>
+argument routes the layer into one shard per group, each shard is
+processed as an independent coverage, and the shards stream so the
+resident budget is one group rather than the whole layer.</p>
+<p>This section covers building polygons from lines, cleaning a polygon
+coverage, decomposing geometry into its parts, set-wise constructions,
+and linear referencing. Every block runs on the optional <a href="https://r-spatial.github.io/sf/">sf</a> package.</p>
+<div id="from-lines-to-polygons" class="section level3">
+<h3>From lines to polygons</h3>
+<p><code>spatial_polygonize()</code> builds the polygonal faces enclosed
+by a line network, the inverse of taking polygon boundaries. A group’s
+lines are unioned and noded, then the faces of that arrangement are
+returned, one per row.</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" tabindex="-1"></a>grid <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(</span>
+<span id="cb41-2"><a href="#cb41-2" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>))),</span>
+<span id="cb41-3"><a href="#cb41-3" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">1</span>))),</span>
+<span id="cb41-4"><a href="#cb41-4" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">2</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))),</span>
+<span id="cb41-5"><a href="#cb41-5" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">2</span>))),</span>
+<span id="cb41-6"><a href="#cb41-6" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>))),</span>
+<span id="cb41-7"><a href="#cb41-7" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>))))</span>
+<span id="cb41-8"><a href="#cb41-8" tabindex="-1"></a></span>
+<span id="cb41-9"><a href="#cb41-9" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb41-10"><a href="#cb41-10" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">geometry =</span> <span class="fu">st_as_binary</span>(grid, <span class="at">hex =</span> <span class="cn">TRUE</span>)), f)</span>
+<span id="cb41-11"><a href="#cb41-11" tabindex="-1"></a></span>
+<span id="cb41-12"><a href="#cb41-12" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span> <span class="fu">spatial_polygonize</span>() <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb41-13"><a href="#cb41-13" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 4 features and 0 fields</span></span>
+<span id="cb41-14"><a href="#cb41-14" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb41-15"><a href="#cb41-15" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb41-16"><a href="#cb41-16" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 2 ymax: 2</span></span>
+<span id="cb41-17"><a href="#cb41-17" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb41-18"><a href="#cb41-18" tabindex="-1"></a><span class="co">#&gt;                         geometry</span></span>
+<span id="cb41-19"><a href="#cb41-19" tabindex="-1"></a><span class="co">#&gt; 1 POLYGON ((1 0, 0 0, 0 1, 1 ...</span></span>
+<span id="cb41-20"><a href="#cb41-20" tabindex="-1"></a><span class="co">#&gt; 2 POLYGON ((2 0, 1 0, 1 1, 2 ...</span></span>
+<span id="cb41-21"><a href="#cb41-21" tabindex="-1"></a><span class="co">#&gt; 3 POLYGON ((1 1, 0 1, 0 2, 1 ...</span></span>
+<span id="cb41-22"><a href="#cb41-22" tabindex="-1"></a><span class="co">#&gt; 4 POLYGON ((2 1, 1 1, 1 2, 2 ...</span></span></code></pre></div>
+<p><code>spatial_line_merge()</code> is the line counterpart of a
+dissolve: it sews segments that meet end to end into maximal
+linestrings, one row per chain. Segments meeting at a junction of degree
+greater than two stay separate.</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" tabindex="-1"></a>seg <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(</span>
+<span id="cb42-2"><a href="#cb42-2" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>))),</span>
+<span id="cb42-3"><a href="#cb42-3" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>))),</span>
+<span id="cb42-4"><a href="#cb42-4" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">0</span>))))</span>
+<span id="cb42-5"><a href="#cb42-5" tabindex="-1"></a></span>
+<span id="cb42-6"><a href="#cb42-6" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb42-7"><a href="#cb42-7" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">geometry =</span> <span class="fu">st_as_binary</span>(seg, <span class="at">hex =</span> <span class="cn">TRUE</span>)), g)</span>
+<span id="cb42-8"><a href="#cb42-8" tabindex="-1"></a></span>
+<span id="cb42-9"><a href="#cb42-9" tabindex="-1"></a><span class="fu">tbl</span>(g) <span class="sc">|&gt;</span> <span class="fu">spatial_line_merge</span>() <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb42-10"><a href="#cb42-10" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 0 fields</span></span>
+<span id="cb42-11"><a href="#cb42-11" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
+<span id="cb42-12"><a href="#cb42-12" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb42-13"><a href="#cb42-13" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 3 ymax: 0</span></span>
+<span id="cb42-14"><a href="#cb42-14" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb42-15"><a href="#cb42-15" tabindex="-1"></a><span class="co">#&gt;                         geometry</span></span>
+<span id="cb42-16"><a href="#cb42-16" tabindex="-1"></a><span class="co">#&gt; 1 LINESTRING (0 0, 1 0, 2 0, ...</span></span></code></pre></div>
+</div>
+<div id="cleaning-a-coverage" class="section level3">
+<h3>Cleaning a coverage</h3>
+<p>Real coverages arrive with jittered shared borders, sub-pixel
+slivers, and more detail than a map needs. Three verbs clean them while
+keeping adjacent polygons edge-matched.</p>
+<p><code>spatial_snap_grid()</code> rounds coordinates to a regular grid
+and repairs the result, one batch at a time. It is the fixed-precision
+snap-rounding that <code>spatial_overlay()</code> applies internally,
+exposed as a standalone verb, so a layer can be pre-noded to a common
+precision without running a full overlay.</p>
+<div class="sourceCode" id="cb43"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" tabindex="-1"></a>p <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="fl">0.04</span>, <span class="fl">0.03</span>), <span class="fu">c</span>(<span class="fl">1.02</span>, <span class="fl">0.01</span>),</span>
+<span id="cb43-2"><a href="#cb43-2" tabindex="-1"></a>                           <span class="fu">c</span>(<span class="fl">0.98</span>, <span class="fl">1.03</span>), <span class="fu">c</span>(<span class="fl">0.01</span>, <span class="fl">0.97</span>), <span class="fu">c</span>(<span class="fl">0.04</span>, <span class="fl">0.03</span>))))</span>
+<span id="cb43-3"><a href="#cb43-3" tabindex="-1"></a>h <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb43-4"><a href="#cb43-4" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(p), <span class="at">hex =</span> <span class="cn">TRUE</span>)), h)</span>
+<span id="cb43-5"><a href="#cb43-5" tabindex="-1"></a></span>
+<span id="cb43-6"><a href="#cb43-6" tabindex="-1"></a><span class="fu">tbl</span>(h) <span class="sc">|&gt;</span> <span class="fu">spatial_snap_grid</span>(<span class="fl">0.1</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb43-7"><a href="#cb43-7" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 1 field</span></span>
+<span id="cb43-8"><a href="#cb43-8" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb43-9"><a href="#cb43-9" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb43-10"><a href="#cb43-10" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 1 ymax: 1</span></span>
+<span id="cb43-11"><a href="#cb43-11" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb43-12"><a href="#cb43-12" tabindex="-1"></a><span class="co">#&gt;   id                       geometry</span></span>
+<span id="cb43-13"><a href="#cb43-13" tabindex="-1"></a><span class="co">#&gt; 1  1 POLYGON ((0 1, 1 1, 1 0, 0 ...</span></span></code></pre></div>
+<p><code>spatial_snap()</code> instead pulls a streamed layer onto a
+resident reference layer: vertices and edges within
+<code>tolerance</code> of <code>y</code> are moved onto it, so two
+layers that should share a boundary line up exactly.</p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" tabindex="-1"></a>ref  <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>))))</span>
+<span id="cb44-2"><a href="#cb44-2" tabindex="-1"></a>line <span class="ot">&lt;-</span> <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.2</span>), <span class="fu">c</span>(<span class="dv">5</span>, <span class="fl">0.1</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="fl">0.2</span>)))</span>
+<span id="cb44-3"><a href="#cb44-3" tabindex="-1"></a></span>
+<span id="cb44-4"><a href="#cb44-4" tabindex="-1"></a>sn <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb44-5"><a href="#cb44-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(line), <span class="at">hex =</span> <span class="cn">TRUE</span>)), sn)</span>
+<span id="cb44-6"><a href="#cb44-6" tabindex="-1"></a></span>
+<span id="cb44-7"><a href="#cb44-7" tabindex="-1"></a><span class="fu">tbl</span>(sn) <span class="sc">|&gt;</span> <span class="fu">spatial_snap</span>(ref, <span class="at">tolerance =</span> <span class="fl">0.5</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb44-8"><a href="#cb44-8" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 1 field</span></span>
+<span id="cb44-9"><a href="#cb44-9" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
+<span id="cb44-10"><a href="#cb44-10" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb44-11"><a href="#cb44-11" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 10 ymax: 0.1</span></span>
+<span id="cb44-12"><a href="#cb44-12" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb44-13"><a href="#cb44-13" tabindex="-1"></a><span class="co">#&gt;   id                      geometry</span></span>
+<span id="cb44-14"><a href="#cb44-14" tabindex="-1"></a><span class="co">#&gt; 1  1 LINESTRING (0 0, 5 0.1, 10 0)</span></span></code></pre></div>
+<p><code>spatial_eliminate()</code> cleans a polygon coverage by
+absorbing every feature smaller than <code>max_area</code> into a
+neighbour, the QGIS “Eliminate”. Each sliver joins the neighbour it
+shares the longest border with, or the largest-area neighbour with
+<code>into = &quot;largest_area&quot;</code>. An area-rooted union-find collapses
+chains of slivers so a connected run flows to its single largest member,
+whose attributes survive.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" tabindex="-1"></a>big    <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
+<span id="cb45-2"><a href="#cb45-2" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">10</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">10</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>))))</span>
+<span id="cb45-3"><a href="#cb45-3" tabindex="-1"></a>sliver <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
+<span id="cb45-4"><a href="#cb45-4" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="fl">10.3</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="fl">10.3</span>, <span class="dv">10</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">10</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>))))</span>
+<span id="cb45-5"><a href="#cb45-5" tabindex="-1"></a></span>
+<span id="cb45-6"><a href="#cb45-6" tabindex="-1"></a>e <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb45-7"><a href="#cb45-7" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb45-8"><a href="#cb45-8" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">c</span>(<span class="st">&quot;keep&quot;</span>, <span class="st">&quot;sliver&quot;</span>),</span>
+<span id="cb45-9"><a href="#cb45-9" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(big, sliver), <span class="at">hex =</span> <span class="cn">TRUE</span>)), e)</span>
+<span id="cb45-10"><a href="#cb45-10" tabindex="-1"></a></span>
+<span id="cb45-11"><a href="#cb45-11" tabindex="-1"></a><span class="fu">tbl</span>(e) <span class="sc">|&gt;</span> <span class="fu">spatial_eliminate</span>(<span class="at">max_area =</span> <span class="dv">5</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb45-12"><a href="#cb45-12" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 1 field</span></span>
+<span id="cb45-13"><a href="#cb45-13" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb45-14"><a href="#cb45-14" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb45-15"><a href="#cb45-15" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 10.3 ymax: 10</span></span>
+<span id="cb45-16"><a href="#cb45-16" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb45-17"><a href="#cb45-17" tabindex="-1"></a><span class="co">#&gt;     id                       geometry</span></span>
+<span id="cb45-18"><a href="#cb45-18" tabindex="-1"></a><span class="co">#&gt; 1 keep POLYGON ((0 0, 0 10, 10 10,...</span></span></code></pre></div>
+<p>The thin sliver is gone, absorbed into the square it bordered, and
+the survivor keeps the <code>keep</code> attributes.</p>
+<p><code>spatial_simplify()</code> simplifies a polygon coverage without
+tearing shared edges. Boundaries are unioned so a shared border is one
+line, noded into arcs, each arc simplified once with its junction
+endpoints pinned, then re-polygonized. Adjacent polygons stay
+edge-matched with no slivers. This is the topology-preserving
+simplification a per-feature
+<code>spatial_map(~ sf::st_simplify())</code> cannot give, because that
+simplifies each polygon’s copy of a shared border independently.</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
+<span id="cb46-2"><a href="#cb46-2" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>))))</span>
+<span id="cb46-3"><a href="#cb46-3" tabindex="-1"></a>p2 <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
+<span id="cb46-4"><a href="#cb46-4" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="fl">0.5</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>))))</span>
+<span id="cb46-5"><a href="#cb46-5" tabindex="-1"></a></span>
+<span id="cb46-6"><a href="#cb46-6" tabindex="-1"></a>s <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb46-7"><a href="#cb46-7" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb46-8"><a href="#cb46-8" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">c</span>(<span class="st">&quot;a&quot;</span>, <span class="st">&quot;b&quot;</span>),</span>
+<span id="cb46-9"><a href="#cb46-9" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(p1, p2), <span class="at">hex =</span> <span class="cn">TRUE</span>)), s)</span>
+<span id="cb46-10"><a href="#cb46-10" tabindex="-1"></a></span>
+<span id="cb46-11"><a href="#cb46-11" tabindex="-1"></a><span class="fu">tbl</span>(s) <span class="sc">|&gt;</span> <span class="fu">spatial_simplify</span>(<span class="at">tolerance =</span> <span class="fl">0.6</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb46-12"><a href="#cb46-12" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 1 field</span></span>
+<span id="cb46-13"><a href="#cb46-13" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb46-14"><a href="#cb46-14" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb46-15"><a href="#cb46-15" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 2 ymax: 1</span></span>
+<span id="cb46-16"><a href="#cb46-16" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb46-17"><a href="#cb46-17" tabindex="-1"></a><span class="co">#&gt;   id                       geometry</span></span>
+<span id="cb46-18"><a href="#cb46-18" tabindex="-1"></a><span class="co">#&gt; 1  a POLYGON ((1 0, 0 0, 0 1, 1 ...</span></span>
+<span id="cb46-19"><a href="#cb46-19" tabindex="-1"></a><span class="co">#&gt; 2  b POLYGON ((1 0, 1 0.5, 1 1, ...</span></span></code></pre></div>
+</div>
+<div id="decomposing-geometry" class="section level3">
+<h3>Decomposing geometry</h3>
+<p><code>spatial_explode()</code> splits every multipart geometry into
+its single-part components, a <code>MULTIPOLYGON</code> into one row per
+polygon and so on, copying the source attributes onto each part. An
+optional <code>part</code> argument names a 1-based part-index column.
+It is the streaming “multipart to singleparts” tool and the inverse of
+<code>spatial_dissolve()</code>.</p>
+<div class="sourceCode" id="cb47"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" tabindex="-1"></a>mp <span class="ot">&lt;-</span> <span class="fu">st_multipolygon</span>(<span class="fu">list</span>(</span>
+<span id="cb47-2"><a href="#cb47-2" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>))),</span>
+<span id="cb47-3"><a href="#cb47-3" tabindex="-1"></a>  <span class="fu">list</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>), <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">2</span>), <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">3</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">3</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">2</span>)))))</span>
+<span id="cb47-4"><a href="#cb47-4" tabindex="-1"></a></span>
+<span id="cb47-5"><a href="#cb47-5" tabindex="-1"></a>m <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb47-6"><a href="#cb47-6" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb47-7"><a href="#cb47-7" tabindex="-1"></a>  <span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(mp), <span class="at">hex =</span> <span class="cn">TRUE</span>)), m)</span>
+<span id="cb47-8"><a href="#cb47-8" tabindex="-1"></a></span>
+<span id="cb47-9"><a href="#cb47-9" tabindex="-1"></a><span class="fu">tbl</span>(m) <span class="sc">|&gt;</span> <span class="fu">spatial_explode</span>(<span class="at">part =</span> <span class="st">&quot;part_id&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb47-10"><a href="#cb47-10" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 2 fields</span></span>
+<span id="cb47-11"><a href="#cb47-11" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb47-12"><a href="#cb47-12" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb47-13"><a href="#cb47-13" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 3 ymax: 3</span></span>
+<span id="cb47-14"><a href="#cb47-14" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb47-15"><a href="#cb47-15" tabindex="-1"></a><span class="co">#&gt;   id part_id                       geometry</span></span>
+<span id="cb47-16"><a href="#cb47-16" tabindex="-1"></a><span class="co">#&gt; 1  1       1 POLYGON ((0 0, 1 0, 1 1, 0 ...</span></span>
+<span id="cb47-17"><a href="#cb47-17" tabindex="-1"></a><span class="co">#&gt; 2  1       2 POLYGON ((2 2, 3 2, 3 3, 2 ...</span></span></code></pre></div>
+<p><code>spatial_topology()</code> decomposes a polygon coverage into
+the arcs of its planar topology. The unioned boundaries are noded so a
+shared border becomes one arc, tagged with the identifiers of the (up to
+two) polygons on either side: two for an internal shared edge, one for
+an outer edge. It is the inverse of
+<code>spatial_polygonize()</code>.</p>
+<div class="sourceCode" id="cb48"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" tabindex="-1"></a>q1 <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>))))</span>
+<span id="cb48-2"><a href="#cb48-2" tabindex="-1"></a>q2 <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">2</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>))))</span>
+<span id="cb48-3"><a href="#cb48-3" tabindex="-1"></a></span>
+<span id="cb48-4"><a href="#cb48-4" tabindex="-1"></a>tp <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb48-5"><a href="#cb48-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb48-6"><a href="#cb48-6" tabindex="-1"></a>  <span class="at">id =</span> <span class="fu">c</span>(<span class="st">&quot;a&quot;</span>, <span class="st">&quot;b&quot;</span>),</span>
+<span id="cb48-7"><a href="#cb48-7" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(q1, q2), <span class="at">hex =</span> <span class="cn">TRUE</span>)), tp)</span>
+<span id="cb48-8"><a href="#cb48-8" tabindex="-1"></a></span>
+<span id="cb48-9"><a href="#cb48-9" tabindex="-1"></a><span class="fu">tbl</span>(tp) <span class="sc">|&gt;</span> <span class="fu">spatial_topology</span>(<span class="at">id =</span> <span class="st">&quot;id&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb48-10"><a href="#cb48-10" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 4 features and 2 fields</span></span>
+<span id="cb48-11"><a href="#cb48-11" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
+<span id="cb48-12"><a href="#cb48-12" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb48-13"><a href="#cb48-13" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 2 ymax: 1</span></span>
+<span id="cb48-14"><a href="#cb48-14" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb48-15"><a href="#cb48-15" tabindex="-1"></a><span class="co">#&gt;   face1 face2                       geometry</span></span>
+<span id="cb48-16"><a href="#cb48-16" tabindex="-1"></a><span class="co">#&gt; 1     a  &lt;NA&gt;          LINESTRING (0 0, 1 0)</span></span>
+<span id="cb48-17"><a href="#cb48-17" tabindex="-1"></a><span class="co">#&gt; 2     a     b          LINESTRING (1 0, 1 1)</span></span>
+<span id="cb48-18"><a href="#cb48-18" tabindex="-1"></a><span class="co">#&gt; 3     a  &lt;NA&gt;     LINESTRING (1 1, 0 1, 0 0)</span></span>
+<span id="cb48-19"><a href="#cb48-19" tabindex="-1"></a><span class="co">#&gt; 4     b  &lt;NA&gt; LINESTRING (1 0, 2 0, 2 1, ...</span></span></code></pre></div>
+<p>The shared edge between <code>a</code> and <code>b</code> appears
+once, with both face columns filled; each outer edge appears once with
+the second face <code>NA</code>.</p>
+<p><code>spatial_centerline()</code> traces the centerline (medial axis)
+of each polygon from the Voronoi diagram of its densified boundary: the
+Voronoi edges that fall inside the polygon are its skeleton, merged into
+maximal lines. <code>density</code> sets the boundary sampling and
+<code>prune</code> drops the short spurs the skeleton grows toward
+convex corners. It is the usual approximation for a river or road
+centerline from a filled shape; non-polygon geometry passes through
+unchanged.</p>
+<div class="sourceCode" id="cb49"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" tabindex="-1"></a>strip <span class="ot">&lt;-</span> <span class="fu">st_polygon</span>(<span class="fu">list</span>(<span class="fu">rbind</span>(</span>
+<span id="cb49-2"><a href="#cb49-2" tabindex="-1"></a>  <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">2</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">2</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>))))</span>
+<span id="cb49-3"><a href="#cb49-3" tabindex="-1"></a></span>
+<span id="cb49-4"><a href="#cb49-4" tabindex="-1"></a>cl <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb49-5"><a href="#cb49-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_sfc</span>(strip), <span class="at">hex =</span> <span class="cn">TRUE</span>)), cl)</span>
+<span id="cb49-6"><a href="#cb49-6" tabindex="-1"></a></span>
+<span id="cb49-7"><a href="#cb49-7" tabindex="-1"></a><span class="fu">tbl</span>(cl) <span class="sc">|&gt;</span> <span class="fu">spatial_centerline</span>(<span class="at">density =</span> <span class="fl">0.25</span>, <span class="at">prune =</span> <span class="fl">0.5</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb49-8"><a href="#cb49-8" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 5 features and 0 fields</span></span>
+<span id="cb49-9"><a href="#cb49-9" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
+<span id="cb49-10"><a href="#cb49-10" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb49-11"><a href="#cb49-11" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0.125 ymin: 0.125 xmax: 9.875 ymax: 1.875</span></span>
+<span id="cb49-12"><a href="#cb49-12" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb49-13"><a href="#cb49-13" tabindex="-1"></a><span class="co">#&gt;                         geometry</span></span>
+<span id="cb49-14"><a href="#cb49-14" tabindex="-1"></a><span class="co">#&gt; 1 LINESTRING (1 1, 0.875 0.87...</span></span>
+<span id="cb49-15"><a href="#cb49-15" tabindex="-1"></a><span class="co">#&gt; 2 LINESTRING (0.125 1.875, 0....</span></span>
+<span id="cb49-16"><a href="#cb49-16" tabindex="-1"></a><span class="co">#&gt; 3 LINESTRING (1 1, 1.125 1, 1...</span></span>
+<span id="cb49-17"><a href="#cb49-17" tabindex="-1"></a><span class="co">#&gt; 4 LINESTRING (9.875 1.875, 9....</span></span>
+<span id="cb49-18"><a href="#cb49-18" tabindex="-1"></a><span class="co">#&gt; 5 LINESTRING (9 1, 9.125 0.87...</span></span></code></pre></div>
+</div>
+<div id="set-wise-constructions" class="section level3">
+<h3>Set-wise constructions</h3>
+<p><code>spatial_construct()</code> builds a geometry construction from
+a whole feature set, the constructions a per-feature
+<code>spatial_map()</code> cannot express. A <code>kind</code> argument
+selects it: <code>&quot;convex_hull&quot;</code>, <code>&quot;concave_hull&quot;</code>,
+<code>&quot;envelope&quot;</code>, <code>&quot;oriented_box&quot;</code>,
+<code>&quot;enclosing_circle&quot;</code>, <code>&quot;inscribed_circle&quot;</code>,
+<code>&quot;pole&quot;</code> (the pole of inaccessibility, the centre of the
+maximum inscribed circle), <code>&quot;voronoi&quot;</code>, and
+<code>&quot;delaunay&quot;</code>. A <code>by</code> argument builds one
+construction per group; the enclosing kinds emit one feature per group,
+the tessellations one polygon per cell.</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" tabindex="-1"></a>nc <span class="ot">&lt;-</span> <span class="fu">st_read</span>(<span class="fu">system.file</span>(<span class="st">&quot;shape/nc.shp&quot;</span>, <span class="at">package =</span> <span class="st">&quot;sf&quot;</span>), <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb50-2"><a href="#cb50-2" tabindex="-1"></a>nc<span class="sc">$</span>band <span class="ot">&lt;-</span> nc<span class="sc">$</span>SID74 <span class="sc">&gt;</span> <span class="dv">5</span></span>
+<span id="cb50-3"><a href="#cb50-3" tabindex="-1"></a></span>
+<span id="cb50-4"><a href="#cb50-4" tabindex="-1"></a>n <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb50-5"><a href="#cb50-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(</span>
+<span id="cb50-6"><a href="#cb50-6" tabindex="-1"></a>  <span class="at">band =</span> nc<span class="sc">$</span>band,</span>
+<span id="cb50-7"><a href="#cb50-7" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_as_binary</span>(<span class="fu">st_geometry</span>(nc), <span class="at">hex =</span> <span class="cn">TRUE</span>)), n)</span>
+<span id="cb50-8"><a href="#cb50-8" tabindex="-1"></a></span>
+<span id="cb50-9"><a href="#cb50-9" tabindex="-1"></a><span class="fu">tbl</span>(n) <span class="sc">|&gt;</span></span>
+<span id="cb50-10"><a href="#cb50-10" tabindex="-1"></a>  <span class="fu">spatial_construct</span>(<span class="st">&quot;convex_hull&quot;</span>, <span class="at">by =</span> <span class="st">&quot;band&quot;</span>, <span class="at">crs =</span> <span class="fu">st_crs</span>(nc)) <span class="sc">|&gt;</span></span>
+<span id="cb50-11"><a href="#cb50-11" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb50-12"><a href="#cb50-12" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 1 field</span></span>
+<span id="cb50-13"><a href="#cb50-13" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb50-14"><a href="#cb50-14" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb50-15"><a href="#cb50-15" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: -84.32385 ymin: 33.88199 xmax: -75.45698 ymax: 36.58965</span></span>
+<span id="cb50-16"><a href="#cb50-16" tabindex="-1"></a><span class="co">#&gt; Geodetic CRS:  NAD27</span></span>
+<span id="cb50-17"><a href="#cb50-17" tabindex="-1"></a><span class="co">#&gt;    band                       geometry</span></span>
+<span id="cb50-18"><a href="#cb50-18" tabindex="-1"></a><span class="co">#&gt; 1 FALSE POLYGON ((-84.32385 34.9890...</span></span>
+<span id="cb50-19"><a href="#cb50-19" tabindex="-1"></a><span class="co">#&gt; 2  TRUE POLYGON ((-82.88111 35.6735...</span></span></code></pre></div>
+<p>A tessellation kind returns one polygon per cell, each carrying the
+group’s <code>by</code> values:</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" tabindex="-1"></a>xy <span class="ot">&lt;-</span> <span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">c</span>(<span class="fl">0.4</span>, <span class="fl">0.6</span>))</span>
+<span id="cb51-2"><a href="#cb51-2" tabindex="-1"></a>cloud <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">lapply</span>(<span class="fu">seq_len</span>(<span class="fu">nrow</span>(xy)), <span class="cf">function</span>(i) <span class="fu">st_point</span>(xy[i, ])))</span>
+<span id="cb51-3"><a href="#cb51-3" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" tabindex="-1"></a>v <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb51-5"><a href="#cb51-5" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">geometry =</span> <span class="fu">st_as_binary</span>(cloud, <span class="at">hex =</span> <span class="cn">TRUE</span>)), v)</span>
+<span id="cb51-6"><a href="#cb51-6" tabindex="-1"></a></span>
+<span id="cb51-7"><a href="#cb51-7" tabindex="-1"></a><span class="fu">tbl</span>(v) <span class="sc">|&gt;</span> <span class="fu">spatial_construct</span>(<span class="st">&quot;voronoi&quot;</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span>
+<span id="cb51-8"><a href="#cb51-8" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 5 features and 0 fields</span></span>
+<span id="cb51-9"><a href="#cb51-9" tabindex="-1"></a><span class="co">#&gt; Geometry type: POLYGON</span></span>
+<span id="cb51-10"><a href="#cb51-10" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb51-11"><a href="#cb51-11" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: -1 ymin: -1 xmax: 2 ymax: 2</span></span>
+<span id="cb51-12"><a href="#cb51-12" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb51-13"><a href="#cb51-13" tabindex="-1"></a><span class="co">#&gt;                         geometry</span></span>
+<span id="cb51-14"><a href="#cb51-14" tabindex="-1"></a><span class="co">#&gt; 1 POLYGON ((2 2, 2 0.5, 0.9 0...</span></span>
+<span id="cb51-15"><a href="#cb51-15" tabindex="-1"></a><span class="co">#&gt; 2 POLYGON ((-1 2, 0.5 2, 0.5 ...</span></span>
+<span id="cb51-16"><a href="#cb51-16" tabindex="-1"></a><span class="co">#&gt; 3 POLYGON ((-1 -1, -1 0.5, -0...</span></span>
+<span id="cb51-17"><a href="#cb51-17" tabindex="-1"></a><span class="co">#&gt; 4 POLYGON ((0.5 1.1, 0.9 0.5,...</span></span>
+<span id="cb51-18"><a href="#cb51-18" tabindex="-1"></a><span class="co">#&gt; 5 POLYGON ((2 -1, 0.5 -1, 0.5...</span></span></code></pre></div>
+</div>
+<div id="linear-referencing" class="section level3">
+<h3>Linear referencing</h3>
+<p><code>spatial_locate()</code> places streamed points along a resident
+line layer: each point gets its nearest line’s identifier, the measure
+(distance along that line to the point’s projection), and the
+perpendicular offset, with an optional <code>snap</code> onto the line.
+The inverse, a measure back to a point, is
+<code>sf::st_line_interpolate()</code> through
+<code>spatial_map()</code>.</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" tabindex="-1"></a>roads <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(<span class="at">road =</span> <span class="fu">c</span>(<span class="st">&quot;main&quot;</span>, <span class="st">&quot;side&quot;</span>), <span class="at">geometry =</span> <span class="fu">st_sfc</span>(</span>
+<span id="cb52-2"><a href="#cb52-2" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="fu">c</span>(<span class="dv">10</span>, <span class="dv">0</span>))),</span>
+<span id="cb52-3"><a href="#cb52-3" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">5</span>), <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">15</span>)))))</span>
+<span id="cb52-4"><a href="#cb52-4" tabindex="-1"></a></span>
+<span id="cb52-5"><a href="#cb52-5" tabindex="-1"></a>pts <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">x =</span> <span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">1</span>), <span class="at">y =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">9</span>))</span>
+<span id="cb52-6"><a href="#cb52-6" tabindex="-1"></a>l <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb52-7"><a href="#cb52-7" tabindex="-1"></a><span class="fu">write_vtr</span>(pts, l)</span>
+<span id="cb52-8"><a href="#cb52-8" tabindex="-1"></a></span>
+<span id="cb52-9"><a href="#cb52-9" tabindex="-1"></a><span class="fu">tbl</span>(l) <span class="sc">|&gt;</span></span>
+<span id="cb52-10"><a href="#cb52-10" tabindex="-1"></a>  <span class="fu">spatial_locate</span>(roads, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">y_id =</span> <span class="st">&quot;road&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb52-11"><a href="#cb52-11" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb52-12"><a href="#cb52-12" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 6 fields</span></span>
+<span id="cb52-13"><a href="#cb52-13" tabindex="-1"></a><span class="co">#&gt; Geometry type: POINT</span></span>
+<span id="cb52-14"><a href="#cb52-14" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb52-15"><a href="#cb52-15" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 1 ymin: 1 xmax: 3 ymax: 9</span></span>
+<span id="cb52-16"><a href="#cb52-16" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb52-17"><a href="#cb52-17" tabindex="-1"></a><span class="co">#&gt;   id x y line measure distance    geometry</span></span>
+<span id="cb52-18"><a href="#cb52-18" tabindex="-1"></a><span class="co">#&gt; 1  1 3 1 main       3        1 POINT (3 1)</span></span>
+<span id="cb52-19"><a href="#cb52-19" tabindex="-1"></a><span class="co">#&gt; 2  2 1 9 side       4        1 POINT (1 9)</span></span></code></pre></div>
+<p>Point 1 is one unit off <code>main</code> at measure 3; point 2 is
+one unit off <code>side</code> at measure 4. With
+<code>snap = TRUE</code> each point’s geometry is replaced by its
+projection onto the matched line.</p>
+</div>
+</div>
+<div id="network-analysis" class="section level2">
+<h2>Network analysis</h2>
+<p>A line layer becomes a routable graph when its segments are joined at
+their endpoints and weighted by a traversal cost. vectra builds that
+graph once and holds it resident in a <code>vectra_network</code>
+object, the network counterpart of the small resident <code>sf</code>
+layer the streaming verbs compare against. Origins then stream past the
+resident graph: each batch of start points is routed in native C, so a
+national set of origins flows past a fixed memory budget while the graph
+stays in memory.</p>
+<p>The graph and the shortest-path solver are pure C, a binary-heap
+Dijkstra over a compressed adjacency, with no <code>igraph</code>
+dependency. The solver parallelises over a batch of origins with
+OpenMP.</p>
+<div id="building-a-network" class="section level3">
+<h3>Building a network</h3>
+<p><code>spatial_network()</code> takes a line layer and returns a
+<code>vectra_network</code>. Endpoints are snapped to shared nodes
+(exactly coincident by default, or within <code>tolerance</code> CRS
+units), and each edge is weighted by its geometry length unless a
+<code>weight</code> column names another cost.</p>
+<p>The examples use a small grid of unit streets.</p>
+<div class="sourceCode" id="cb53"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" tabindex="-1"></a>mk <span class="ot">&lt;-</span> <span class="cf">function</span>(x1, y1, x2, y2)</span>
+<span id="cb53-2"><a href="#cb53-2" tabindex="-1"></a>  <span class="fu">st_linestring</span>(<span class="fu">rbind</span>(<span class="fu">c</span>(x1, y1), <span class="fu">c</span>(x2, y2)))</span>
+<span id="cb53-3"><a href="#cb53-3" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" tabindex="-1"></a>streets <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(</span>
+<span id="cb53-5"><a href="#cb53-5" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">0</span>), <span class="fu">mk</span>(<span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">0</span>), <span class="fu">mk</span>(<span class="dv">2</span>, <span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">0</span>),   <span class="co"># bottom row</span></span>
+<span id="cb53-6"><a href="#cb53-6" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">1</span>),   <span class="co"># middle row</span></span>
+<span id="cb53-7"><a href="#cb53-7" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">2</span>), <span class="fu">mk</span>(<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>, <span class="dv">2</span>), <span class="fu">mk</span>(<span class="dv">2</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">2</span>),   <span class="co"># top row</span></span>
+<span id="cb53-8"><a href="#cb53-8" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">0</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">2</span>),                   <span class="co"># left verticals</span></span>
+<span id="cb53-9"><a href="#cb53-9" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">1</span>, <span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">1</span>, <span class="dv">2</span>),</span>
+<span id="cb53-10"><a href="#cb53-10" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">2</span>, <span class="dv">0</span>, <span class="dv">2</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">2</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">2</span>),</span>
+<span id="cb53-11"><a href="#cb53-11" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="dv">3</span>, <span class="dv">0</span>, <span class="dv">3</span>, <span class="dv">1</span>), <span class="fu">mk</span>(<span class="dv">3</span>, <span class="dv">1</span>, <span class="dv">3</span>, <span class="dv">2</span>))                   <span class="co"># right verticals</span></span>
+<span id="cb53-12"><a href="#cb53-12" tabindex="-1"></a></span>
+<span id="cb53-13"><a href="#cb53-13" tabindex="-1"></a>net <span class="ot">&lt;-</span> <span class="fu">spatial_network</span>(streets)</span>
+<span id="cb53-14"><a href="#cb53-14" tabindex="-1"></a>net</span>
+<span id="cb53-15"><a href="#cb53-15" tabindex="-1"></a><span class="co">#&gt; &lt;vectra_network&gt;</span></span>
+<span id="cb53-16"><a href="#cb53-16" tabindex="-1"></a><span class="co">#&gt;   nodes:      12</span></span>
+<span id="cb53-17"><a href="#cb53-17" tabindex="-1"></a><span class="co">#&gt;   edges:      34 (undirected)</span></span>
+<span id="cb53-18"><a href="#cb53-18" tabindex="-1"></a><span class="co">#&gt;   components: 1</span></span></code></pre></div>
+</div>
+<div id="shortest-routes" class="section level3">
+<h3>Shortest routes</h3>
+<p><code>spatial_route()</code> streams a layer of origin points past
+the network and returns the shortest path from each origin to one or
+more destinations. With <code>geometry = FALSE</code> it returns only
+the cost, so a set of destinations per origin is an origin-destination
+cost matrix in long form.</p>
+<div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" tabindex="-1"></a>f <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb54-2"><a href="#cb54-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="dt">L</span>, <span class="at">x =</span> <span class="dv">0</span>, <span class="at">y =</span> <span class="dv">0</span>), f)</span>
+<span id="cb54-3"><a href="#cb54-3" tabindex="-1"></a></span>
+<span id="cb54-4"><a href="#cb54-4" tabindex="-1"></a>dest <span class="ot">&lt;-</span> <span class="fu">st_sfc</span>(<span class="fu">st_point</span>(<span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">2</span>)))</span>
+<span id="cb54-5"><a href="#cb54-5" tabindex="-1"></a></span>
+<span id="cb54-6"><a href="#cb54-6" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb54-7"><a href="#cb54-7" tabindex="-1"></a>  <span class="fu">spatial_route</span>(net, <span class="at">to =</span> dest, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">geometry =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb54-8"><a href="#cb54-8" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb54-9"><a href="#cb54-9" tabindex="-1"></a><span class="co">#&gt;   id x y destination cost</span></span>
+<span id="cb54-10"><a href="#cb54-10" tabindex="-1"></a><span class="co">#&gt; 1  1 0 0           1    5</span></span></code></pre></div>
+<p>The cost is the five unit steps from the bottom-left corner to the
+top-right. With <code>geometry = TRUE</code> (the default) each row also
+carries the route line, ready to materialise with
+<code>collect()</code>:</p>
+<div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb55-2"><a href="#cb55-2" tabindex="-1"></a>  <span class="fu">spatial_route</span>(net, <span class="at">to =</span> dest, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb55-3"><a href="#cb55-3" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb55-4"><a href="#cb55-4" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 1 feature and 5 fields</span></span>
+<span id="cb55-5"><a href="#cb55-5" tabindex="-1"></a><span class="co">#&gt; Geometry type: LINESTRING</span></span>
+<span id="cb55-6"><a href="#cb55-6" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb55-7"><a href="#cb55-7" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 3 ymax: 2</span></span>
+<span id="cb55-8"><a href="#cb55-8" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb55-9"><a href="#cb55-9" tabindex="-1"></a><span class="co">#&gt;   id x y destination cost                       geometry</span></span>
+<span id="cb55-10"><a href="#cb55-10" tabindex="-1"></a><span class="co">#&gt; 1  1 0 0           1    5 LINESTRING (0 0, 1 0, 1 1, ...</span></span></code></pre></div>
+<p>Several destinations, named through <code>to_id</code>, give one row
+per origin and destination, the cost matrix in long form:</p>
+<div class="sourceCode" id="cb56"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" tabindex="-1"></a>g <span class="ot">&lt;-</span> <span class="fu">tempfile</span>(<span class="at">fileext =</span> <span class="st">&quot;.vtr&quot;</span>)</span>
+<span id="cb56-2"><a href="#cb56-2" tabindex="-1"></a><span class="fu">write_vtr</span>(<span class="fu">data.frame</span>(<span class="at">id =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">2</span>, <span class="at">x =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">3</span>), <span class="at">y =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), g)</span>
+<span id="cb56-3"><a href="#cb56-3" tabindex="-1"></a></span>
+<span id="cb56-4"><a href="#cb56-4" tabindex="-1"></a>dests <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(</span>
+<span id="cb56-5"><a href="#cb56-5" tabindex="-1"></a>  <span class="at">name =</span> <span class="fu">c</span>(<span class="st">&quot;top_left&quot;</span>, <span class="st">&quot;top_right&quot;</span>),</span>
+<span id="cb56-6"><a href="#cb56-6" tabindex="-1"></a>  <span class="at">geometry =</span> <span class="fu">st_sfc</span>(<span class="fu">st_point</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">2</span>)), <span class="fu">st_point</span>(<span class="fu">c</span>(<span class="dv">3</span>, <span class="dv">2</span>))))</span>
+<span id="cb56-7"><a href="#cb56-7" tabindex="-1"></a></span>
+<span id="cb56-8"><a href="#cb56-8" tabindex="-1"></a><span class="fu">tbl</span>(g) <span class="sc">|&gt;</span></span>
+<span id="cb56-9"><a href="#cb56-9" tabindex="-1"></a>  <span class="fu">spatial_route</span>(net, <span class="at">to =</span> dests, <span class="at">to_id =</span> <span class="st">&quot;name&quot;</span>, <span class="at">geometry =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb56-10"><a href="#cb56-10" tabindex="-1"></a>                <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb56-11"><a href="#cb56-11" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb56-12"><a href="#cb56-12" tabindex="-1"></a><span class="co">#&gt;   id x y destination cost</span></span>
+<span id="cb56-13"><a href="#cb56-13" tabindex="-1"></a><span class="co">#&gt; 1  1 0 0    top_left    2</span></span>
+<span id="cb56-14"><a href="#cb56-14" tabindex="-1"></a><span class="co">#&gt; 2  1 0 0   top_right    5</span></span>
+<span id="cb56-15"><a href="#cb56-15" tabindex="-1"></a><span class="co">#&gt; 3  2 3 0    top_left    5</span></span>
+<span id="cb56-16"><a href="#cb56-16" tabindex="-1"></a><span class="co">#&gt; 4  2 3 0   top_right    2</span></span></code></pre></div>
+<p>Each origin carries its own attributes (<code>id</code> here) onto
+every route row. Unreachable pairs return an infinite cost rather than
+dropping the row.</p>
+</div>
+<div id="service-areas-and-isochrones" class="section level3">
+<h3>Service areas and isochrones</h3>
+<p><code>spatial_service_area()</code> returns, per origin, the part of
+the network reachable within a cost budget. A vector of budgets returns
+nested travel-cost bands, one row per origin and band. The
+<code>output</code> argument selects the shape: the reachable nodes as a
+multipoint, the reachable edges as lines, or their convex hull as a
+service-area polygon.</p>
+<div class="sourceCode" id="cb57"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb57-2"><a href="#cb57-2" tabindex="-1"></a>  <span class="fu">spatial_service_area</span>(net, <span class="at">cost =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">2</span>), <span class="at">output =</span> <span class="st">&quot;nodes&quot;</span>,</span>
+<span id="cb57-3"><a href="#cb57-3" tabindex="-1"></a>                       <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb57-4"><a href="#cb57-4" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb57-5"><a href="#cb57-5" tabindex="-1"></a><span class="co">#&gt; Simple feature collection with 2 features and 4 fields</span></span>
+<span id="cb57-6"><a href="#cb57-6" tabindex="-1"></a><span class="co">#&gt; Geometry type: MULTIPOINT</span></span>
+<span id="cb57-7"><a href="#cb57-7" tabindex="-1"></a><span class="co">#&gt; Dimension:     XY</span></span>
+<span id="cb57-8"><a href="#cb57-8" tabindex="-1"></a><span class="co">#&gt; Bounding box:  xmin: 0 ymin: 0 xmax: 2 ymax: 2</span></span>
+<span id="cb57-9"><a href="#cb57-9" tabindex="-1"></a><span class="co">#&gt; CRS:           NA</span></span>
+<span id="cb57-10"><a href="#cb57-10" tabindex="-1"></a><span class="co">#&gt;   id x y band                       geometry</span></span>
+<span id="cb57-11"><a href="#cb57-11" tabindex="-1"></a><span class="co">#&gt; 1  1 0 0    1 MULTIPOINT ((0 0), (1 0), (...</span></span>
+<span id="cb57-12"><a href="#cb57-12" tabindex="-1"></a><span class="co">#&gt; 2  1 0 0    2 MULTIPOINT ((0 0), (1 0), (...</span></span></code></pre></div>
+<p>The first band reaches the start node and its two immediate
+neighbours; the second band reaches everything within two steps. Asking
+for <code>output = &quot;polygon&quot;</code> wraps each band in its hull, the
+usual drive-time catchment:</p>
+<div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb58-2"><a href="#cb58-2" tabindex="-1"></a>  <span class="fu">spatial_service_area</span>(net, <span class="at">cost =</span> <span class="dv">2</span>, <span class="at">output =</span> <span class="st">&quot;polygon&quot;</span>,</span>
+<span id="cb58-3"><a href="#cb58-3" tabindex="-1"></a>                       <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb58-4"><a href="#cb58-4" tabindex="-1"></a>  <span class="fu">collect</span>() <span class="sc">|&gt;</span></span>
+<span id="cb58-5"><a href="#cb58-5" tabindex="-1"></a>  <span class="fu">st_area</span>()</span>
+<span id="cb58-6"><a href="#cb58-6" tabindex="-1"></a><span class="co">#&gt; [1] 2</span></span></code></pre></div>
+</div>
+<div id="weighted-and-directed-networks" class="section level3">
+<h3>Weighted and directed networks</h3>
+<p>By default every edge is two-way and weighted by length. A
+<code>weight</code> column sets a different traversal cost (a travel
+time, a toll), and <code>directed = TRUE</code> makes edges one-way. The
+<code>direction</code> column then carries one-way codes
+(<code>&quot;B&quot;</code> two-way, <code>&quot;FT&quot;</code> along the digitised
+direction, <code>&quot;TF&quot;</code> against it, <code>&quot;N&quot;</code> closed), and
+<code>weight_to</code> gives the reverse cost on a two-way edge.</p>
+<div class="sourceCode" id="cb59"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" tabindex="-1"></a>streets_df <span class="ot">&lt;-</span> <span class="fu">st_sf</span>(</span>
+<span id="cb59-2"><a href="#cb59-2" tabindex="-1"></a>  <span class="at">cost =</span> <span class="fu">runif</span>(<span class="fu">length</span>(streets), <span class="dv">1</span>, <span class="dv">3</span>),</span>
+<span id="cb59-3"><a href="#cb59-3" tabindex="-1"></a>  <span class="at">geometry =</span> streets)</span>
+<span id="cb59-4"><a href="#cb59-4" tabindex="-1"></a></span>
+<span id="cb59-5"><a href="#cb59-5" tabindex="-1"></a>wnet <span class="ot">&lt;-</span> <span class="fu">spatial_network</span>(streets_df, <span class="at">weight =</span> <span class="st">&quot;cost&quot;</span>)</span>
+<span id="cb59-6"><a href="#cb59-6" tabindex="-1"></a></span>
+<span id="cb59-7"><a href="#cb59-7" tabindex="-1"></a><span class="fu">tbl</span>(f) <span class="sc">|&gt;</span></span>
+<span id="cb59-8"><a href="#cb59-8" tabindex="-1"></a>  <span class="fu">spatial_route</span>(wnet, <span class="at">to =</span> dest, <span class="at">coords =</span> <span class="fu">c</span>(<span class="st">&quot;x&quot;</span>, <span class="st">&quot;y&quot;</span>), <span class="at">geometry =</span> <span class="cn">FALSE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb59-9"><a href="#cb59-9" tabindex="-1"></a>  <span class="fu">collect</span>()</span>
+<span id="cb59-10"><a href="#cb59-10" tabindex="-1"></a><span class="co">#&gt;   id x y destination     cost</span></span>
+<span id="cb59-11"><a href="#cb59-11" tabindex="-1"></a><span class="co">#&gt; 1  1 0 0           1 8.326658</span></span></code></pre></div>
+<p>The route now minimises the summed <code>cost</code> weight instead
+of the step count.</p>
+</div>
+<div id="the-streaming-model" class="section level3">
+<h3>The streaming model</h3>
+<p>The graph is the resident budget: it is built once and held in the
+<code>vectra_network</code> object for the life of the queries against
+it. The origin layer is what streams. Each batch of origins is solved
+against the resident graph with one Dijkstra per origin, run in parallel
+across the batch, so the query side scales by streaming while memory
+tracks the graph plus one batch. This is the network analogue of the
+resident-<code>y</code> pattern the streaming spatial verbs use for a
+small locator layer.</p>
+</div>
 </div>
 <div id="the-cost-model" class="section level2">
 <h2>The cost model</h2>
@@ -1015,7 +1767,7 @@ inherently resident because the operation is global, and the overlay
 bounds it by tiling overlap clusters. Operations that are global by
 nature and not tiled, such as Voronoi diagrams, Delaunay triangulation,
 convex hulls, and neighbour graphs, are not streamed at all:
-<code>collect_sf()</code> the layer and run sf or terra on it.</p>
+<code>collect()</code> the layer and run sf or terra on it.</p>
 <p>A second axis is whether a step runs natively or through sf. The
 recognised predicates and operations run in C straight off the WKB
 column when the data is planar, which means projected, or geographic

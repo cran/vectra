@@ -23,6 +23,8 @@ clean piece of algebra, and `vectra` exposes it through two pieces:
 disk (or, with a key, splitting one into shards). Along the way the same
 principle explains both what streams cheaply and what needs a sort.
 
+Installation is covered in [Get started](quickstart.html).
+
 ## Two cost models
 
 There are two distinct settings, and conflating them causes most of the

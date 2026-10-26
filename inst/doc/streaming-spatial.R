@@ -1,5 +1,6 @@
 ## ----setup, include = FALSE---------------------------------------------------
-has_sf <- requireNamespace("sf", quietly = TRUE)
+has_sf <- requireNamespace("sf", quietly = TRUE) &&
+  requireNamespace("s2", quietly = TRUE)
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
@@ -41,7 +42,7 @@ buffered <- tbl(cent) |>
 buffered
 
 ## ----map-buffer-plot----------------------------------------------------------
-b_sf <- collect_sf(buffered)
+b_sf <- collect(buffered)
 plot(st_geometry(nc), border = "grey80", col = NA,
      main = "County centroids buffered by 15 km")
 plot(st_geometry(b_sf), border = "#3366cc", col = "#3366cc22", add = TRUE)
@@ -59,7 +60,7 @@ f_zig <- tempfile(fileext = ".vtr")
 write_vtr(data.frame(
   id = 1L, geometry = st_as_binary(st_sfc(zig), hex = TRUE)), f_zig)
 
-tbl(f_zig) |> spatial_smooth(iterations = 3) |> collect_sf()
+tbl(f_zig) |> spatial_smooth(iterations = 3) |> collect()
 unlink(f_zig)
 
 ## ----sample-points------------------------------------------------------------
@@ -93,7 +94,7 @@ nrow(collect(near))
 mask_region <- st_union(st_geometry(region))
 
 clipped <- tbl(f_poly) |> spatial_clip(mask_region, crs = crs_nc)
-c_sf <- collect_sf(clipped)
+c_sf <- collect(clipped)
 nrow(c_sf)
 
 ## ----clip-plot----------------------------------------------------------------
@@ -109,7 +110,7 @@ f_sq <- tempfile(fileext = ".vtr")
 write_vtr(data.frame(
   id = 1L, geometry = st_as_binary(st_sfc(square), hex = TRUE)), f_sq)
 
-tbl(f_sq) |> spatial_split(blade) |> collect_sf()
+tbl(f_sq) |> spatial_split(blade) |> collect()
 unlink(f_sq)
 
 ## ----join-tag-----------------------------------------------------------------
@@ -206,7 +207,7 @@ write_vtr(data.frame(
 merged <- tbl(fb) |>
   spatial_dissolve(by = "band", crs = crs_nc,
                    .fun = list(births = function(d) sum(d$BIR74)))
-m_sf <- collect_sf(merged)
+m_sf <- collect(merged)
 m_sf
 
 ## ----dissolve-plot------------------------------------------------------------
@@ -218,7 +219,7 @@ sq <- function(a, b) st_polygon(list(rbind(
 polys <- st_sf(year = c(1990L, 2010L, 2000L),
                geometry = st_sfc(sq(0, 2), sq(1, 3), sq(1.5, 3.5)))
 
-pieces <- collect_sf(spatial_overlay(polys))
+pieces <- collect(spatial_overlay(polys))
 nrow(pieces)
 length(unique(pieces$piece_id))
 
@@ -226,7 +227,7 @@ length(unique(pieces$piece_id))
 first <- spatial_overlay(polys) |>
   group_by(piece_id) |>
   slice_min(year, n = 1, with_ties = FALSE) |>
-  collect_sf()
+  collect()
 nrow(first)
 
 plot(first["year"], main = "Overlay pieces, earliest year wins")
@@ -235,7 +236,7 @@ plot(first["year"], main = "Overlay pieces, earliest year wins")
 zones <- st_sf(zone = c("A", "B"),
                geometry = st_sfc(sq(0, 1.5), sq(1.5, 3)))
 
-inter <- spatial_overlay(polys, zones, how = "intersection") |> collect_sf()
+inter <- spatial_overlay(polys, zones, how = "intersection") |> collect()
 inter
 
 ## ----roundtrip----------------------------------------------------------------
@@ -244,6 +245,308 @@ tbl(fp) |>
   spatial_filter(region, coords = c("x", "y"), crs = crs_nc) |>
   write_vtr(out)
 nrow(collect(tbl(out)))
+
+## ----gx-data------------------------------------------------------------------
+nc <- st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+
+f <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  NAME     = nc$NAME,
+  BIR74    = nc$BIR74,
+  geometry = st_as_binary(st_geometry(nc), hex = TRUE)
+), f)
+
+tbl(f)
+
+## ----gx-measures--------------------------------------------------------------
+tbl(f) |>
+  mutate(area   = st_area(geometry),
+         perim  = st_perimeter(geometry),
+         nverts = st_npoints(geometry)) |>
+  select(NAME, area, perim, nverts) |>
+  collect() |>
+  head()
+
+## ----gx-coords----------------------------------------------------------------
+tbl(f) |>
+  mutate(centroid = st_centroid(geometry),
+         cx = st_x(centroid),
+         cy = st_y(centroid)) |>
+  select(NAME, cx, cy) |>
+  collect() |>
+  head()
+
+## ----gx-predicate-filter------------------------------------------------------
+aoi <- st_as_sfc(st_bbox(c(xmin = -80, ymin = 35, xmax = -78, ymax = 36.5)),
+                 crs = st_crs(nc))
+
+tbl(f) |>
+  filter(st_intersects(geometry, aoi)) |>
+  collect() |>
+  nrow()
+
+## ----gx-predicate-mutate------------------------------------------------------
+tbl(f) |>
+  mutate(near_raleigh = st_intersects(geometry, aoi)) |>
+  filter(near_raleigh) |>
+  select(NAME) |>
+  collect() |>
+  head()
+
+## ----gx-distance--------------------------------------------------------------
+raleigh <- st_sfc(st_point(c(-78.64, 35.78)), crs = st_crs(nc))
+
+tbl(f) |>
+  mutate(centroid   = st_centroid(geometry),
+         d_raleigh  = st_distance(centroid, raleigh)) |>
+  select(NAME, d_raleigh) |>
+  arrange(d_raleigh) |>
+  collect() |>
+  head()
+
+## ----gx-summarise-------------------------------------------------------------
+tbl(f) |>
+  mutate(area = st_area(geometry)) |>
+  summarise(total_area = sum(area), counties = n()) |>
+  collect()
+
+## ----gx-transforms------------------------------------------------------------
+hulls <- tbl(f) |>
+  mutate(geometry = st_convex_hull(geometry)) |>
+  select(NAME, geometry) |>
+  collect(geom = "geometry", crs = st_crs(nc))
+
+hulls
+
+## ----gx-buffer----------------------------------------------------------------
+tbl(f) |>
+  mutate(geometry = st_buffer(geometry, 0.1)) |>
+  select(NAME, geometry) |>
+  collect(geom = "geometry", crs = st_crs(nc)) |>
+  st_area() |>
+  head()
+
+## ----gx-na--------------------------------------------------------------------
+g <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = 1:4,
+  geometry = c(st_as_binary(st_geometry(nc)[1:3], hex = TRUE), NA)
+), g)
+
+tbl(g) |>
+  mutate(area = st_area(geometry)) |>
+  collect()
+
+## ----gx-cleanup, include = FALSE----------------------------------------------
+unlink(c(f, g))
+
+## ----ct-polygonize------------------------------------------------------------
+grid <- st_sfc(
+  st_linestring(rbind(c(0, 0), c(2, 0))),
+  st_linestring(rbind(c(0, 1), c(2, 1))),
+  st_linestring(rbind(c(0, 2), c(2, 2))),
+  st_linestring(rbind(c(0, 0), c(0, 2))),
+  st_linestring(rbind(c(1, 0), c(1, 2))),
+  st_linestring(rbind(c(2, 0), c(2, 2))))
+
+f <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(geometry = st_as_binary(grid, hex = TRUE)), f)
+
+tbl(f) |> spatial_polygonize() |> collect()
+
+## ----ct-line-merge------------------------------------------------------------
+seg <- st_sfc(
+  st_linestring(rbind(c(0, 0), c(1, 0))),
+  st_linestring(rbind(c(1, 0), c(2, 0))),
+  st_linestring(rbind(c(2, 0), c(3, 0))))
+
+g <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(geometry = st_as_binary(seg, hex = TRUE)), g)
+
+tbl(g) |> spatial_line_merge() |> collect()
+
+## ----ct-snap-grid-------------------------------------------------------------
+p <- st_polygon(list(rbind(c(0.04, 0.03), c(1.02, 0.01),
+                           c(0.98, 1.03), c(0.01, 0.97), c(0.04, 0.03))))
+h <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(id = 1L, geometry = st_as_binary(st_sfc(p), hex = TRUE)), h)
+
+tbl(h) |> spatial_snap_grid(0.1) |> collect()
+
+## ----ct-snap------------------------------------------------------------------
+ref  <- st_sfc(st_linestring(rbind(c(0, 0), c(10, 0))))
+line <- st_linestring(rbind(c(0, 0.2), c(5, 0.1), c(10, 0.2)))
+
+sn <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(id = 1L, geometry = st_as_binary(st_sfc(line), hex = TRUE)), sn)
+
+tbl(sn) |> spatial_snap(ref, tolerance = 0.5) |> collect()
+
+## ----ct-eliminate-------------------------------------------------------------
+big    <- st_polygon(list(rbind(
+  c(0, 0), c(10, 0), c(10, 10), c(0, 10), c(0, 0))))
+sliver <- st_polygon(list(rbind(
+  c(10, 0), c(10.3, 0), c(10.3, 10), c(10, 10), c(10, 0))))
+
+e <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = c("keep", "sliver"),
+  geometry = st_as_binary(st_sfc(big, sliver), hex = TRUE)), e)
+
+tbl(e) |> spatial_eliminate(max_area = 5) |> collect()
+
+## ----ct-simplify--------------------------------------------------------------
+p1 <- st_polygon(list(rbind(
+  c(0, 0), c(1, 0), c(1, 0.5), c(1, 1), c(0, 1), c(0, 0))))
+p2 <- st_polygon(list(rbind(
+  c(1, 0), c(2, 0), c(2, 1), c(1, 1), c(1, 0.5), c(1, 0))))
+
+s <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = c("a", "b"),
+  geometry = st_as_binary(st_sfc(p1, p2), hex = TRUE)), s)
+
+tbl(s) |> spatial_simplify(tolerance = 0.6) |> collect()
+
+## ----ct-explode---------------------------------------------------------------
+mp <- st_multipolygon(list(
+  list(rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0, 0))),
+  list(rbind(c(2, 2), c(3, 2), c(3, 3), c(2, 3), c(2, 2)))))
+
+m <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = 1L, geometry = st_as_binary(st_sfc(mp), hex = TRUE)), m)
+
+tbl(m) |> spatial_explode(part = "part_id") |> collect()
+
+## ----ct-topology--------------------------------------------------------------
+q1 <- st_polygon(list(rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0, 0))))
+q2 <- st_polygon(list(rbind(c(1, 0), c(2, 0), c(2, 1), c(1, 1), c(1, 0))))
+
+tp <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  id = c("a", "b"),
+  geometry = st_as_binary(st_sfc(q1, q2), hex = TRUE)), tp)
+
+tbl(tp) |> spatial_topology(id = "id") |> collect()
+
+## ----ct-centerline------------------------------------------------------------
+strip <- st_polygon(list(rbind(
+  c(0, 0), c(10, 0), c(10, 2), c(0, 2), c(0, 0))))
+
+cl <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(geometry = st_as_binary(st_sfc(strip), hex = TRUE)), cl)
+
+tbl(cl) |> spatial_centerline(density = 0.25, prune = 0.5) |> collect()
+
+## ----ct-construct-hull--------------------------------------------------------
+nc <- st_read(system.file("shape/nc.shp", package = "sf"), quiet = TRUE)
+nc$band <- nc$SID74 > 5
+
+n <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(
+  band = nc$band,
+  geometry = st_as_binary(st_geometry(nc), hex = TRUE)), n)
+
+tbl(n) |>
+  spatial_construct("convex_hull", by = "band", crs = st_crs(nc)) |>
+  collect()
+
+## ----ct-construct-voronoi-----------------------------------------------------
+xy <- rbind(c(0, 0), c(1, 0), c(1, 1), c(0, 1), c(0.4, 0.6))
+cloud <- st_sfc(lapply(seq_len(nrow(xy)), function(i) st_point(xy[i, ])))
+
+v <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(geometry = st_as_binary(cloud, hex = TRUE)), v)
+
+tbl(v) |> spatial_construct("voronoi") |> collect()
+
+## ----ct-locate----------------------------------------------------------------
+roads <- st_sf(road = c("main", "side"), geometry = st_sfc(
+  st_linestring(rbind(c(0, 0), c(10, 0))),
+  st_linestring(rbind(c(0, 5), c(0, 15)))))
+
+pts <- data.frame(id = 1:2, x = c(3, 1), y = c(1, 9))
+l <- tempfile(fileext = ".vtr")
+write_vtr(pts, l)
+
+tbl(l) |>
+  spatial_locate(roads, coords = c("x", "y"), y_id = "road") |>
+  collect()
+
+## ----ct-cleanup, include = FALSE----------------------------------------------
+unlink(c(f, g, h, sn, e, s, m, tp, cl, n, v, l))
+
+## ----nw-build-----------------------------------------------------------------
+mk <- function(x1, y1, x2, y2)
+  st_linestring(rbind(c(x1, y1), c(x2, y2)))
+
+streets <- st_sfc(
+  mk(0, 0, 1, 0), mk(1, 0, 2, 0), mk(2, 0, 3, 0),   # bottom row
+  mk(0, 1, 1, 1), mk(1, 1, 2, 1), mk(2, 1, 3, 1),   # middle row
+  mk(0, 2, 1, 2), mk(1, 2, 2, 2), mk(2, 2, 3, 2),   # top row
+  mk(0, 0, 0, 1), mk(0, 1, 0, 2),                   # left verticals
+  mk(1, 0, 1, 1), mk(1, 1, 1, 2),
+  mk(2, 0, 2, 1), mk(2, 1, 2, 2),
+  mk(3, 0, 3, 1), mk(3, 1, 3, 2))                   # right verticals
+
+net <- spatial_network(streets)
+net
+
+## ----nw-route-cost------------------------------------------------------------
+f <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(id = 1L, x = 0, y = 0), f)
+
+dest <- st_sfc(st_point(c(3, 2)))
+
+tbl(f) |>
+  spatial_route(net, to = dest, coords = c("x", "y"), geometry = FALSE) |>
+  collect()
+
+## ----nw-route-geom------------------------------------------------------------
+tbl(f) |>
+  spatial_route(net, to = dest, coords = c("x", "y")) |>
+  collect()
+
+## ----nw-od-matrix-------------------------------------------------------------
+g <- tempfile(fileext = ".vtr")
+write_vtr(data.frame(id = 1:2, x = c(0, 3), y = c(0, 0)), g)
+
+dests <- st_sf(
+  name = c("top_left", "top_right"),
+  geometry = st_sfc(st_point(c(0, 2)), st_point(c(3, 2))))
+
+tbl(g) |>
+  spatial_route(net, to = dests, to_id = "name", geometry = FALSE,
+                coords = c("x", "y")) |>
+  collect()
+
+## ----nw-service-nodes---------------------------------------------------------
+tbl(f) |>
+  spatial_service_area(net, cost = c(1, 2), output = "nodes",
+                       coords = c("x", "y")) |>
+  collect()
+
+## ----nw-service-polygon-------------------------------------------------------
+tbl(f) |>
+  spatial_service_area(net, cost = 2, output = "polygon",
+                       coords = c("x", "y")) |>
+  collect() |>
+  st_area()
+
+## ----nw-weighted--------------------------------------------------------------
+streets_df <- st_sf(
+  cost = runif(length(streets), 1, 3),
+  geometry = streets)
+
+wnet <- spatial_network(streets_df, weight = "cost")
+
+tbl(f) |>
+  spatial_route(wnet, to = dest, coords = c("x", "y"), geometry = FALSE) |>
+  collect()
+
+## ----nw-cleanup, include = FALSE----------------------------------------------
+unlink(c(f, g))
 
 ## ----cleanup, include = FALSE-------------------------------------------------
 unlink(c(f_poly, cent, fp, g_poly, fb, out))

@@ -1,3 +1,101 @@
+# vectra 0.14.0
+
+## Storage format
+
+* `.vtr` files are written in a new on-disk format (tdc 'TDCF' container,
+  'TDBK' block records), and files of the previous format are still read and
+  can still be appended to. Strings compress far better: a string column's
+  values sit in a dictionary that the previous format stored uncompressed, and
+  the new one runs through the column's entropy coder, with its offsets table
+  stored as per-value lengths. On the World Flora Online backbone (1.66 M
+  rows of names and identifiers), 739 MiB in the previous format,
+  `write_vtr()` gives about 230 MiB at `compress = "fast"` and 118 MiB at
+  `"small"`, and the whole table reads back in 9 s instead of 19 s. Files
+  written by 0.14.0 cannot be read by earlier versions.
+* String columns byte-shuffle the per-row dictionary index ahead of the
+  entropy coder, which turns the index sequence of a column of distinct values
+  into runs the coder matches.
+* `compress = "small"` also tries tdc's LZ_STREAMS coder under its
+  multi-pass optimal parser, which on text comes within reach of zstd -19.
+
+# vectra 0.13.5
+
+## Fixes
+
+* `append_vtr()` no longer leaves the store's previous row-group index behind
+  on every call. Both directions now write from the end of the store's data,
+  over the superseded index, and end with one new index, so a store built by
+  repeated appends is the size of the same row groups written by
+  `write_vtr()`. Before, each append added an index the size of all row
+  groups so far and file size grew quadratically with the number of appends:
+  999 appends of 200 rows to a 2-column store gave 69.6 MB, now 0.77 MB, the
+  same as `write_vtr(batch_size = 200)` of those rows.
+* An interrupted append still leaves the store readable as it was: the index
+  the file header points to is never overwritten, because a copy is moved
+  ahead of the bytes being written and the header is pointed at it until the
+  new index is complete. The store also keeps its trailer and fingerprint
+  through the interruption, so its `.vtri` indexes stay in use, and the next
+  append writes over the bytes the interrupted one left.
+* Stores grown by appends in vectra 0.13.4 and earlier read and append as
+  before; the indexes earlier appends left inside them stay until the store is
+  rewritten with `write_vtr()`.
+
+# vectra 0.13.4
+
+## Changes
+
+* `append_vtr()` appends the rows of a data.frame straight from its R columns,
+  in row groups of the store's column types, instead of writing the frame to
+  a temporary `.vtr` and scanning it back. An integer column can now be
+  appended to a store column narrowed to `int8`, `int16` or `int32`.
+* The `.vtri` sidecars of a store are looked up by name in C (on Windows a
+  single directory query for the store's own prefix) rather than by listing
+  the whole directory in R.
+* Together a 2,000-row append into a directory of 2,000 stores goes from 4.4
+  ms to 0.6 ms.
+
+# vectra 0.13.3
+
+## Bug fixes
+
+* `append_vtr()` no longer runs a full garbage collection on every call. The
+  collection cost grew with every object the session held (17 ms per append
+  in an empty session, 240 ms with six million live objects), so building
+  stores by many appends from a session with large state slowed to a crawl.
+  An append grows the store in place, and readers map files with every share
+  mode, so no open map has to be collected first.
+
+# vectra 0.13.2
+
+## Bug fixes
+
+* `vec_to_tiff()` and the GeoTIFF writer declare the bands past the first as
+  `ExtraSamples`, so GDAL reads multi-band output without a
+  `TIFFReadDirectory` warning.
+* A raster whose geotransform is not north-up and axis-aligned (a positive
+  y resolution, as in the identity default of `vec_write_raster()`, or a
+  rotation) is georeferenced through `ModelTransformation` instead of a
+  negative `ModelPixelScale` that GDAL silently re-read as north-up.
+  `tbl_tiff()` reads `ModelTransformation` and applies the rotation terms to
+  the `x`/`y` columns.
+
+# vectra 0.13.1
+
+## Changes
+
+* `collect()` returns an `sf` object when the query still carries a geometry
+  column, or when a string column holds hex-encoded WKB (recognised from the
+  first values of the column, so a stored geometry column comes back as `sf`
+  from a plain `tbl()`), so `tbl(f) |> spatial_map(...) |> filter(...) |> collect()` needs no
+  second verb. The spatial verbs, and `mutate()` with a geometry-producing
+  `st_*` expression, mark the geometry column on the node together with its
+  CRS; `filter()`, `select()`, `rename()`, `mutate()`, the window, grouping and
+  join verbs carry the mark, and it is dropped when the column is. `collect(x,
+  sf = FALSE)` returns the hex-WKB string column, and `collect(x, geom =,
+  crs =)` decodes a geometry column the node does not carry.
+
+* `collect_sf()` is deprecated in favour of `collect()`.
+
 # vectra 0.13.0
 
 ## New features
